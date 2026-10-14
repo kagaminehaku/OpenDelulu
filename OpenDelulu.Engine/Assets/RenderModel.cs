@@ -247,6 +247,7 @@ public sealed class RenderModel
                         // Material colors are stored negated in SB3 data (4778 of 4796 materials; the rest are 0).
                         Diffuse = material is null ? Vector4.One : Vector4.Abs(material.Diffuse),
                         Ambient = material is null ? Vector4.Zero : Vector4.Abs(material.Ambient),
+                        Emissive = material is null ? Vector4.Zero : Vector4.Abs(material.Emissive),
                         MaterialName = material?.Name ?? "",
                         SourceVertices = submesh.Vertices,
                         FrameIndex = rig.FrameIndex[frame],
@@ -314,6 +315,7 @@ public sealed class RenderMesh
     /// <summary>Material diffuse color (already un-negated); W is the material opacity.</summary>
     public required Vector4 Diffuse { get; init; }
     public required Vector4 Ambient { get; init; }
+    public Vector4 Emissive { get; init; }
     public required string MaterialName { get; init; }
     /// <summary>Texture contains translucent pixels; draw after opaque meshes.</summary>
     public bool HasAlpha { get; internal set; }

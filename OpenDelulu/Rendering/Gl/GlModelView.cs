@@ -16,11 +16,11 @@ namespace OpenDelulu.Rendering.Gl;
 /// </summary>
 internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
 {
-    sealed record GpuMesh(int VertexBuffer, int IndexBuffer, int IndexCount, int TextureIndex, Vector4 Diffuse, bool HasAlpha);
+    sealed record GpuMesh(int VertexBuffer, int IndexBuffer, int IndexCount, int TextureIndex, Vector4 Diffuse, Vector4 Ambient, Vector4 Emissive, bool HasAlpha);
 
     GlExtras? _ext;
     int _program, _vao, _whiteTexture;
-    int _uMvp, _uTex, _uDiffuse, _uLightDir, _uAlphaPass;
+    int _uMvp, _uTex, _uDiffuse, _uLightDir, _uAlphaPass, _uAmbient, _uEmissive;
     readonly List<GpuMesh> _meshes = [];
     readonly List<int> _textures = [];
     ModelScene? _uploaded;
@@ -105,6 +105,8 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         _uDiffuse = gl.GetUniformLocationString(_program, "uDiffuse");
         _uLightDir = gl.GetUniformLocationString(_program, "uLightDir");
         _uAlphaPass = gl.GetUniformLocationString(_program, "uAlphaPass");
+        _uAmbient = gl.GetUniformLocationString(_program, "uAmbient");
+        _uEmissive = gl.GetUniformLocationString(_program, "uEmissive");
 
         if (gl.IsGenVertexArraysAvailable)
             _vao = gl.GenVertexArray();
@@ -219,6 +221,8 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             gl.BindTexture(GL_TEXTURE_2D, mesh.TextureIndex >= 0 ? _textures[mesh.TextureIndex] : _whiteTexture);
             var d = mesh.Diffuse;
             _ext!.Uniform4f(_uDiffuse, d.X, d.Y, d.Z, d.W);
+            _ext.Uniform4f(_uAmbient, mesh.Ambient.X, mesh.Ambient.Y, mesh.Ambient.Z, 0);
+            _ext.Uniform4f(_uEmissive, mesh.Emissive.X, mesh.Emissive.Y, mesh.Emissive.Z, 0);
 
             gl.BindBuffer(GL_ARRAY_BUFFER, mesh.VertexBuffer);
             const int stride = RenderModelStride * sizeof(float);
@@ -256,7 +260,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             var diffuse = mesh.Diffuse;
             if (diffuse.X + diffuse.Y + diffuse.Z < 0.05f)
                 diffuse = new Vector4(1, 1, 1, diffuse.W); // some materials only use ambient/emissive; keep their opacity
-            _meshes.Add(new GpuMesh(vbo, ibo, mesh.Indices.Length, mesh.TextureIndex, diffuse, mesh.HasAlpha));
+            _meshes.Add(new GpuMesh(vbo, ibo, mesh.Indices.Length, mesh.TextureIndex, diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha));
         }
         gl.BindBuffer(GL_ARRAY_BUFFER, 0);
         gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -327,6 +331,8 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         public const string Fragment = """
             uniform sampler2D uTex;
             uniform vec4 uDiffuse;
+            uniform vec4 uAmbient;
+            uniform vec4 uEmissive;
             uniform vec3 uLightDir;
             uniform float uAlphaPass;
             VIN vec3 vNormal;
@@ -340,8 +346,11 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
                 } else {
                     if (alpha >= 0.5 || alpha < 0.02) discard;
                 }
+                // Direct3D 9 fixed-function material lighting (two-sided): emissive + ambient * scene ambient
+                // + diffuse * light * N.L. Keep in sync with the Vulkan shader (model.frag).
                 float lambert = abs(dot(normalize(vNormal), uLightDir));
-                vec3 color = texel.rgb * uDiffuse.rgb * (0.45 + 0.6 * lambert);
+                vec3 lit = uEmissive.rgb + uAmbient.rgb * 0.35 + uDiffuse.rgb * 0.55 * lambert;
+                vec3 color = texel.rgb * min(lit, vec3(1.15));
                 fragColor = vec4(color, alpha);
             }
             """;

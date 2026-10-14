@@ -25,6 +25,8 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         public Matrix4x4 Mvp;
         public Vector4 Diffuse;
         public Vector4 LightAndPass;
+        public Vector4 Ambient;
+        public Vector4 Emissive; // 128 bytes in total: the guaranteed push-constant minimum
     }
 
     sealed class GpuTexture
@@ -35,8 +37,10 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         public DescriptorSet Set;
     }
 
-    sealed class GpuMesh(VulkanBuffer vertices, VulkanBuffer indices, int indexCount, int texture, Vector4 diffuse, bool hasAlpha)
+    sealed class GpuMesh(VulkanBuffer vertices, VulkanBuffer indices, int indexCount, int texture, Vector4 diffuse, Vector4 ambient, Vector4 emissive, bool hasAlpha)
     {
+        public Vector4 Ambient { get; } = ambient;
+        public Vector4 Emissive { get; } = emissive;
         public VulkanBuffer Vertices { get; } = vertices;
         public VulkanBuffer Indices { get; } = indices;
         public int IndexCount { get; } = indexCount;
@@ -213,6 +217,8 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             var set = (mesh.Texture >= 0 ? _textures[mesh.Texture] : _white!).Set;
             Api.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, _pipelineLayout, 0, 1, &set, 0, null);
             push.Diffuse = mesh.Diffuse;
+            push.Ambient = mesh.Ambient;
+            push.Emissive = mesh.Emissive;
             Api.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
                 0, (uint)sizeof(PushConstants), &push);
             var buffer = mesh.Vertices.Handle;
@@ -260,7 +266,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             var diffuse = mesh.Diffuse;
             if (diffuse.X + diffuse.Y + diffuse.Z < 0.05f)
                 diffuse = new Vector4(1, 1, 1, diffuse.W); // some materials only use ambient/emissive; keep their opacity
-            _meshes.Add(new GpuMesh(vertices, indices, mesh.Indices.Length, mesh.TextureIndex, diffuse, mesh.HasAlpha));
+            _meshes.Add(new GpuMesh(vertices, indices, mesh.Indices.Length, mesh.TextureIndex, diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha));
         }
     }
 

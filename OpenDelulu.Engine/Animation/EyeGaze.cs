@@ -54,24 +54,38 @@ public sealed class EyeGaze
         return gaze._eyes.Count > 0 ? gaze : null;
     }
 
+    /// <summary>How much each eye turns towards the target itself instead of the common direction (0 = parallel).</summary>
+    const float Convergence = 0.25f;
+
     /// <summary>
     /// Rotates the eye frames in <paramref name="local"/> towards <paramref name="target"/> (model space).
     /// <paramref name="world"/> must hold the world matrices of the current pose.
+    /// Both eyes share one gaze direction (from between the eyes), with only a little convergence:
+    /// full convergence looks cross-eyed on these large anime eyes at close range. The limits are measured
+    /// from the head's straight-ahead direction, not from each iris' rest direction (which differ by ~24°),
+    /// so the two eyes stay parallel when the target is off to the side.
     /// </summary>
     public void Apply(Span<Matrix4x4> local, ReadOnlySpan<Matrix4x4> world, Vector3 target)
     {
+        var middle = Vector3.Zero;
+        foreach (var eye in _eyes)
+            middle += (local[eye.Frame] * world[eye.Parent]).Translation;
+        middle /= _eyes.Count;
+
         foreach (var eye in _eyes)
         {
             if (!Matrix4x4.Invert(world[eye.Parent], out var toParent))
                 continue;
             var eyePosition = (local[eye.Frame] * world[eye.Parent]).Translation;
-            var wanted = Vector3.TransformNormal(target - eyePosition, toParent);
+            var shared = Vector3.Normalize(target - middle);
+            var own = Vector3.Normalize(target - eyePosition);
+            var wanted = Vector3.TransformNormal(Vector3.Lerp(shared, own, Convergence), toParent);
             if (wanted.LengthSquared() < 1e-8f)
                 continue;
             wanted = Vector3.Normalize(wanted);
 
-            float yaw = Math.Clamp(Yaw(wanted) - Yaw(eye.RestIris), -MaxYaw, MaxYaw);
-            float pitch = Math.Clamp(Pitch(wanted) - Pitch(eye.RestIris), -MaxPitch, MaxPitch);
+            float yaw = Math.Clamp(Yaw(wanted), -MaxYaw, MaxYaw) - Yaw(eye.RestIris);
+            float pitch = Math.Clamp(Pitch(wanted), -MaxPitch, MaxPitch) - Pitch(eye.RestIris);
 
             // Direct3D row vectors: RotationY(+a) turns +Z towards +X; RotationX(+b) turns +Z towards -Y.
             var turn = Matrix4x4.CreateRotationX(-pitch) * Matrix4x4.CreateRotationY(yaw);

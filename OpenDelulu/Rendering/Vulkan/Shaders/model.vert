@@ -9,6 +9,8 @@ layout(push_constant) uniform Push
     mat4 mvp;
     vec4 diffuse;
     vec4 lightAndPass; // xyz = light direction, w = 0 opaque pass / 1 translucent pass
+    vec4 ambient;
+    vec4 emissive;
 } pc;
 
 layout(location = 0) out vec3 vNormal;
