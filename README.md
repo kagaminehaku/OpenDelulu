@@ -15,6 +15,24 @@ Dự án đọc trực tiếp dữ liệu từ bản game người dùng đã c�
 | `OpenDelulu.Android` | Bản Android | net10.0-android |
 | `OpenDelulu.iOS` | Bản iOS (build cần máy Mac) | net10.0-ios |
 | `OpenDelulu.Cli` | Công cụ dòng lệnh `delulu` để kiểm tra / giải nén | net10.0 |
+| `tools/OpenDelulu.ShaderCompiler` | Biên dịch shader Vulkan (GLSL → SPIR-V) | net10.0 |
+
+## Đồ họa
+
+Trình xem 3D có hai backend, chọn ở góc trên bên phải ("Đồ họa: …") hoặc bằng `--backend auto|gl|vulkan`:
+
+| Backend | Nền tảng | Cách hiển thị |
+|---|---|---|
+| **Vulkan** | Windows, Linux (Android: thử, tự lùi về OpenGL nếu compositor không nhận ảnh Vulkan) | Render bằng device Vulkan riêng, trao ảnh cho compositor của Avalonia qua `ICompositionGpuInterop` (Windows: texture D3D11 chia sẻ + keyed mutex; Linux: file descriptor + semaphore), không chép qua CPU |
+| **OpenGL ES** | Mọi nền tảng (Windows chạy qua ANGLE → Direct3D 11) | `OpenGlControlBase` |
+
+"Tự động" thử Vulkan trước, lỗi thì lùi về OpenGL; góc trái khung xem ghi backend và GPU đang dùng.
+Skinning hiện chạy trên CPU (dùng chung cho cả hai backend).
+Sửa shader Vulkan trong `OpenDelulu/Rendering/Vulkan/Shaders/*.vert|frag` rồi chạy:
+
+```
+dotnet run --project tools/OpenDelulu.ShaderCompiler -- OpenDelulu/Rendering/Vulkan/Shaders
+```
 
 Toàn bộ logic nằm trong các thư viện không phụ thuộc nền tảng, nên mang lên điện thoại
 chỉ cần một project "đầu vào" mỏng cho từng nền tảng.
@@ -45,10 +63,11 @@ rồi bấm *Mở*. Thư mục này không cần cấp quyền truy cập bộ n
 - [x] Build được cho Desktop, Android, iOS
 - [x] Ghép nhân vật từ bảng `.lst`: 8 nhân vật, 5 kiểu tóc, 168 bộ đồ bơi (tab **Nhân vật**)
 - [x] Animation `.xa`: khung xương (clip, tự chuyển clip, tốc độ), biểu cảm mặt bằng morph, chớp mắt; skinning trên CPU
+- [x] Backend Vulkan (Silk.NET) bên cạnh OpenGL ES, tự lùi về OpenGL khi cần
 
 ## Lộ trình
 
-1. **Render backend**: tách lớp render, thêm Vulkan (Windows/Android), skinning trên GPU.
+1. **Đồ họa**: skinning trên GPU, Vulkan trên Android (compositor Vulkan), bóng đổ/đổ sáng gần với game gốc.
 2. **Ghép nhân vật (tiếp)**: phụ kiện (`lc*`), khăn pareo, vệt rám nắng, mắt/biểu cảm.
 3. **Âm thanh**: `.ogg`/`.wav` (giọng nói, nhạc nền), lip-sync (`.vss`?).
 4. **Cảnh và kịch bản**: phân tích `.sdt` và các bảng `lx/ly/lz`; vòng lặp game, camera, UI trong game.

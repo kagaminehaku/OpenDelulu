@@ -31,11 +31,17 @@ public static class AppHost
 
     /// <summary>Optional body variant override (desktop: <c>--cut &lt;n&gt;</c>).</summary>
     public static int? StartupCut { get; set; }
+
+    /// <summary>Optional render backend override (desktop: <c>--backend auto|gl|vulkan</c>).</summary>
+    public static string? StartupBackend { get; set; }
 }
 
 public sealed class AppSettings
 {
     public string? LastGameFolder { get; set; }
+
+    /// <summary>"Auto", "OpenGl" or "Vulkan".</summary>
+    public string? RenderBackend { get; set; }
 
     static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenDelulu", "settings.json");

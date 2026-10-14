@@ -41,8 +41,29 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public MainViewModel()
     {
+        var backend = (AppHost.StartupBackend ?? _settings.RenderBackend)?.ToLowerInvariant() switch
+        {
+            "gl" or "opengl" => RenderBackendKind.OpenGl,
+            "vulkan" or "vk" => RenderBackendKind.Vulkan,
+            _ => RenderBackendKind.Auto,
+        };
+        RenderBackendSettings.Preferred = backend;
+        SelectedBackendIndex = (int)backend;
         GameFolder = AppHost.StartupGameFolder ?? _settings.LastGameFolder ?? AppHost.SuggestedGameFolder ?? "";
         StorageHint = AppHost.StorageHint ?? "Chọn thư mục chứa SexyBeach3 (và SexyBeach3Plus / SexyBeach3PlusG nếu có).";
+    }
+
+    /// <summary>Indexes match <see cref="RenderBackendKind"/>.</summary>
+    public string[] Backends { get; } = ["Đồ họa: Tự động", "Đồ họa: OpenGL ES", "Đồ họa: Vulkan"];
+
+    [ObservableProperty]
+    public partial int SelectedBackendIndex { get; set; }
+
+    partial void OnSelectedBackendIndexChanged(int value)
+    {
+        RenderBackendSettings.Preferred = (RenderBackendKind)Math.Clamp(value, 0, 2);
+        _settings.RenderBackend = RenderBackendSettings.Preferred.ToString();
+        _settings.Save();
     }
 
     /// <summary>Set by the view: shows the platform folder picker, returns a local path or null.</summary>

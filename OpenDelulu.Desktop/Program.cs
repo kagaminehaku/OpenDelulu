@@ -45,6 +45,8 @@ sealed class Program
                 AppHost.StartupCut = cut;
                 i++;
             }
+            else if (args[i] == "--backend" && i + 1 < args.Length)
+                AppHost.StartupBackend = args[++i];
             else if (args[i] == "--open" && i + 2 < args.Length)
                 AppHost.StartupFile = (args[++i], args[++i]);
         }

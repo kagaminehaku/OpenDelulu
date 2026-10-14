@@ -20,6 +20,16 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Silk.NET.Vulkan" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" />
+    <PackageReference Include="Silk.NET.Direct3D11" />
+    <PackageReference Include="Silk.NET.DXGI" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- SPIR-V compiled from the .vert/.frag sources by tools/OpenDelulu.ShaderCompiler -->
+    <EmbeddedResource Include="Rendering\Vulkan\Shaders\*.spv" LogicalName="OpenDelulu.Shaders.%(Filename)%(Extension)" />
+    <None Include="Rendering\Vulkan\Shaders\*.vert;Rendering\Vulkan\Shaders\*.frag" />
   </ItemGroup>
 
   <ItemGroup>

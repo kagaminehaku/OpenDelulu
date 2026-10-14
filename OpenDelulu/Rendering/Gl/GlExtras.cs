@@ -1,6 +1,6 @@
 using Avalonia.OpenGL;
 
-namespace OpenDelulu.Rendering;
+namespace OpenDelulu.Rendering.Gl;
 
 /// <summary>GL entry points that Avalonia's <see cref="GlInterface"/> does not expose.</summary>
 internal sealed unsafe class GlExtras

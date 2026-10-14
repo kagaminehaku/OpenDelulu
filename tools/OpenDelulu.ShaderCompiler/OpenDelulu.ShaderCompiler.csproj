@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Build-time helper: compiles the Vulkan GLSL shaders to SPIR-V (checked in next to the sources). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Shaderc" />
+    <PackageReference Include="Silk.NET.Shaderc.Native" />
+  </ItemGroup>
+</Project>

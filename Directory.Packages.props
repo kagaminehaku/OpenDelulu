@@ -18,5 +18,13 @@
         <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 
         <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
+
+        <!-- Vulkan backend (Windows/Linux/Android) and shader compilation tool -->
+        <PackageVersion Include="Silk.NET.Vulkan" Version="2.23.0" />
+        <PackageVersion Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.23.0" />
+        <PackageVersion Include="Silk.NET.Direct3D11" Version="2.23.0" />
+        <PackageVersion Include="Silk.NET.DXGI" Version="2.23.0" />
+        <PackageVersion Include="Silk.NET.Shaderc" Version="2.23.0" />
+        <PackageVersion Include="Silk.NET.Shaderc.Native" Version="2.23.0" />
     </ItemGroup>
 </Project>

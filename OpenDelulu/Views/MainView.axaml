@@ -50,10 +50,11 @@
         <!-- Game folder bar -->
         <Border Grid.Row="0" Padding="12,10" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
             <StackPanel Spacing="6">
-                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                     <TextBox Text="{Binding GameFolder}" PlaceholderText="Thư mục game, ví dụ D:\Sexy Beach 3" />
                     <Button Grid.Column="1" Content="Chọn…" Command="{Binding BrowseCommand}" />
                     <Button Grid.Column="2" Content="Mở" Classes="accent" Command="{Binding LoadCommand}" />
+                    <ComboBox Grid.Column="3" ItemsSource="{Binding Backends}" SelectedIndex="{Binding SelectedBackendIndex}" />
                 </Grid>
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.85" />
