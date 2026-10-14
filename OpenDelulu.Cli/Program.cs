@@ -8,6 +8,7 @@ using OpenDelulu.Formats.Imaging;
 using OpenDelulu.Formats.Lst;
 using OpenDelulu.Formats.Pp;
 using OpenDelulu.Formats.Save;
+using OpenDelulu.Formats.Script;
 using OpenDelulu.Formats.Scene;
 using OpenDelulu.Formats.Voice;
 using OpenDelulu.Formats.Xa;
@@ -30,6 +31,7 @@ if (args.Length < 2)
           delulu chars   <gameFolder>                         characters, hairstyles, swimsuits (from the .lst tables)
           delulu cutfit  <gameFolder> <girlId>                 diagnostic: swimsuit texture vs body variant UV fit
           delulu verify  <gameFolder> [.ext]                  parse every supported file (or one type), report failures
+          delulu sdt     <gameFolder> <archive.pp> <file.sdt> print an event/dialogue script
           delulu saves   <gameFolder> [pictureDir]            parse data/save/*.sav (optionally export character pictures)
 
         <gameFolder> is the folder that contains SexyBeach3 (and optionally SexyBeach3Plus / SexyBeach3PlusG).
@@ -184,12 +186,37 @@ switch (args[0])
     case "verify":
         return Verify(fs, args.Length > 2 ? args[2] : null);
 
+    case "sdt":
+        var script = SdtFile.Read(fs.ReadFile(args[2], args[3]));
+        Console.WriteLine($"{script.Name} v{script.Version}, {script.Scenes.Count} scene(s)");
+        foreach (var scene in script.Scenes)
+        {
+            Console.WriteLine($"scene {scene.Id} ({scene.Value}) labels: {string.Join(", ", scene.Labels.Select(l => $"{l.Value}:{l.Text}"))}");
+            PrintCommands(scene.Commands, "  ");
+        }
+        return 0;
+
     case "saves":
         return Saves(fs, args.Length > 2 ? args[2] : null);
 
     default:
         Console.Error.WriteLine($"Unknown command {args[0]}");
         return 1;
+}
+
+static void PrintCommands(IEnumerable<SdtCommand> commands, string indent)
+{
+    foreach (var command in commands)
+    {
+        Console.WriteLine(indent + command);
+        foreach (var row in command.Rows)
+            Console.WriteLine($"{indent}    | {string.Join(", ", row)}");
+        for (int i = 0; i < command.Blocks.Count; i++)
+        {
+            Console.WriteLine($"{indent}  block {i}:");
+            PrintCommands(command.Blocks[i], indent + "    ");
+        }
+    }
 }
 
 // Parses every file in <edition>/data/save; optionally exports the character pictures as PNG.
@@ -317,6 +344,8 @@ static int Verify(GameFileSystem fs, string? only = null)
         [".ptcl"] = (d, _) => Environment.GetEnvironmentVariable("DELULU_VERBOSE") is null ? Ignore(PtclFile.Read(d))
             : PtclFile.Read(d) is var pt ? $"info: {pt.Emitters.Count} emitters: {string.Join(", ", pt.Emitters.Take(4).Select(e => $"{e.Model.Textures.FirstOrDefault()?.Name}@{e.AttachFrame} keys {e.Curve17.Count}/{e.Curve7.Count}"))}" : null,
         [".glare"] = (d, _) => { GlareFile.Read(d); return null; },
+        [".sdt"] = (d, _) => Environment.GetEnvironmentVariable("DELULU_VERBOSE") is null ? Ignore(SdtFile.Read(d))
+            : SdtFile.Read(d) is var sdt ? $"info: {sdt.Name} {sdt.Scenes.Count} scenes, ops {string.Join(" ", sdt.AllCommands().GroupBy(c => c.Op).OrderBy(g => g.Key).Select(g => $"{g.Key}x{g.Count()}"))}" : null,
         [".xm"] = (d, _) =>
         {
             var morphs = XmFile.Read(d).Morphs;
