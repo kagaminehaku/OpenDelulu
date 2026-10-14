@@ -272,6 +272,14 @@ static int Verify(GameFileSystem fs, string? only = null)
         [".ptcl"] = (d, _) => Environment.GetEnvironmentVariable("DELULU_VERBOSE") is null ? Ignore(PtclFile.Read(d))
             : PtclFile.Read(d) is var pt ? $"info: {pt.Emitters.Count} emitters: {string.Join(", ", pt.Emitters.Take(4).Select(e => $"{e.Model.Textures.FirstOrDefault()?.Name}@{e.AttachFrame} keys {e.Curve17.Count}/{e.Curve7.Count}"))}" : null,
         [".glare"] = (d, _) => { GlareFile.Read(d); return null; },
+        [".xm"] = (d, _) =>
+        {
+            var morphs = XmFile.Read(d).Morphs;
+            int dangling = morphs.Clips.Sum(c => c.KeyframeRefs.Count(k => morphs.FindKeyframe(k.Name) is null));
+            return dangling > 0 ? $"{dangling} clip refs name a missing keyframe"
+                : Environment.GetEnvironmentVariable("DELULU_VERBOSE") is null ? null
+                : $"info: {morphs.IndexSets.Count} sets, {morphs.Keyframes.Count} keyframes, clips {string.Join(", ", morphs.Clips.Take(3).Select(c => $"{c.MeshName}/{c.Name}[{c.KeyframeRefs.Count}] frames {c.KeyframeRefs.First().Index}..{c.KeyframeRefs.Last().Index}"))}";
+        },
         [".tty"] = (d, _) => Environment.GetEnvironmentVariable("DELULU_VERBOSE") is null ? Ignore(TtyFile.Read(d))
             : TtyFile.Read(d) is var t ? $"info: header {Convert.ToHexString(t.Header)} joints {string.Join("/", t.Joints)}; sets {string.Join(", ", t.Sets.Select(x => $"{x.Name}[{x.Entries.Count}] g={x.Float(10):F3}"))}" : null,
     };
