@@ -80,8 +80,10 @@ dotnet run --project tools/OpenDelulu.ShaderCompiler -- OpenDelulu/Rendering/Vul
       PulseAudio/PipeWire (Linux) and AudioTrack (Android); voices with lip sync (`.vss` + level)
 - [x] `.sdt` script player (**Scripts** tab): voiced lines with lip sync, menus, Goto/SetVar/Switch; all 180 scripts run
 - [x] Stages: 9 maps × 5 times of day (`ld02_01`), the girl stands at a date point, lit for the time of day
-- [x] Basic game loop (**Play** tab): pick girl/stage/time → meeting → talk, move, go to the next intimacy level,
-      say goodbye; progress saved in `%LOCALAPPDATA%/OpenDelulu/progress.json`
+- [x] Basic game loop (**Play** tab): pick girl/stage/time → meeting → talk, dates (21 activities), swimsuit change,
+      move, go to the next intimacy level, say goodbye; progress saved in `%LOCALAPPDATA%/OpenDelulu/progress.json`
+- [x] Sun oil scene (first version): 4 poses, press and drag on her to rub oil in (the player's hand, touch areas and
+      refusals by intimacy level, reactions, voices, oily shine on the skin)
 - [x] All other formats parse: `.vss`, `.xl`, `.kys`, `.eyes`/`.neck`, `.tty`, `.ptcl`/`.glare`, `.xm`, `.sav`
 - [x] UI translations (English, Vietnamese) with runtime switching
 

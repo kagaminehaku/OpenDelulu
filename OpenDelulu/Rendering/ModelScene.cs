@@ -95,6 +95,23 @@ public sealed class ModelScene
         Changed?.Invoke();
     }
 
+    /// <summary>Shows or hides every mesh of one object (meshes its model hides by default stay hidden).</summary>
+    public void SetObjectVisible(int objectIndex, bool visible)
+    {
+        bool changed = false;
+        for (int i = 0; i < _meshes.Count; i++)
+        {
+            if (_owner[i] != objectIndex || _visible[i] == (visible && _meshes[i].Visible))
+                continue;
+            _visible[i] = visible && _meshes[i].Visible;
+            changed = true;
+        }
+        if (!changed)
+            return;
+        _objects[objectIndex].Animator?.Invalidate();
+        Changed?.Invoke();
+    }
+
     /// <summary>Call after changing an animator (clip, expression, play state, placement).</summary>
     public void NotifyChanged()
     {
@@ -104,6 +121,44 @@ public sealed class ModelScene
     }
 
     public bool IsAnimating => _objects.Any(o => o.Animator?.IsAnimating == true);
+
+    /// <summary>Camera pitch to start from (radians, positive = from above); null = the viewer's default.</summary>
+    public float? CameraPitch { get; set; }
+
+    /// <summary>Camera zoom to start from (1 = whole model); null = the viewer's default.</summary>
+    public float? CameraZoom { get; set; }
+
+    /// <summary>Added to the subject's heading for the default view (e.g. pi/2 = from her side).</summary>
+    public float CameraYawOffset { get; set; }
+
+    /// <summary>
+    /// Centre the camera on the subject's current pose instead of its bind pose (lying down poses are far from the
+    /// standing T-pose the model's bounds describe); zooming in then stays on the body rather than the face.
+    /// The centre is taken once, after the first animated frame, so the camera does not follow every move.
+    /// </summary>
+    public bool FrameLivePose { get; set; }
+
+    Vector3? _liveCenter;
+
+    Vector3? LiveCenter()
+    {
+        var o = _objects[_subject];
+        var min = new Vector3(float.MaxValue);
+        var max = new Vector3(float.MinValue);
+        for (int m = o.MeshOffset; m < o.MeshOffset + o.Model.Meshes.Count; m++)
+        {
+            if (!_visible[m])
+                continue;
+            var vertices = _meshes[m].Vertices;
+            for (int v = 0; v < vertices.Length; v += RenderModel.VertexStride)
+            {
+                var p = new Vector3(vertices[v], vertices[v + 1], vertices[v + 2]);
+                min = Vector3.Min(min, p);
+                max = Vector3.Max(max, p);
+            }
+        }
+        return min.X <= max.X ? (min + max) * 0.5f : null;
+    }
 
     /// <summary>Points the characters' eyes at the camera.</summary>
     public void SetLookTarget(Vector3 eye)
@@ -124,6 +179,8 @@ public sealed class ModelScene
             int offset = o.MeshOffset;
             changed |= animator.Update(seconds, i => _visible[offset + i]);
         }
+        if (FrameLivePose && _liveCenter is null && _objects[_subject].Animator is not null)
+            _liveCenter = LiveCenter();
         return changed;
     }
 
@@ -134,12 +191,12 @@ public sealed class ModelScene
             var o = _objects[_subject];
             var placement = o.Animator?.Placement ?? Matrix4x4.Identity;
             var model = o.Model;
-            var center = Vector3.Transform(model.Center, placement);
-            var aim = o.Animator?.Focus
+            var center = (FrameLivePose ? _liveCenter : null) ?? Vector3.Transform(model.Center, placement);
+            var aim = FrameLivePose ? center : o.Animator?.Focus
                 ?? Vector3.Transform(model.FocusPoint ?? model.Center + new Vector3(0, (model.BoundsMax.Y - model.Center.Y) * 0.85f, 0), placement);
             float sceneRadius = _objects.Max(x => Vector3.Distance(center, Vector3.Transform(x.Model.Center, x.Animator?.Placement ?? Matrix4x4.Identity)) + x.Model.Radius);
             var forward = Vector3.TransformNormal(Vector3.UnitZ, placement);
-            return new CameraSubject(center, model.Radius, aim, sceneRadius, MathF.Atan2(forward.X, forward.Z));
+            return new CameraSubject(center, model.Radius, aim, sceneRadius, MathF.Atan2(forward.X, forward.Z) + CameraYawOffset);
         }
     }
 }

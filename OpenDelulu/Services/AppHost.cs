@@ -58,6 +58,18 @@ public static class AppHost
     /// <summary>Start this date activity after entering the game (desktop: <c>--activity &lt;n&gt;</c>).</summary>
     public static int? StartupActivity { get; set; }
 
+    /// <summary>Start the sun oil scene in this pose after entering the game (desktop: <c>--oil &lt;pose&gt;</c>).</summary>
+    public static int? StartupOil { get; set; }
+
+    /// <summary>
+    /// Test hook: a drag to replay on the 3D view once it accepts touches, as fractions of its size
+    /// (desktop: <c>--touch 0.4,0.5;0.6,0.5 [seconds]</c>).
+    /// </summary>
+    public static (double X, double Y)[]? StartupTouch { get; set; }
+
+    /// <summary>How long the <see cref="StartupTouch"/> drag lasts before letting go.</summary>
+    public static double StartupTouchSeconds { get; set; } = 4;
+
     /// <summary>Start with all sound muted (desktop: <c>--mute</c>), e.g. for automated screenshots.</summary>
     public static bool StartupMute { get; set; }
 

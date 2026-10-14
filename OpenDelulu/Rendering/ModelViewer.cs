@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -12,7 +13,8 @@ namespace OpenDelulu.Rendering;
 /// <summary>
 /// 3D viewport for a <see cref="ModelScene"/>. Picks a render backend (Vulkan or OpenGL ES, see
 /// <see cref="RenderBackendSettings"/>), falls back to OpenGL when Vulkan cannot run, and owns the
-/// orbit camera and input: drag = rotate, wheel / pinch = zoom.
+/// orbit camera and input: drag = rotate, wheel / pinch = zoom. With a <see cref="TouchHandler"/>, the primary
+/// button or a finger touches the scene instead (the right mouse button still rotates).
 /// </summary>
 public sealed class ModelViewer : Border
 {
@@ -45,6 +47,16 @@ public sealed class ModelViewer : Border
         set => SetValue(DefaultZoomProperty, value);
     }
 
+    public static readonly StyledProperty<ISceneTouchHandler?> TouchHandlerProperty =
+        AvaloniaProperty.Register<ModelViewer, ISceneTouchHandler?>(nameof(TouchHandler));
+
+    /// <summary>Receives presses on the scene as rays; null = every drag rotates the camera.</summary>
+    public ISceneTouchHandler? TouchHandler
+    {
+        get => GetValue(TouchHandlerProperty);
+        set => SetValue(TouchHandlerProperty, value);
+    }
+
     readonly OrbitCamera _camera = new();
     readonly Grid _layers = new();
     readonly TextBlock _badge = new()
@@ -60,6 +72,7 @@ public sealed class ModelViewer : Border
     IModelViewBackend? _backend;
     string? _fallbackReason;
     Point? _dragFrom;
+    bool _touching;
 
     public ModelViewer()
     {
@@ -176,6 +189,8 @@ public sealed class ModelViewer : Border
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (change.Property == TouchHandlerProperty && change.NewValue is not null)
+            ReplayStartupTouch();
         if (change.Property == DefaultZoomProperty)
         {
             _camera.DefaultZoom = (float)DefaultZoom;
@@ -190,7 +205,13 @@ public sealed class ModelViewer : Border
         if (change.NewValue is ModelScene newScene)
             newScene.Changed += RequestFrame;
         if (!KeepCamera || change.OldValue is null)
+        {
             _camera.Reset();
+            if (change.NewValue is ModelScene { CameraPitch: { } pitch })
+                _camera.Pitch = pitch;
+            if (change.NewValue is ModelScene { CameraZoom: { } zoom } && Services.AppHost.StartupZoom is null)
+                _camera.Zoom = zoom;
+        }
         if (_backend is not null)
             _backend.Scene = change.NewValue as ModelScene;
         RequestFrame();
@@ -201,13 +222,28 @@ public sealed class ModelViewer : Border
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        _dragFrom = e.GetPosition(this);
+        var position = e.GetPosition(this);
         e.Pointer.Capture(this);
+        bool primary = e.Pointer.Type != PointerType.Mouse || e.GetCurrentPoint(this).Properties.IsLeftButtonPressed;
+        if (primary && TouchHandler is { } handler && RayAt(position) is var (ray, up) && handler.Begin(ray, up))
+        {
+            _touching = true;
+            RequestFrame();
+            return;
+        }
+        _dragFrom = position;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
+        if (_touching)
+        {
+            if (TouchHandler is { } handler && RayAt(e.GetPosition(this)) is var (ray, up))
+                handler.Move(ray, up);
+            RequestFrame();
+            return;
+        }
         if (_dragFrom is not { } from)
             return;
         var to = e.GetPosition(this);
@@ -219,8 +255,78 @@ public sealed class ModelViewer : Border
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        EndTouch();
         _dragFrom = null;
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        EndTouch();
+        _dragFrom = null;
+    }
+
+    void EndTouch()
+    {
+        if (!_touching)
+            return;
+        _touching = false;
+        TouchHandler?.End();
+        RequestFrame();
+    }
+
+    /// <summary>The camera ray through a point of the viewer (same camera as the backends draw with).</summary>
+    (Engine.Assets.Ray Ray, Vector3 Up)? RayAt(Point point)
+    {
+        if (Scene is not { } scene || Bounds.Width < 1 || Bounds.Height < 1)
+            return null;
+        float width = (float)Bounds.Width, height = (float)Bounds.Height;
+        return _camera.RayThrough(scene.Subject, width / height, 2 * (float)point.X / width - 1, 1 - 2 * (float)point.Y / height);
+    }
+
+    /// <summary>
+    /// Test hook (desktop <c>--touch</c>): once a touch handler is set, drags back and forth along
+    /// <see cref="Services.AppHost.StartupTouch"/> for a few seconds through the same code as real input, then lets go.
+    /// </summary>
+    void ReplayStartupTouch()
+    {
+        if (Services.AppHost.StartupTouch is not { Length: >= 1 } path)
+            return;
+        Services.AppHost.StartupTouch = null;
+        var started = DateTime.UtcNow;
+        bool down = false;
+        var timer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
+        timer.Tick += (_, _) =>
+        {
+            double seconds = (DateTime.UtcNow - started).TotalSeconds - 1;
+            if (seconds < 0)
+                return;
+            // Back and forth along the path, one leg per second.
+            double t = seconds % 2 > 1 ? 2 - seconds % 2 : seconds % 2;
+            double f = t * (path.Length - 1);
+            int i = Math.Min((int)f, Math.Max(0, path.Length - 2));
+            var a = path[i];
+            var b = path[Math.Min(i + 1, path.Length - 1)];
+            double u = f - i;
+            var point = new Point((a.X + (b.X - a.X) * u) * Bounds.Width, (a.Y + (b.Y - a.Y) * u) * Bounds.Height);
+            if (TouchHandler is not { } handler || RayAt(point) is not var (ray, up))
+                return;
+            if (!down)
+            {
+                down = handler.Begin(ray, up);
+                _touching = down;
+            }
+            else if (seconds < Services.AppHost.StartupTouchSeconds)
+                handler.Move(ray, up);
+            else
+            {
+                timer.Stop();
+                EndTouch();
+            }
+            RequestFrame();
+        };
+        timer.Start();
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)

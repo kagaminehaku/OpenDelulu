@@ -32,6 +32,12 @@ public sealed record SwimsuitInfo(int Row, string Name, AssetRef Texture, AssetR
 /// </summary>
 public sealed record DateActivity(int Number, AssetRef Animation, AssetRef? Prop, AssetRef? PropAnimation);
 
+/// <summary>
+/// A pose of the sun-oil scene (ld01 rows 81..84, "onGG_PP.xa"): about 200 clips of the girl waiting, reacting to
+/// oil and touches, refusing, and the transitions between them. The exe picks it with the oil menu's four icons.
+/// </summary>
+public sealed record OilPose(int Number, AssetRef Animation);
+
 /// <summary>A playable girl, assembled from ld00 (skin), ld01_NN (parts) and lbNN (swimsuits).</summary>
 public sealed record GirlInfo(
     int Id,
@@ -58,6 +64,9 @@ public sealed record GirlInfo(
 
     /// <summary>Breast (ld01 row 31) and buttocks (row 32) jiggle (.tty).</summary>
     public IReadOnlyList<AssetRef> BodyPhysics { get; init; } = [];
+
+    /// <summary>Sun-oil scene poses by number (1..4).</summary>
+    public IReadOnlyList<OilPose> OilPoses { get; init; } = [];
 
     public string DisplayName => $"{CharacterDatabase.NameOf(Id)} ({Id:00})";
 }
@@ -176,6 +185,9 @@ public sealed class CharacterDatabase
                             : null)
                     .OfType<DateActivity>().ToList(),
                 BodyPhysics = new[] { Physics(31, ".tty"), Physics(32, ".tty") }.OfType<AssetRef>().ToList(),
+                OilPoses = Enumerable.Range(81, 4)
+                    .Select(n => Existing(Xa(n)) is { } anim ? new OilPose(n - 80, anim) : null)
+                    .OfType<OilPose>().ToList(),
             });
         }
 

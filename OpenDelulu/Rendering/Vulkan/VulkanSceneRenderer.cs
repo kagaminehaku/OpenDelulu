@@ -597,18 +597,19 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             PName = entry,
         };
 
-        // RenderModel vertex: position (3), normal (3), uv (2) floats.
+        // RenderModel vertex: position (3), normal (3), uv (2), gloss (1) floats.
         var binding = new VertexInputBindingDescription(0, RenderModel.VertexStride * sizeof(float), VertexInputRate.Vertex);
-        var attributes = stackalloc VertexInputAttributeDescription[3];
+        var attributes = stackalloc VertexInputAttributeDescription[4];
         attributes[0] = new VertexInputAttributeDescription(0, 0, Format.R32G32B32Sfloat, 0);
         attributes[1] = new VertexInputAttributeDescription(1, 0, Format.R32G32B32Sfloat, 3 * sizeof(float));
         attributes[2] = new VertexInputAttributeDescription(2, 0, Format.R32G32Sfloat, 6 * sizeof(float));
+        attributes[3] = new VertexInputAttributeDescription(3, 0, Format.R32Sfloat, 8 * sizeof(float));
         var vertexInput = new PipelineVertexInputStateCreateInfo
         {
             SType = StructureType.PipelineVertexInputStateCreateInfo,
             VertexBindingDescriptionCount = 1,
             PVertexBindingDescriptions = &binding,
-            VertexAttributeDescriptionCount = 3,
+            VertexAttributeDescriptionCount = 4,
             PVertexAttributeDescriptions = attributes,
         };
         var inputAssembly = new PipelineInputAssemblyStateCreateInfo

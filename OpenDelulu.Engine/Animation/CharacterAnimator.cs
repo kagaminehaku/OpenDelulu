@@ -84,6 +84,9 @@ public sealed class CharacterAnimator
 
     public MorphPlayer? Face { get; set; }
 
+    /// <summary>Morphs that follow the body animation's timeline (the player's hand); null for none.</summary>
+    public TimelineMorph? Morph { get; set; }
+
     /// <summary>Hair and breast/buttock secondary motion; null to disable.</summary>
     public SpringBones? Physics { get; set; }
 
@@ -118,6 +121,9 @@ public sealed class CharacterAnimator
     /// <summary>True while something moves on its own (a playing clip or blinking).</summary>
     public bool IsAnimating => Body is { IsPlaying: true, Current.IsStatic: false } || Face?.AutoBlink == true || Speech is not null
         || Physics?.IsMoving == true;
+
+    /// <summary>World matrix of a rig frame in the last evaluated pose, placement included.</summary>
+    public Matrix4x4 WorldOf(int frame) => _world[frame];
 
     /// <summary>Forces a re-skin on the next <see cref="Update"/> (pose, expression or visibility changed).</summary>
     public void Invalidate() => _dirty = true;
@@ -160,6 +166,8 @@ public sealed class CharacterAnimator
             ComputeWorld();
         }
         Physics?.Apply(_local, _world, seconds);
+        if (Morph is not null)
+            Morph.Time = Body?.Time ?? 0;
         if (_focusFrames.Length > 0)
             Focus = _focusFrames.Aggregate(Vector3.Zero, (sum, i) => sum + _world[i].Translation) / _focusFrames.Length;
 
@@ -169,7 +177,7 @@ public sealed class CharacterAnimator
             if (!isVisible(i) || !IsMeshAnimated(i))
                 return;
             var mesh = meshes[i];
-            RenderModel.Skin(mesh, _world, Face?.Apply(mesh));
+            RenderModel.Skin(mesh, _world, Face?.Apply(mesh) ?? Morph?.Apply(mesh));
         });
         return true;
     }

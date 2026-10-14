@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using OpenDelulu.Engine;
 using OpenDelulu.Engine.Animation;
@@ -12,6 +14,7 @@ using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
 using OpenDelulu.Engine.Game;
+using OpenDelulu.Engine.Oil;
 using OpenDelulu.Engine.Script;
 using OpenDelulu.Engine.Stages;
 using OpenDelulu.Localization;
@@ -46,10 +49,20 @@ public sealed partial class PlayViewModel : ViewModelBase
     int _point;
     (RenderModel Model, CharacterAnimator? Animator)? _prop;
     DateActivity? _activity;
+    VoiceLibrary? _voices;
+    OilSession? _oil;
+    int _handObject = -1;
+    readonly DispatcherTimer _oilTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    readonly Stopwatch _oilClock = new();
+    readonly ISceneTouchHandler _oilTouch;
+    long _statusHoldUntil;
 
-    public PlayViewModel(GameFileSystem fs, CharacterDatabase characters, StageDatabase stages, ScriptLibrary library)
+    public PlayViewModel(GameFileSystem fs, CharacterDatabase characters, StageDatabase stages, ScriptLibrary library, VoiceLibrary? voices = null)
     {
         _fs = fs;
+        _voices = voices;
+        _oilTouch = new OilTouch(this);
+        _oilTimer.Tick += (_, _) => OilTick();
         _assembler = new CharacterAssembler(fs, characters);
         _stages = stages;
         _library = library;
@@ -84,6 +97,9 @@ public sealed partial class PlayViewModel : ViewModelBase
     [ObservableProperty] public partial bool InGame { get; set; }
     [ObservableProperty] public partial string Status { get; set; } = T("play.prompt");
 
+    /// <summary>Set while rubbing oil: presses on the viewer touch her instead of turning the camera.</summary>
+    [ObservableProperty] public partial ISceneTouchHandler? TouchHandler { get; set; }
+
     StageTime Time => (StageTime)(SelectedTimeIndex + 1);
     bool IsNight => Time is StageTime.Night or StageTime.LateNight;
 
@@ -116,6 +132,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         IsBusy = true;
         Status = T("play.loading");
         Dialogue.Hide();
+        OilPose? startupOil = null;
         try
         {
             int? swimsuit = _progress.For(choice.Id).SwimsuitRow;
@@ -128,6 +145,11 @@ public sealed partial class PlayViewModel : ViewModelBase
             PlaceGirl();
             BuildScene();
             InGame = true;
+            if (AppHost.StartupOil is int oilPose)
+            {
+                AppHost.StartupOil = null;
+                startupOil = girl.Girl.OilPoses.FirstOrDefault(p => p.Number == oilPose);
+            }
             if (AppHost.StartupActivity is int startup && girl.Girl.DateActivities.FirstOrDefault(a => a.Number == startup) is { } first)
             {
                 AppHost.StartupActivity = null;
@@ -135,7 +157,8 @@ public sealed partial class PlayViewModel : ViewModelBase
             }
             Status = F("play.where", choice.Name, StageNames[SelectedStageIndex], Times[SelectedTimeIndex]);
             PlayAmbience(stageInfo.Id);
-            Meet();
+            if (startupOil is null)
+                Meet();
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
         {
@@ -145,11 +168,14 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             IsBusy = false;
         }
+        if (startupOil is not null)
+            await StartOilAsync(startupOil);
     }
 
     [RelayCommand]
     void Leave()
     {
+        StopOil(restore: false);
         Dialogue.Hide();
         AudioSystem.Shared.StopMusic();
         Scene = null;
@@ -182,10 +208,196 @@ public sealed partial class PlayViewModel : ViewModelBase
         var objects = new List<(RenderModel, CharacterAnimator?)> { (_stage.Model, _stage.Animator), (_girl.Model, _girl.Animator) };
         if (_prop is { } prop)
             objects.Add(prop);
-        Scene = new ModelScene(objects, subject: 1);
+        _handObject = -1;
+        if (_oil is { Hand: { } hand, HandAnimator: { } handAnimator })
+        {
+            _handObject = objects.Count;
+            objects.Add((hand, handAnimator));
+        }
+        var scene = new ModelScene(objects, subject: 1);
+        if (_oil is { } oil)
+        {
+            // The whole body: from the side and above when she lies down (poses 3 and 4), three-quarter otherwise.
+            bool lying = oil.Pose.Number >= 3;
+            scene.FrameLivePose = true;
+            scene.CameraYawOffset = lying ? MathF.PI / 2 : MathF.PI / 4;
+            scene.CameraPitch = lying ? 0.75f : 0.3f;
+            scene.CameraZoom = lying ? 0.75f : 0.9f;
+        }
+        Scene = scene;
         var light = CharacterLight(_stage, Time);
         for (int i = 1; i < objects.Count; i++)
             Scene.SetLight(i, light);
+        SyncHand();
+    }
+
+    // ------------------------------------------------------------------ sun oil
+
+    /// <summary>Puts her in an oil pose at the stage's nearest oil point; drags on the viewer then rub oil in.</summary>
+    async Task StartOilAsync(OilPose pose)
+    {
+        if (_girl is not { } girl || _stage is null || IsBusy)
+            return;
+        IsBusy = true;
+        Dialogue.ShowMenu(T("oil.loading"), []);
+        StopOil(restore: false);
+        try
+        {
+            int level = Progress.Intimacy;
+            var session = await Task.Run(() =>
+            {
+                _voices ??= new VoiceLibrary(_fs);
+                return OilSession.Start(_fs, _assembler, girl, pose, level, _voices, AudioSystem.Shared);
+            });
+            if (!ReferenceEquals(girl, _girl))
+                return;
+            session.Attach();
+            session.Refused += _ => ShowStatus(F("oil.refused", CharacterDatabase.NameOf(girl.Girl.Id)), seconds: 3);
+            _oil = session;
+            _activity = null;
+            _prop = null;
+            PlaceForOil();
+            BuildScene();
+            TouchHandler = _oilTouch;
+            _oilClock.Restart();
+            _oilTimer.Start();
+            ShowStatus(F("oil.status", 0), seconds: 0);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or EndOfStreamException)
+        {
+            Status = F("oil.loadError", ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+        if (_oil is not null)
+            ShowOilMenu();
+        else
+            ShowMenu();
+    }
+
+    /// <summary>Ends the oil scene; with <paramref name="restore"/> she goes back to standing at her date point.</summary>
+    void StopOil(bool restore)
+    {
+        if (_oil is not { } oil)
+            return;
+        _oilTimer.Stop();
+        TouchHandler = null;
+        oil.End();
+        _oil = null;
+        _statusHoldUntil = 0;
+        if (!restore || _girl is not { } girl)
+            return;
+        if (girl.Girl.BodyAnimations.FirstOrDefault() is { } idle)
+            girl.Animator.Body = _assembler.LoadBodyAnimation(girl.Model, idle);
+        girl.Animator.Physics?.Reset();
+        PlaceGirl();
+        BuildScene();
+        Status = F("play.where", SelectedGirl?.Name ?? "", StageNames[SelectedStageIndex], Times[SelectedTimeIndex]);
+    }
+
+    /// <summary>The stage's oil point nearest to where she stands (moNN.xx has ten o01_N_Point_OilNN).</summary>
+    void PlaceForOil()
+    {
+        if (_girl is null || _stage is null)
+            return;
+        var points = _stage.PointGroup("Oil");
+        if (points.Count == 0)
+        {
+            PlaceGirl();
+            return;
+        }
+        var here = _girl.Animator.Placement.Translation;
+        var nearest = points.MinBy(p => Vector3.DistanceSquared(p.Transform.Translation, here));
+        _girl.Animator.Placement = Upright(nearest.Transform);
+        Scene?.NotifyChanged();
+    }
+
+    static string PoseName(int number) =>
+        Translator.Instance[$"oil.pose{number}"] is var name && name != $"oil.pose{number}" ? name : Translator.Format("oil.poseN", number);
+
+    void ShowOilPoses()
+    {
+        if (_girl is null)
+            return;
+        var options = _girl.Girl.OilPoses
+            .Select(p => (PoseName(p.Number), (Action)(() => _ = StartOilAsync(p))))
+            .ToList();
+        options.Add((T("date.back"), () => { if (_oil is null) ShowMenu(); else ShowOilMenu(); }));
+        Dialogue.ShowMenu(F("oil.choosePose", CharacterDatabase.NameOf(_girl.Girl.Id)), options);
+    }
+
+    void ShowOilMenu()
+    {
+        if (_girl is null || _oil is null)
+        {
+            ShowMenu();
+            return;
+        }
+        var options = new List<(string, Action)>
+        {
+            (T("oil.changePose"), ShowOilPoses),
+            (TouchHandler is null ? T("oil.rubMode") : T("oil.cameraMode"), () =>
+            {
+                TouchHandler = TouchHandler is null ? _oilTouch : null;
+                ShowOilMenu();
+            }),
+            (T("oil.finish"), () =>
+            {
+                StopOil(restore: true);
+                ShowMenu();
+            }),
+        };
+        Dialogue.ShowMenu(F("oil.menu", CharacterDatabase.NameOf(_girl.Girl.Id)), options);
+    }
+
+    void OilTick()
+    {
+        if (_oil is not { } oil)
+            return;
+        double seconds = Math.Min(0.1, _oilClock.Elapsed.TotalSeconds);
+        _oilClock.Restart();
+        oil.Update(seconds);
+        SyncHand();
+        if (Environment.TickCount64 >= _statusHoldUntil)
+            Status = F("oil.status", (int)MathF.Round(oil.Coating.Coverage * 100));
+    }
+
+    /// <summary>Shows a message in the status line and keeps it there for a while (the oil coverage waits).</summary>
+    void ShowStatus(string text, double seconds)
+    {
+        Status = text;
+        _statusHoldUntil = Environment.TickCount64 + (long)(seconds * 1000);
+    }
+
+    void SyncHand()
+    {
+        if (Scene is { } scene && _handObject >= 0)
+            scene.SetObjectVisible(_handObject, _oil?.HandVisible == true);
+    }
+
+    /// <summary>Passes the viewer's touches to the oil scene.</summary>
+    sealed class OilTouch(PlayViewModel owner) : ISceneTouchHandler
+    {
+        public bool Begin(Ray ray, Vector3 up)
+        {
+            bool taken = owner._oil?.Begin(ray, up) == true;
+            owner.SyncHand();
+            return taken;
+        }
+
+        public void Move(Ray ray, Vector3 up)
+        {
+            owner._oil?.Move(ray, up);
+            owner.SyncHand();
+        }
+
+        public void End()
+        {
+            owner._oil?.End();
+            owner.SyncHand();
+        }
     }
 
     /// <summary>Date activity N plays at the stage's o01_N_Point_DateNN, with its prop.</summary>
@@ -370,6 +582,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             (T("play.talk"), () => RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu)),
             (T("play.date"), ShowActivities),
+            (T("play.oil"), ShowOilPoses),
             (T("play.changeSwimsuit"), ShowSwimsuits),
             (T("play.move"), () => { _point++; PlaceGirl(); ShowMenu(); }),
         };

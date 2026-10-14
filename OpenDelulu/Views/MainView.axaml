@@ -140,7 +140,7 @@
                         <TextBlock Text="{Binding Dialogue.Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
                     </StackPanel>
                     <Grid Grid.Column="1" Margin="8">
-                        <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" />
+                        <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" TouchHandler="{Binding TouchHandler}" />
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                     </Grid>
                 </Grid>

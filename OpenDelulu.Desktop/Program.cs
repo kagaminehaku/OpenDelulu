@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.Linq;
 using Avalonia;
 using OpenDelulu.Rendering;
 using OpenDelulu.Services;
@@ -101,6 +103,25 @@ sealed class Program
             {
                 AppHost.StartupActivity = activity;
                 i++;
+            }
+            else if (args[i] == "--oil" && i + 1 < args.Length && int.TryParse(args[i + 1], out int oilPose))
+            {
+                AppHost.StartupOil = oilPose;
+                i++;
+            }
+            else if (args[i] == "--touch" && i + 1 < args.Length)
+            {
+                var points = args[++i].Split(';', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(p => p.Split(','))
+                    .Where(p => p.Length == 2)
+                    .Select(p => (double.Parse(p[0], CultureInfo.InvariantCulture), double.Parse(p[1], CultureInfo.InvariantCulture)))
+                    .ToArray();
+                AppHost.StartupTouch = points.Length > 0 ? points : null;
+                if (i + 1 < args.Length && double.TryParse(args[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds))
+                {
+                    AppHost.StartupTouchSeconds = seconds;
+                    i++;
+                }
             }
             else if (args[i] == "--mute")
                 AppHost.StartupMute = true;

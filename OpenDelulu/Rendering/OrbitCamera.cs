@@ -63,6 +63,26 @@ public sealed class OrbitCamera
             viewProjection *= Matrix4x4.CreateScale(1, -1, 1);
         return (viewProjection, Vector3.Normalize(eyeDir + new Vector3(0, 0.6f, 0)), eye);
     }
+
+    /// <summary>
+    /// The ray through a point of the view (<paramref name="x"/>, <paramref name="y"/> from -1 to 1, y up) and the
+    /// screen's up direction there, for the projection <see cref="Compute"/> gives the backends.
+    /// </summary>
+    public (Ray Ray, Vector3 Up)? RayThrough(CameraSubject subject, float aspect, float x, float y)
+    {
+        var (viewProjection, _, _) = Compute(subject, aspect, flipY: false);
+        if (!Matrix4x4.Invert(viewProjection, out var inverse))
+            return null;
+        Vector3 Unproject(float px, float py, float depth)
+        {
+            var v = Vector4.Transform(new Vector4(px, py, depth, 1), inverse);
+            return new Vector3(v.X, v.Y, v.Z) / v.W;
+        }
+        var near = Unproject(x, y, 0);
+        var far = Unproject(x, y, 1);
+        var up = Unproject(x, y + 0.05f, 0.5f) - Unproject(x, y, 0.5f);
+        return (new Ray(near, Vector3.Normalize(far - near)), up.LengthSquared() > 1e-12f ? Vector3.Normalize(up) : Vector3.UnitY);
+    }
 }
 
 /// <summary>Measures real time between rendered frames for animation.</summary>

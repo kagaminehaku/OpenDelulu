@@ -97,6 +97,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.BindAttribLocationString(_program, 0, "aPos");
         gl.BindAttribLocationString(_program, 1, "aNormal");
         gl.BindAttribLocationString(_program, 2, "aUV");
+        gl.BindAttribLocationString(_program, 3, "aGloss");
         CheckShader(gl.LinkProgramAndGetError(_program), "link");
         gl.DeleteShader(vs);
         gl.DeleteShader(fs);
@@ -251,6 +252,8 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             gl.VertexAttribPointer(1, 3, GL_FLOAT, 0, stride, 3 * sizeof(float));
             gl.EnableVertexAttribArray(2);
             gl.VertexAttribPointer(2, 2, GL_FLOAT, 0, stride, 6 * sizeof(float));
+            gl.EnableVertexAttribArray(3);
+            gl.VertexAttribPointer(3, 1, GL_FLOAT, 0, stride, 8 * sizeof(float));
             gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.IndexBuffer);
             gl.DrawElements(GL_TRIANGLES, mesh.IndexCount, GL_UNSIGNED_SHORT, 0);
         }
@@ -335,13 +338,16 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             ATTRIB vec3 aPos;
             ATTRIB vec3 aNormal;
             ATTRIB vec2 aUV;
+            ATTRIB float aGloss;
             uniform mat4 uMvp;
             VOUT vec3 vNormal;
             VOUT vec2 vUV;
+            VOUT float vGloss;
             void main()
             {
                 vNormal = aNormal;
                 vUV = aUV;
+                vGloss = aGloss;
                 gl_Position = uMvp * vec4(aPos, 1.0);
             }
             """;
@@ -356,6 +362,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             uniform float uAlphaPass;
             VIN vec3 vNormal;
             VIN vec2 vUV;
+            VIN float vGloss;
             void main()
             {
                 vec4 texel = TEX(uTex, vUV);
@@ -369,9 +376,19 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
                 }
                 // Direct3D 9 fixed-function material lighting (two-sided): emissive + ambient * scene ambient
                 // + diffuse * light * N.L. Keep in sync with the Vulkan shader (model.frag).
-                float lambert = abs(dot(normalize(vNormal), uLightDir));
+                vec3 normal = normalize(vNormal);
+                float lambert = abs(dot(normal, uLightDir));
                 vec3 lit = uEmissive.rgb + uAmbient.rgb * 0.35 + uDiffuse.rgb * 0.55 * lambert;
                 vec3 color = texel.rgb * min(lit, vec3(1.15));
+                // Sun oil: wet, darker skin with a sharp highlight. The camera direction is recovered from the
+                // light, which OrbitCamera puts at normalize(eye direction + 0.6 up).
+                if (vGloss > 0.001) {
+                    float s = 0.6 * uLightDir.y + sqrt(0.36 * uLightDir.y * uLightDir.y + 0.64);
+                    vec3 view = normalize(uLightDir * s - vec3(0.0, 0.6, 0.0));
+                    float highlight = pow(abs(dot(normal, normalize(uLightDir + view))), 48.0);
+                    float sheen = pow(1.0 - abs(dot(normal, view)), 3.0);
+                    color = color * (1.0 - 0.12 * vGloss) + uDiffuse.rgb * vGloss * (0.75 * highlight + 0.18 * sheen);
+                }
                 fragColor = vec4(color, alpha);
             }
             """;

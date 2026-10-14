@@ -62,8 +62,8 @@ public sealed class Rig
 /// </summary>
 public sealed class RenderModel
 {
-    /// <summary>Floats per vertex: position (3), normal (3), uv (2).</summary>
-    public const int VertexStride = 8;
+    /// <summary>Floats per vertex: position (3), normal (3), uv (2), gloss (1; sun oil, see <see cref="RenderMesh.Gloss"/>).</summary>
+    public const int VertexStride = 9;
 
     public required string Name { get; init; }
     public required IReadOnlyList<RenderMesh> Meshes { get; init; }
@@ -96,6 +96,7 @@ public sealed class RenderModel
         if (source.IsEmpty)
             source = mesh.SourceVertices;
         var output = mesh.Vertices;
+        var gloss = mesh.Gloss;
         var frameWorld = world[mesh.FrameIndex];
 
         Span<Matrix4x4> skin = mesh.BoneFrames is { } bones ? new Matrix4x4[bones.Length] : default;
@@ -143,6 +144,7 @@ public sealed class RenderModel
             output[o] = position.X; output[o + 1] = position.Y; output[o + 2] = position.Z;
             output[o + 3] = normal.X; output[o + 4] = normal.Y; output[o + 5] = normal.Z;
             output[o + 6] = src.UV.X; output[o + 7] = src.UV.Y;
+            output[o + 8] = gloss is null ? 0 : gloss[v];
         }
     }
 
@@ -354,6 +356,11 @@ public sealed class RenderMesh
 
     /// <summary>Blending requested by the data (see <see cref="BlendMode"/>).</summary>
     public BlendMode Blend { get; init; }
+
+    /// <summary>
+    /// Per-vertex shine 0..1 (sun oil), copied into the vertices by <see cref="RenderModel.Skin"/>; null = matte.
+    /// </summary>
+    public float[]? Gloss { get; set; }
 
     public string DisplayName => $"{FrameName} [{SubmeshIndex}]";
 }

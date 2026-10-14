@@ -210,8 +210,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             bool openScript = AppHost.StartupScript is not null;
             Characters = characters is ({ Girls.Count: > 0 } db, var voices, _) ? new CharacterViewModel(fileSystem, db, voices) : null;
             Scripts = characters is ({ Girls.Count: > 0 } sdb, _, { Scripts.Count: > 0 } library) ? new ScriptViewModel(fileSystem, sdb, library) : null;
-            Play = characters is ({ Girls.Count: > 0 } pdb, _, { Scripts.Count: > 0 } plib) && stageDb is { Stages.Count: > 0 }
-                ? new PlayViewModel(fileSystem, pdb, stageDb, plib) : null;
+            Play = characters is ({ Girls.Count: > 0 } pdb, var pvoices, { Scripts.Count: > 0 } plib) && stageDb is { Stages.Count: > 0 }
+                ? new PlayViewModel(fileSystem, pdb, stageDb, plib, pvoices) : null;
             if (Characters is not null)
             {
                 Characters.SelectedGirl = Characters.Girls.FirstOrDefault(g => g.Id == AppHost.StartupCharacter) ?? Characters.Girls[0];
