@@ -7,6 +7,7 @@ using OpenDelulu.Formats.Character;
 using OpenDelulu.Formats.Imaging;
 using OpenDelulu.Formats.Lst;
 using OpenDelulu.Formats.Pp;
+using OpenDelulu.Formats.Save;
 using OpenDelulu.Formats.Scene;
 using OpenDelulu.Formats.Voice;
 using OpenDelulu.Formats.Xa;
@@ -29,6 +30,7 @@ if (args.Length < 2)
           delulu chars   <gameFolder>                         characters, hairstyles, swimsuits (from the .lst tables)
           delulu cutfit  <gameFolder> <girlId>                 diagnostic: swimsuit texture vs body variant UV fit
           delulu verify  <gameFolder> [.ext]                  parse every supported file (or one type), report failures
+          delulu saves   <gameFolder> [pictureDir]            parse data/save/*.sav (optionally export character pictures)
 
         <gameFolder> is the folder that contains SexyBeach3 (and optionally SexyBeach3Plus / SexyBeach3PlusG).
         """);
@@ -182,9 +184,52 @@ switch (args[0])
     case "verify":
         return Verify(fs, args.Length > 2 ? args[2] : null);
 
+    case "saves":
+        return Saves(fs, args.Length > 2 ? args[2] : null);
+
     default:
         Console.Error.WriteLine($"Unknown command {args[0]}");
         return 1;
+}
+
+// Parses every file in <edition>/data/save; optionally exports the character pictures as PNG.
+static int Saves(GameFileSystem fs, string? pictureDir)
+{
+    int failed = 0;
+    foreach (var edition in fs.Install.Editions)
+    {
+        string dir = $"{edition.DataFolder}/save";
+        if (!fs.Install.Storage.DirectoryExists(dir))
+            continue;
+        foreach (var name in fs.Install.Storage.EnumerateFiles(dir, "*.sav").Order(StringComparer.OrdinalIgnoreCase))
+        {
+            using var stream = fs.Install.Storage.OpenRead($"{dir}/{name}");
+            var data = new byte[stream.Length];
+            stream.ReadExactly(data);
+            try
+            {
+                var save = SaveFile.Read(data, name);
+                string detail = save.Kind == SaveKind.Personal
+                    ? $"history {save.History.Count(h => h.Time is not null)} dated ({string.Join(", ", save.History.Where(h => h.Time is not null).Select(h => h.Time!.Value.ToString("yyyy-MM-dd HH:mm")))}), " +
+                      $"pictures {string.Join(" ", save.Pictures.Select((_, i) => save.DecodePicture(i) is var img ? $"{img.Width}x{img.Height}" : ""))}" +
+                      (save.Plus ? $", plus extension {save.PlusExtension.Count / 2} entries" : "")
+                    : string.Join(" ", save.Fields.Take(12));
+                Console.WriteLine($"{edition.Edition,-8} {name}: {save.Kind}{(save.Plus ? " (Plus)" : "")}, {data.Length} bytes: {detail}");
+                if (pictureDir is not null && save.Kind == SaveKind.Personal)
+                {
+                    Directory.CreateDirectory(pictureDir);
+                    for (int i = 0; i < save.Pictures.Count; i++)
+                        File.WriteAllBytes(Path.Combine(pictureDir, $"{edition.Edition}_{Path.GetFileNameWithoutExtension(name)}_{i}.png"), PngWriter.Encode(save.DecodePicture(i)));
+                }
+            }
+            catch (Exception e) when (e is InvalidDataException or ArgumentException)
+            {
+                failed++;
+                Console.WriteLine($"{edition.Edition,-8} {name}: FAILED {e.Message}");
+            }
+        }
+    }
+    return failed == 0 ? 0 : 1;
 }
 
 // Diagnostic: which body variant's swimsuit UVs best match each swimsuit texture's opaque area (F1 score).
