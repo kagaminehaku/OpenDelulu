@@ -140,10 +140,15 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             _scene = scene;
         }
 
+        // No Y flip: Vulkan's clip space points down, but the compositor samples the shared image with its
+        // origin at the bottom (verified on the D3D11 and Vulkan sharing paths), and the two cancel out.
+        var camera3 = scene is null ? default : camera.Compute(scene.Model, _size.Width / (float)_size.Height, flipY: false, scene.Animator?.Focus);
+
         // The swapchain waited for the previous frame, so the mapped vertex buffers are free to rewrite.
         bool animating = false;
         if (scene?.Animator is { } animator)
         {
+            animator.LookTarget = camera3.Eye;
             if (animator.Update(deltaSeconds, scene.IsVisible))
                 for (int i = 0; i < _meshes.Count; i++)
                     if (scene.IsVisible(i))
@@ -176,11 +181,8 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
 
         if (scene is not null && _meshes.Count > 0)
         {
-            // No Y flip: Vulkan's clip space points down, but the compositor samples the shared image with its
-            // origin at the bottom (verified on the D3D11 shared-texture path), and the two cancel out.
-            var (viewProjection, light) = camera.Compute(scene.Model, _size.Width / (float)_size.Height, flipY: false);
-            DrawPass(cmd, scene, _opaque, viewProjection, light, translucent: false);
-            DrawPass(cmd, scene, _translucent, viewProjection, light, translucent: true);
+            DrawPass(cmd, scene, _opaque, camera3.ViewProjection, camera3.LightDirection, translucent: false);
+            DrawPass(cmd, scene, _translucent, camera3.ViewProjection, camera3.LightDirection, translucent: true);
         }
         Api.CmdEndRenderPass(cmd);
 
@@ -257,7 +259,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             indices.Write<ushort>(mesh.Indices);
             var diffuse = mesh.Diffuse;
             if (diffuse.X + diffuse.Y + diffuse.Z < 0.05f)
-                diffuse = Vector4.One; // some materials only use ambient/emissive
+                diffuse = new Vector4(1, 1, 1, diffuse.W); // some materials only use ambient/emissive; keep their opacity
             _meshes.Add(new GpuMesh(vertices, indices, mesh.Indices.Length, mesh.TextureIndex, diffuse, mesh.HasAlpha));
         }
     }

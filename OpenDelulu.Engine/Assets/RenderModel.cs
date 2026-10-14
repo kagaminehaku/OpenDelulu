@@ -74,6 +74,9 @@ public sealed class RenderModel
     public Vector3 BoundsMax { get; init; }
 
     public Vector3 Center => (BoundsMin + BoundsMax) * 0.5f;
+
+    /// <summary>Point close-ups should aim at: between the eyes for characters, null otherwise.</summary>
+    public Vector3? FocusPoint { get; init; }
     public float Radius => MathF.Max(0.001f, Vector3.Distance(BoundsMin, BoundsMax) * 0.5f);
 
     public static RenderModel FromXx(XxModel model, string name) => Build(name, [new RenderPart(name, model, model.Root)]);
@@ -241,8 +244,9 @@ public sealed class RenderModel
                         Vertices = new float[submesh.Vertices.Length * VertexStride],
                         Indices = submesh.Indices,
                         TextureIndex = material is null ? -1 : ResolveTexture(p, material.Textures.FirstOrDefault()?.Name ?? ""),
-                        Diffuse = material?.Diffuse ?? Vector4.One,
-                        Ambient = material?.Ambient ?? Vector4.Zero,
+                        // Material colors are stored negated in SB3 data (4778 of 4796 materials; the rest are 0).
+                        Diffuse = material is null ? Vector4.One : Vector4.Abs(material.Diffuse),
+                        Ambient = material is null ? Vector4.Zero : Vector4.Abs(material.Ambient),
                         MaterialName = material?.Name ?? "",
                         SourceVertices = submesh.Vertices,
                         FrameIndex = rig.FrameIndex[frame],
@@ -265,7 +269,10 @@ public sealed class RenderModel
         var max = new Vector3(float.MinValue);
         foreach (var mesh in meshes)
         {
-            mesh.HasAlpha = mesh.TextureIndex >= 0 && textures[mesh.TextureIndex]?.HasAlpha() == true;
+            // Material alpha below 1 marks overlays/effects: water, glints, blush, the cornea layer (alpha 0 = hidden
+            // until an expression or effect raises it).
+            mesh.HasAlpha = mesh.Diffuse.W < 0.999f
+                || (mesh.TextureIndex >= 0 && textures[mesh.TextureIndex]?.HasAlpha() == true);
             // Frame the camera on what is actually shown (helper meshes can be huge).
             if (!mesh.Visible)
                 continue;
@@ -279,7 +286,18 @@ public sealed class RenderModel
         if (min.X > max.X)
             min = max = Vector3.Zero;
 
-        return new RenderModel { Name = name, Meshes = meshes, Textures = textures, Rig = rig, BoundsMin = min, BoundsMax = max };
+        // Characters: between the eye frames (bind pose), falling back to the head joint.
+        Vector3? focus = null;
+        int left = rig.Find("o01_N_Me_L"), right = rig.Find("o01_N_Me_R"), head = rig.Find("o01_J_Head");
+        if (left >= 0 && right >= 0)
+            focus = (world[left].Translation + world[right].Translation) * 0.5f;
+        else if (head >= 0)
+            focus = world[head].Translation;
+
+        return new RenderModel
+        {
+            Name = name, Meshes = meshes, Textures = textures, Rig = rig, BoundsMin = min, BoundsMax = max, FocusPoint = focus,
+        };
     }
 }
 
@@ -293,6 +311,7 @@ public sealed class RenderMesh
     /// <summary>Triangle list, Direct3D winding (clockwise front faces).</summary>
     public required ushort[] Indices { get; init; }
     public required int TextureIndex { get; init; }
+    /// <summary>Material diffuse color (already un-negated); W is the material opacity.</summary>
     public required Vector4 Diffuse { get; init; }
     public required Vector4 Ambient { get; init; }
     public required string MaterialName { get; init; }

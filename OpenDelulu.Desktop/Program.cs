@@ -75,6 +75,12 @@ sealed class Program
             }
             else if (args[i] == "--backend" && i + 1 < args.Length)
                 AppHost.StartupBackend = args[++i];
+            else if (args[i] == "--zoom" && i + 1 < args.Length
+                     && float.TryParse(args[i + 1], System.Globalization.CultureInfo.InvariantCulture, out float zoom))
+            {
+                AppHost.StartupZoom = zoom;
+                i++;
+            }
             else if (args[i] == "--compositor" && i + 1 < args.Length)
                 _compositorOverride = args[++i].Equals("vulkan", StringComparison.OrdinalIgnoreCase);
             else if (args[i] == "--open" && i + 2 < args.Length)

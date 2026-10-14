@@ -124,6 +124,7 @@
                         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Expressions}" SelectedItem="{Binding SelectedExpression}"
                                   MaxDropDownHeight="420" />
                         <CheckBox IsChecked="{Binding AutoBlink}" Content="Chớp mắt tự động" />
+                        <CheckBox IsChecked="{Binding EyesFollowCamera}" Content="Mắt nhìn theo camera" />
 
                         <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
                         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="OrangeRed" />

@@ -53,6 +53,7 @@ public partial class CharacterViewModel : ViewModelBase
     [ObservableProperty] public partial bool IsPlaying { get; set; } = true;
     [ObservableProperty] public partial bool FollowNext { get; set; } = true;
     [ObservableProperty] public partial bool AutoBlink { get; set; } = true;
+    [ObservableProperty] public partial bool EyesFollowCamera { get; set; } = true;
     [ObservableProperty] public partial double Speed { get; set; } = 1;
     [ObservableProperty] public partial ModelPreviewViewModel? Preview { get; set; }
     [ObservableProperty] public partial string Status { get; set; } = "";
@@ -243,12 +244,15 @@ public partial class CharacterViewModel : ViewModelBase
 
     partial void OnAutoBlinkChanged(bool value) => ApplyPlaybackSettings();
 
+    partial void OnEyesFollowCameraChanged(bool value) => ApplyPlaybackSettings();
+
     partial void OnSpeedChanged(double value) => ApplyPlaybackSettings();
 
     void ApplyPlaybackSettings()
     {
         if (_character?.Animator is not { } animator)
             return;
+        animator.EyesFollowTarget = EyesFollowCamera;
         if (animator.Body is { } body)
         {
             body.IsPlaying = IsPlaying;

@@ -37,6 +37,9 @@ public static class AppHost
 
     /// <summary>Optional render backend override (desktop: <c>--backend auto|gl|vulkan</c>).</summary>
     public static string? StartupBackend { get; set; }
+
+    /// <summary>Optional initial camera zoom for the 3D viewer (desktop: <c>--zoom 0.3</c>).</summary>
+    public static float? StartupZoom { get; set; }
 }
 
 public sealed class AppSettings

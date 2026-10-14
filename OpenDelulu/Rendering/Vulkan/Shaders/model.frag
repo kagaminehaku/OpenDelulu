@@ -15,7 +15,7 @@ layout(location = 0) out vec4 outColor;
 void main()
 {
     vec4 texel = texture(uTex, vUV);
-    float alpha = texel.a;
+    float alpha = texel.a * pc.diffuse.a;
     if (pc.lightAndPass.w < 0.5) {
         if (alpha < 0.5) discard;
     } else {

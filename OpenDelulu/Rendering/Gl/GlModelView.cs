@@ -144,9 +144,11 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         if (scene is null || _uploaded != scene || _meshes.Count == 0)
             return;
 
+        var (mvp, light, eye) = Camera.Compute(scene.Model, width / (float)height, flipY: false, scene.Animator?.Focus);
+        if (scene.Animator is { } lookAnimator)
+            lookAnimator.LookTarget = eye;
         AnimateScene(gl, scene);
 
-        var (mvp, light) = Camera.Compute(scene.Model, width / (float)height, flipY: false);
 
         gl.UseProgram(_program);
         if (_vao != 0) gl.BindVertexArray(_vao);
@@ -253,7 +255,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
 
             var diffuse = mesh.Diffuse;
             if (diffuse.X + diffuse.Y + diffuse.Z < 0.05f)
-                diffuse = Vector4.One; // some materials only use ambient/emissive
+                diffuse = new Vector4(1, 1, 1, diffuse.W); // some materials only use ambient/emissive; keep their opacity
             _meshes.Add(new GpuMesh(vbo, ibo, mesh.Indices.Length, mesh.TextureIndex, diffuse, mesh.HasAlpha));
         }
         gl.BindBuffer(GL_ARRAY_BUFFER, 0);
@@ -332,7 +334,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             void main()
             {
                 vec4 texel = TEX(uTex, vUV);
-                float alpha = texel.a; // material alpha is unreliable in SB3 data
+                float alpha = texel.a * uDiffuse.a;
                 if (uAlphaPass < 0.5) {
                     if (alpha < 0.5) discard;
                 } else {

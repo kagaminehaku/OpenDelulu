@@ -12,13 +12,13 @@ public sealed class OrbitCamera
 
     public float Yaw { get; set; } = DefaultYaw;
     public float Pitch { get; set; } = 0.1f;
-    public float Zoom { get; set; } = 1f;
+    public float Zoom { get; set; } = Services.AppHost.StartupZoom ?? 1f;
 
     public void Reset()
     {
         Yaw = DefaultYaw;
         Pitch = 0.1f;
-        Zoom = 1f;
+        Zoom = Services.AppHost.StartupZoom ?? 1f;
     }
 
     public void Rotate(float deltaYaw, float deltaPitch)
@@ -34,10 +34,15 @@ public sealed class OrbitCamera
     /// GLSL's column-major read then equals the transpose needed for <c>M * v</c>.
     /// </summary>
     /// <param name="flipY">Vulkan's clip space points Y down.</param>
-    public (Matrix4x4 ViewProjection, Vector3 LightDirection) Compute(RenderModel model, float aspect, bool flipY)
+    /// <param name="focus">Current close-up point (e.g. the animated eyes); defaults to the model's bind-pose one.</param>
+    public (Matrix4x4 ViewProjection, Vector3 LightDirection, Vector3 Eye) Compute(RenderModel model, float aspect, bool flipY, Vector3? focus = null)
     {
         float radius = model.Radius;
-        var target = model.Center;
+        // Zooming in also moves the orbit centre from the middle of the model to its focus point (between a
+        // character's eyes), so close-ups are not seen from waist height.
+        float raise = Math.Clamp((1f - Zoom) / 0.6f, 0f, 1f);
+        var aim = focus ?? model.FocusPoint ?? model.Center + new Vector3(0, (model.BoundsMax.Y - model.Center.Y) * 0.85f, 0);
+        var target = Vector3.Lerp(model.Center, aim, raise);
         float distance = radius * 2.4f * Zoom;
         var eyeDir = new Vector3(
             MathF.Sin(Yaw) * MathF.Cos(Pitch),
@@ -51,7 +56,7 @@ public sealed class OrbitCamera
         var viewProjection = view * projection;
         if (flipY)
             viewProjection *= Matrix4x4.CreateScale(1, -1, 1);
-        return (viewProjection, Vector3.Normalize(eyeDir + new Vector3(0, 0.6f, 0)));
+        return (viewProjection, Vector3.Normalize(eyeDir + new Vector3(0, 0.6f, 0)), eye);
     }
 }
 
