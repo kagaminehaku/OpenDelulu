@@ -44,6 +44,17 @@ public sealed class XxFrame
     /// <summary>Transform from this frame's space to model space (<c>local * parent * ... * root</c>).</summary>
     public Matrix4x4 WorldMatrix => Parent is null ? Matrix : Matrix * Parent.WorldMatrix;
 
+    /// <summary>
+    /// Re-parents <paramref name="child"/> under this frame (detaching it from its previous parent).
+    /// Used to attach parts loaded from other .xx files, e.g. a face under the body's head joint.
+    /// </summary>
+    public void AttachChild(XxFrame child)
+    {
+        child.Parent?.Children.Remove(child);
+        child.Parent = this;
+        Children.Add(child);
+    }
+
     public IEnumerable<XxFrame> EnumerateSelfAndDescendants()
     {
         var stack = new Stack<XxFrame>();

@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:OpenDelulu.ViewModels"
              xmlns:r="using:OpenDelulu.Rendering"
+             xmlns:ch="using:OpenDelulu.Engine.Characters"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              x:Class="OpenDelulu.Views.MainView"
              x:DataType="vm:MainViewModel">
@@ -14,6 +15,35 @@
     <UserControl.Resources>
         <FontFamily x:Key="MonoFont">Consolas, Menlo, monospace</FontFamily>
     </UserControl.Resources>
+
+    <!-- Preview templates shared by the data browser and the character maker. -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="vm:TextPreviewViewModel">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                <SelectableTextBlock Text="{Binding Text}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+            </ScrollViewer>
+        </DataTemplate>
+        <DataTemplate DataType="vm:ImagePreviewViewModel">
+            <Border Background="#30808080" CornerRadius="4">
+                <Image Source="{Binding Bitmap}" Stretch="Uniform" StretchDirection="DownOnly" />
+            </Border>
+        </DataTemplate>
+        <DataTemplate DataType="vm:ModelPreviewViewModel">
+            <Grid RowDefinitions="*,Auto">
+                <r:ModelViewer Scene="{Binding Scene}" KeepCamera="True" />
+                <Expander Grid.Row="1" Margin="0,8,0,0" HorizontalAlignment="Stretch"
+                          Header="{Binding Meshes.Count, StringFormat='Mesh ({0}): bật/tắt từng phần'}">
+                    <ListBox ItemsSource="{Binding Meshes}" MaxHeight="220">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:MeshToggleViewModel">
+                                <CheckBox IsChecked="{Binding IsVisible}" Content="{Binding Name}" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Expander>
+            </Grid>
+        </DataTemplate>
+    </UserControl.DataTemplates>
 
     <Grid RowDefinitions="Auto,*">
         <!-- Game folder bar -->
@@ -31,74 +61,91 @@
             </StackPanel>
         </Border>
 
-        <Grid Grid.Row="1" x:Name="Body" ColumnDefinitions="340,4,*">
-            <!-- Archive + file browser -->
-            <Grid x:Name="LeftPane" Grid.Column="0" RowDefinitions="Auto,Auto,*" Margin="8">
-                <ComboBox Grid.Row="0" HorizontalAlignment="Stretch"
-                          ItemsSource="{Binding Archives}" SelectedItem="{Binding SelectedArchive}"
-                          PlaceholderText="Archive (.pp)">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ArchiveItem">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="{Binding Display}" />
-                                <TextBlock Grid.Column="1" Text="{Binding Edition}" Opacity="0.6" Margin="12,0,0,0" />
-                            </Grid>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <TextBox Grid.Row="1" Margin="0,8" Text="{Binding FileFilter}" PlaceholderText="Lọc tên file (vd: .xx, bo01)" />
-                <ListBox Grid.Row="2" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:FileItem">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Text="{Binding Display}" FontFamily="{StaticResource MonoFont}" />
-                                <TextBlock Grid.Column="1" Text="{Binding Size}" Opacity="0.6" Margin="12,0,0,0" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </Grid>
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTab}" Padding="0">
+            <TabItem Header="Nhân vật" IsEnabled="{Binding Characters, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Grid x:Name="CharacterBody" ColumnDefinitions="300,*" DataContext="{Binding Characters}" x:DataType="vm:CharacterViewModel">
+                    <StackPanel x:Name="CharacterOptions" Grid.Column="0" Margin="12" Spacing="10">
+                        <TextBlock Text="Nhân vật" Opacity="0.7" />
+                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Girls}" SelectedItem="{Binding SelectedGirl}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="ch:GirlInfo">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Kiểu tóc" Opacity="0.7" />
+                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Hairs}" SelectedIndex="{Binding SelectedHairIndex}" />
+                        <TextBlock Text="Đồ bơi" Opacity="0.7" />
+                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Swimsuits}" SelectedItem="{Binding SelectedSwimsuit}"
+                                  MaxDropDownHeight="420">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="ch:SwimsuitInfo">
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <TextBlock Text="{Binding Row}" Opacity="0.5" MinWidth="32" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Kiểu thân (biến thể model)" Opacity="0.7" />
+                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Cuts}" SelectedIndex="{Binding SelectedCutIndex}" />
+                        <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+                        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
+                        <TextBlock Text="{Binding TableInfo}" TextWrapping="Wrap" Opacity="0.5" FontSize="12" />
+                    </StackPanel>
+                    <Grid x:Name="CharacterPreview" Grid.Column="1" RowDefinitions="Auto,*" Margin="8">
+                        <StackPanel Margin="4,0,4,8">
+                            <TextBlock Text="{Binding Preview.Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Preview.Details}" Opacity="0.7" />
+                        </StackPanel>
+                        <ContentControl Grid.Row="1" Content="{Binding Preview}" />
+                    </Grid>
+                </Grid>
+            </TabItem>
 
-            <GridSplitter x:Name="Splitter" Grid.Column="1" ResizeDirection="Columns" />
+            <TabItem Header="Dữ liệu game">
+                <Grid x:Name="Body" ColumnDefinitions="340,4,*">
+                    <!-- Archive + file browser -->
+                    <Grid x:Name="LeftPane" Grid.Column="0" RowDefinitions="Auto,Auto,*" Margin="8">
+                        <ComboBox Grid.Row="0" HorizontalAlignment="Stretch"
+                                  ItemsSource="{Binding Archives}" SelectedItem="{Binding SelectedArchive}"
+                                  PlaceholderText="Archive (.pp)">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ArchiveItem">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Display}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Edition}" Opacity="0.6" Margin="12,0,0,0" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBox Grid.Row="1" Margin="0,8" Text="{Binding FileFilter}" PlaceholderText="Lọc tên file (vd: .xx, bo01)" />
+                        <ListBox Grid.Row="2" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:FileItem">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Display}" FontFamily="{StaticResource MonoFont}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Size}" Opacity="0.6" Margin="12,0,0,0" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
 
-            <!-- Preview -->
-            <Grid x:Name="PreviewPane" Grid.Column="2" RowDefinitions="Auto,*" Margin="8">
-                <StackPanel Grid.Row="0" Margin="4,0,4,8" IsVisible="{Binding Preview, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <TextBlock Text="{Binding Preview.Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding Preview.Details}" Opacity="0.7" />
-                </StackPanel>
-                <TextBlock Grid.Row="1" Text="{Binding StorageHint}" TextWrapping="Wrap" Opacity="0.6" Margin="4"
-                           IsVisible="{Binding Preview, Converter={x:Static ObjectConverters.IsNull}}" />
-                <ContentControl Grid.Row="1" Content="{Binding Preview}">
-                    <ContentControl.DataTemplates>
-                        <DataTemplate DataType="vm:TextPreviewViewModel">
-                            <ScrollViewer HorizontalScrollBarVisibility="Auto">
-                                <SelectableTextBlock Text="{Binding Text}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
-                            </ScrollViewer>
-                        </DataTemplate>
-                        <DataTemplate DataType="vm:ImagePreviewViewModel">
-                            <Border Background="#30808080" CornerRadius="4">
-                                <Image Source="{Binding Bitmap}" Stretch="Uniform" StretchDirection="DownOnly" />
-                            </Border>
-                        </DataTemplate>
-                        <DataTemplate DataType="vm:ModelPreviewViewModel">
-                            <Grid RowDefinitions="*,Auto">
-                                <r:ModelViewer Scene="{Binding Scene}" />
-                                <Expander Grid.Row="1" Margin="0,8,0,0" HorizontalAlignment="Stretch"
-                                          Header="{Binding Meshes.Count, StringFormat='Mesh ({0}): bật/tắt từng phần'}">
-                                    <ListBox ItemsSource="{Binding Meshes}" MaxHeight="220">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:MeshToggleViewModel">
-                                                <CheckBox IsChecked="{Binding IsVisible}" Content="{Binding Name}" />
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
-                                </Expander>
-                            </Grid>
-                        </DataTemplate>
-                    </ContentControl.DataTemplates>
-                </ContentControl>
-            </Grid>
-        </Grid>
+                    <GridSplitter x:Name="Splitter" Grid.Column="1" ResizeDirection="Columns" />
+
+                    <!-- Preview -->
+                    <Grid x:Name="PreviewPane" Grid.Column="2" RowDefinitions="Auto,*" Margin="8">
+                        <StackPanel Grid.Row="0" Margin="4,0,4,8" IsVisible="{Binding Preview, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <TextBlock Text="{Binding Preview.Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Preview.Details}" Opacity="0.7" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="1" Text="{Binding StorageHint}" TextWrapping="Wrap" Opacity="0.6" Margin="4"
+                                   IsVisible="{Binding Preview, Converter={x:Static ObjectConverters.IsNull}}" />
+                        <ContentControl Grid.Row="1" Content="{Binding Preview}" />
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
     </Grid>
 </UserControl>

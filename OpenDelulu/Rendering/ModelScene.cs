@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using OpenDelulu.Engine.Assets;
 
 namespace OpenDelulu.Rendering;
@@ -6,7 +7,7 @@ namespace OpenDelulu.Rendering;
 /// <summary>What the <see cref="ModelViewer"/> draws: a model plus per-mesh visibility.</summary>
 public sealed class ModelScene(RenderModel model)
 {
-    readonly bool[] _visible = CreateVisibility(model.Meshes.Count);
+    readonly bool[] _visible = model.Meshes.Select(m => m.Visible).ToArray();
 
     public RenderModel Model { get; } = model;
 
@@ -21,12 +22,5 @@ public sealed class ModelScene(RenderModel model)
             return;
         _visible[meshIndex] = visible;
         Changed?.Invoke();
-    }
-
-    static bool[] CreateVisibility(int count)
-    {
-        var visible = new bool[count];
-        Array.Fill(visible, true);
-        return visible;
     }
 }

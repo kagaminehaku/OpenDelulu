@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenDelulu.Engine;
 using OpenDelulu.Engine.Assets;
+using OpenDelulu.Engine.Characters;
 using OpenDelulu.Formats.Imaging;
 using OpenDelulu.Formats.Lst;
 using OpenDelulu.Formats.Pp;
@@ -74,6 +75,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     public partial PreviewViewModel? Preview { get; set; }
 
+    /// <summary>Character maker; null until game data with character tables is loaded.</summary>
+    [ObservableProperty]
+    public partial CharacterViewModel? Characters { get; set; }
+
+    /// <summary>0 = character maker, 1 = data browser.</summary>
+    [ObservableProperty]
+    public partial int SelectedTab { get; set; } = 1;
+
     /// <summary>Opens the last used folder automatically if it still looks valid.</summary>
     public async Task TryAutoLoadAsync()
     {
@@ -109,11 +118,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         try
         {
             string folder = GameFolder.Trim();
-            var (fileSystem, items) = await Task.Run(() =>
+            var (fileSystem, items, characters, characterError) = await Task.Run(() =>
             {
                 var fs = new GameFileSystem(GameInstall.Detect(folder));
                 var list = fs.Archives.Select(a => new ArchiveItem(a, fs.GetArchive(a.Name).Entries.Count)).ToList();
-                return (fs, list);
+                CharacterDatabase? db = null;
+                string? error = null;
+                try { db = CharacterDatabase.Load(fs); }
+                catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException) { error = ex.Message; }
+                return (fs, list, db, error);
             });
 
             _fileSystem?.Dispose();
@@ -123,8 +136,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 Archives.Add(item);
             SelectedArchive = Archives.FirstOrDefault();
 
+            Characters = characters is { Girls.Count: > 0 } ? new CharacterViewModel(fileSystem, characters) : null;
+            if (Characters is not null)
+            {
+                Characters.SelectedGirl = Characters.Girls.FirstOrDefault(g => g.Id == AppHost.StartupCharacter) ?? Characters.Girls[0];
+                if (Characters.Swimsuits.FirstOrDefault(s => s.Row == AppHost.StartupSwimsuit) is { } swimsuit)
+                    Characters.SelectedSwimsuit = swimsuit;
+                if (AppHost.StartupCut is int cut && cut > 0 && cut < Characters.Cuts.Count)
+                    Characters.SelectedCutIndex = cut;
+                SelectedTab = AppHost.StartupFile is null ? 0 : 1;
+            }
+
             var editions = string.Join(", ", fileSystem.Install.Editions.Select(e => e.Edition));
-            Status = $"{editions}: {items.Count} archive, {items.Sum(i => i.FileCount):N0} file.";
+            Status = $"{editions}: {items.Count} archive, {items.Sum(i => i.FileCount):N0} file"
+                + (characters is null ? $". Không đọc được bảng nhân vật: {characterError}" : $", {characters.Girls.Count} nhân vật.");
             _settings.LastGameFolder = folder;
             _settings.Save();
         }

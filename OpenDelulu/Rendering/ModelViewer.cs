@@ -27,6 +27,16 @@ public sealed class ModelViewer : OpenGlControlBase
         set => SetValue(SceneProperty, value);
     }
 
+    public static readonly StyledProperty<bool> KeepCameraProperty =
+        AvaloniaProperty.Register<ModelViewer, bool>(nameof(KeepCamera));
+
+    /// <summary>Keep rotation/zoom when the scene changes (e.g. switching swimsuits).</summary>
+    public bool KeepCamera
+    {
+        get => GetValue(KeepCameraProperty);
+        set => SetValue(KeepCameraProperty, value);
+    }
+
     sealed record GpuMesh(int VertexBuffer, int IndexBuffer, int IndexCount, int TextureIndex, Vector4 Diffuse, bool HasAlpha);
 
     GlExtras? _ext;
@@ -37,7 +47,9 @@ public sealed class ModelViewer : OpenGlControlBase
     ModelScene? _uploaded;
     bool _sceneDirty;
 
-    float _yaw, _pitch = 0.1f, _zoom = 1f;
+    // Illusion characters face +Z, so the default camera looks from the front (+Z towards -Z).
+    const float DefaultYaw = MathF.PI;
+    float _yaw = DefaultYaw, _pitch = 0.1f, _zoom = 1f;
     Point? _dragFrom;
 
     public ModelViewer()
@@ -60,9 +72,12 @@ public sealed class ModelViewer : OpenGlControlBase
         if (change.NewValue is ModelScene newScene)
             newScene.Changed += RequestNextFrameRendering;
         _sceneDirty = true;
-        _yaw = 0;
-        _pitch = 0.1f;
-        _zoom = 1f;
+        if (!KeepCamera || change.OldValue is null)
+        {
+            _yaw = DefaultYaw;
+            _pitch = 0.1f;
+            _zoom = 1f;
+        }
         RequestNextFrameRendering();
     }
 

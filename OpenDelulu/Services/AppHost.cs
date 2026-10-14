@@ -22,6 +22,15 @@ public static class AppHost
 
     /// <summary>Optional file to select after loading (desktop: <c>--open &lt;archive.pp&gt; &lt;file&gt;</c>).</summary>
     public static (string Archive, string File)? StartupFile { get; set; }
+
+    /// <summary>Optional girl id to show first in the character maker (desktop: <c>--character &lt;id&gt;</c>).</summary>
+    public static int? StartupCharacter { get; set; }
+
+    /// <summary>Optional swimsuit row to select first (desktop: <c>--swimsuit &lt;row&gt;</c>).</summary>
+    public static int? StartupSwimsuit { get; set; }
+
+    /// <summary>Optional body variant override (desktop: <c>--cut &lt;n&gt;</c>).</summary>
+    public static int? StartupCut { get; set; }
 }
 
 public sealed class AppSettings

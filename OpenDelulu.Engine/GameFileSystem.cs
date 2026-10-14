@@ -64,7 +64,7 @@ public sealed class GameFileSystem : IDisposable
 
     public XxModel ReadModel(string archiveName, string fileName) => XxReader.Read(ReadFile(archiveName, fileName));
 
-    /// <summary>Finds a file by name in any archive (slow: opens every archive). Prefers later editions.</summary>
+    /// <summary>Finds a file by name in any archive. Prefers later editions.</summary>
     public (ArchiveInfo Archive, PpEntry Entry)? FindAnywhere(string fileName)
     {
         foreach (var info in Archives.Reverse())
@@ -74,6 +74,24 @@ public sealed class GameFileSystem : IDisposable
                 return (info, entry);
         }
         return null;
+    }
+
+    /// <summary>True if <see cref="ReadReferenced"/> would find the file.</summary>
+    public bool ExistsReferenced(string archiveName, string fileName) =>
+        (HasArchive(archiveName) && GetArchive(archiveName).Find(fileName) is not null) || FindAnywhere(fileName) is not null;
+
+    /// <summary>
+    /// Reads a file the way the game's tables reference it: from the named archive, falling back to
+    /// any archive containing that file name (tables of one edition sometimes name archives of another,
+    /// e.g. base tables point at sb3_1300.pp which only exists as sb3x_1300.pp in the Bonus Disc).
+    /// </summary>
+    public byte[] ReadReferenced(string archiveName, string fileName)
+    {
+        if (HasArchive(archiveName) && GetArchive(archiveName).Find(fileName) is { } entry)
+            return GetArchive(archiveName).ReadAllBytes(entry);
+        if (FindAnywhere(fileName) is var (info, found))
+            return GetArchive(info.Name).ReadAllBytes(found);
+        throw new FileNotFoundException($"{fileName} (referenced in {archiveName}) is not installed.");
     }
 
     public void Dispose()

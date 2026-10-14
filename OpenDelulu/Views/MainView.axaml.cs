@@ -64,5 +64,10 @@ public partial class MainView : UserControl
         Grid.SetColumn(PreviewPane, narrow ? 0 : 2);
         Grid.SetRow(PreviewPane, narrow ? 1 : 0);
         Splitter.IsVisible = !narrow;
+
+        CharacterBody.ColumnDefinitions = narrow ? new ColumnDefinitions("*") : new ColumnDefinitions("300,*");
+        CharacterBody.RowDefinitions = narrow ? new RowDefinitions("Auto,*") : new RowDefinitions("*");
+        Grid.SetColumn(CharacterPreview, narrow ? 0 : 1);
+        Grid.SetRow(CharacterPreview, narrow ? 1 : 0);
     }
 }

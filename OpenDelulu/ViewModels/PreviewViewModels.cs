@@ -31,17 +31,12 @@ public sealed class ModelPreviewViewModel : PreviewViewModel
         for (int i = 0; i < scene.Model.Meshes.Count; i++)
         {
             var toggle = new MeshToggleViewModel(scene, i);
-            if (IsHelperMaterial(scene.Model.Meshes[i].MaterialName))
+            if (!scene.Model.Meshes[i].Visible)
                 toggle.IsVisible = false;
             meshes.Add(toggle);
         }
         Meshes = meshes;
     }
-
-    /// <summary>Collision ("Atari") and glare helper meshes are never drawn as-is by the game.</summary>
-    static bool IsHelperMaterial(string material) =>
-        material.Contains("Atari", System.StringComparison.OrdinalIgnoreCase) ||
-        material.Contains("Glare", System.StringComparison.OrdinalIgnoreCase);
 
     public ModelScene Scene { get; }
     public IReadOnlyList<MeshToggleViewModel> Meshes { get; }
@@ -49,7 +44,7 @@ public sealed class ModelPreviewViewModel : PreviewViewModel
 
 public sealed partial class MeshToggleViewModel(ModelScene scene, int index) : ViewModelBase
 {
-    public string Name { get; } = scene.Model.Meshes[index].DisplayName;
+    public string Name { get; } = $"{scene.Model.Meshes[index].PartName}: {scene.Model.Meshes[index].DisplayName}";
 
     [ObservableProperty]
     public partial bool IsVisible { get; set; } = true;
