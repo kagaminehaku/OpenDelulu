@@ -19,7 +19,8 @@ public sealed class NullAudioOutput : IAudioOutput
     Thread? _thread;
     volatile bool _running;
 
-    public string Name => "không có thiết bị âm thanh";
+    /// <summary>"none": the UI shows its own translated text for it.</summary>
+    public string Name => "none";
 
     public void Start(AudioMixer mixer)
     {

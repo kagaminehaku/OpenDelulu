@@ -42,7 +42,7 @@ internal sealed unsafe class VulkanContext : IDisposable
         }
         catch (Exception ex)
         {
-            return (null, "Không tải được Vulkan: " + ex.Message);
+            return (null, Localization.Translator.Format("gfx.vulkanLoad", ex.Message));
         }
 
         bool windows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
@@ -55,20 +55,20 @@ internal sealed unsafe class VulkanContext : IDisposable
             bool d3d = images.Contains(KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureNtHandle);
             bool opaque = images.Contains(KnownPlatformGraphicsExternalImageHandleTypes.VulkanOpaqueNtHandle);
             if (!d3d && !opaque)
-                return (null, $"Compositor không nhận ảnh ngoài ({string.Join(", ", images)})");
+                return (null, Localization.Translator.Format("gfx.noExternalImages", string.Join(", ", images)));
             deviceExtensions.AddRange([KhrExternalMemoryWin32.ExtensionName, KhrExternalSemaphoreWin32.ExtensionName,
                 "VK_KHR_dedicated_allocation", "VK_KHR_get_memory_requirements2"]);
             shareMode = opaque ? "Vulkan NT handle" : "D3D11 shared texture";
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            return (null, "Vulkan trên macOS/iOS cần MoltenVK, chưa hỗ trợ");
+            return (null, Localization.Translator.Get("gfx.noMoltenVk"));
         }
         else
         {
             if (!images.Contains(KnownPlatformGraphicsExternalImageHandleTypes.VulkanOpaquePosixFileDescriptor)
                 || !semaphores.Contains(KnownPlatformGraphicsExternalSemaphoreHandleTypes.VulkanOpaquePosixFileDescriptor))
-                return (null, $"Compositor không nhận ảnh Vulkan ({string.Join(", ", images)})");
+                return (null, Localization.Translator.Format("gfx.noVulkanImages", string.Join(", ", images)));
             deviceExtensions.AddRange([KhrExternalMemoryFd.ExtensionName, KhrExternalSemaphoreFd.ExtensionName]);
             shareMode = "Vulkan file descriptor";
         }
@@ -183,7 +183,7 @@ internal sealed unsafe class VulkanContext : IDisposable
             }
 
             api.DestroyInstance(instance, null);
-            return (null, "Không tìm thấy GPU Vulkan phù hợp với compositor");
+            return (null, Localization.Translator.Get("gfx.noGpu"));
         }
         catch (Exception ex)
         {

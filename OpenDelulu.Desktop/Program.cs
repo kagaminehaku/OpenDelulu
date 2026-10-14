@@ -51,7 +51,7 @@ sealed class Program
     /// <summary>
     /// --game &lt;folder&gt;   --character &lt;id&gt;   --swimsuit &lt;row&gt;   --cut &lt;n&gt;
     /// --open &lt;archive.pp&gt; &lt;file&gt;   --backend auto|gl|vulkan   --compositor vulkan|default
-    /// --speak po|ph|pd|pe|all   --mute   --script &lt;name&gt;   --play &lt;girl&gt; [stage] [time]
+    /// --speak po|ph|pd|pe|all   --mute   --script &lt;name&gt;   --play &lt;girl&gt; [stage] [time]   --lang &lt;code&gt;
     /// </summary>
     static void ParseArguments(string[] args)
     {
@@ -95,6 +95,8 @@ sealed class Program
                 int time = i + 1 < args.Length && int.TryParse(args[i + 1], out int t) ? (++i, t).Item2 : 2;
                 AppHost.StartupPlay = (playGirl, stage, time);
             }
+            else if (args[i] == "--lang" && i + 1 < args.Length)
+                AppHost.StartupLanguage = args[++i];
             else if (args[i] == "--mute")
                 AppHost.StartupMute = true;
             else if (args[i] == "--open" && i + 2 < args.Length)

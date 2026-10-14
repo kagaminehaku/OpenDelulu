@@ -8,7 +8,7 @@ namespace OpenDelulu.Engine.Animation;
 public sealed record AnimationClipInfo(int Index, string Name, float Start, float End, float Speed, int Next)
 {
     public bool IsStatic => End <= Start;
-    public string DisplayName => $"{Index}. {(Name.Length > 0 ? Name : "(không tên)")}";
+    public string DisplayName => Name.Length > 0 ? $"{Index}. {Name}" : $"{Index}.";
 }
 
 /// <summary>

@@ -130,7 +130,7 @@ public sealed class ModelViewer : Border
         _startupTimer.Tick += (_, _) =>
         {
             _startupTimer?.Stop();
-            OnBackendFailed(backend, kind, "không khởi tạo được với compositor hiện tại");
+            OnBackendFailed(backend, kind, Localization.Translator.Get("gfx.startTimeout"));
         };
         _startupTimer.Start();
     }
@@ -152,13 +152,13 @@ public sealed class ModelViewer : Border
         if (_failedKinds.Contains(other))
         {
             RemoveBackend();
-            _badge.Text = $"Lỗi đồ họa: {BackendName(kind)} {reason}. {_fallbackReason}";
+            _badge.Text = Localization.Translator.Format("gfx.error", BackendName(kind), reason, _fallbackReason);
             return;
         }
         // Never leave the viewer blank: try the other backend once.
-        _fallbackReason = $"{BackendName(kind)} không dùng được ({reason}), dùng {BackendName(other)}"
+        _fallbackReason = Localization.Translator.Format("gfx.fallback", BackendName(kind), reason, BackendName(other))
             + (RenderBackendSettings.VulkanCompositor && kind == RenderBackendKind.OpenGl
-                ? ". Giao diện đang chạy Vulkan; chọn OpenGL rồi mở lại app để dùng OpenGL."
+                ? Localization.Translator.Get("gfx.vulkanUi")
                 : "");
         CreateBackend(other);
     }

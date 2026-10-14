@@ -9,6 +9,7 @@ using OpenDelulu.Engine.Animation;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
 using OpenDelulu.Engine.Script;
+using OpenDelulu.Localization;
 using OpenDelulu.Rendering;
 
 namespace OpenDelulu.ViewModels;
@@ -128,7 +129,7 @@ public sealed partial class DialogueViewModel(GameFileSystem fs, ScriptLibrary l
         switch (next)
         {
             case ScriptMessage message:
-                Speaker = ScriptLibrary.SpeakerName(message.Speaker);
+                Speaker = GameText.Speaker(message.Speaker);
                 Text = message.Text;
                 CanAdvance = true;
                 PlayVoice(message.Voice);
@@ -150,7 +151,7 @@ public sealed partial class DialogueViewModel(GameFileSystem fs, ScriptLibrary l
         _runner = null;
         CanAdvance = false;
         Speaker = "";
-        Text = "— Hết —";
+        Text = T("dialogue.end");
         var finished = _finished;
         _finished = null;
         finished?.Invoke();
@@ -173,7 +174,7 @@ public sealed partial class DialogueViewModel(GameFileSystem fs, ScriptLibrary l
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
         {
-            Status = $"Không phát được {voice}: {ex.Message}";
+            Status = F("audio.playError", voice, ex.Message);
         }
     }
 }

@@ -9,7 +9,7 @@ namespace OpenDelulu.Engine.Script;
 /// <param name="Title">From the header comment (e.g. "親密度１（初回（出会い））"), or the file name.</param>
 public sealed record ScriptInfo(string Archive, string Name, int? GirlId, int? Intimacy, string Title)
 {
-    public string Display => $"{Name}  {ScriptLibrary.TranslateTitle(Title)}";
+    public string Display => $"{Name}  {Title}";
 }
 
 /// <summary>
@@ -46,9 +46,6 @@ public sealed partial class ScriptLibrary
         Scripts = _byName.Values.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    [GeneratedRegex("([１-５])への導入(Ｈ)?")]
-    private static partial Regex LeadIn();
-
     [GeneratedRegex(@"^c(\d\d)_(\d\d)_\d\d$", RegexOptions.IgnoreCase)]
     private static partial Regex CharacterScript();
 
@@ -69,56 +66,6 @@ public sealed partial class ScriptLibrary
             .Where(t => t.Length > 0 && !t.All(ch => ch is '-' or '=') && !char.IsDigit(t[0]) && !t.StartsWith('１'))
             .ToList();
         return comments is { Count: > 0 } ? comments[^1] : null;
-    }
-
-    /// <summary>
-    /// Display names for the speakers used in the scripts (the scripts keep the Japanese names; the English
-    /// patch only translated the lines).
-    /// </summary>
-    public static string SpeakerName(string speaker) => speaker switch
-    {
-        "俺" => "Tôi",
-        "愛美" => "Manami",
-        "麻矢" => "Maya",
-        "イスカ" => "Esk",
-        "イーオ" => "Eo",
-        "麗子" => "Reiko",
-        "マリア" => "Maria",
-        "バエル" => "Bael",
-        "フェイ" => "Fei",
-        "フロント" => "Lễ tân",
-        "設定２" => "",
-        _ => speaker,
-    };
-
-    static readonly (string Japanese, string Vietnamese)[] TitleWords =
-    [
-        ("クリア後メッセージ", "Lời nhắn sau khi phá đảo"),
-        ("セーブ確認", "Xác nhận lưu"),
-        ("デートシーンからマップ選択に戻った時", "Từ buổi hẹn quay về chọn bản đồ"),
-        ("ロビーでの親密度変更", "Đổi mức thân mật ở sảnh"),
-        ("ロビーに戻った時", "Khi quay về sảnh"),
-        ("島に到着後", "Sau khi tới đảo"),
-        ("水着取得", "Nhận đồ bơi"),
-        ("キャラ選択後", "sau khi chọn"),
-        ("初回", "lần đầu"),
-        ("出会い", "gặp mặt"),
-        ("別れる時", "lúc chia tay"),
-        ("夜間", "buổi tối"),
-        ("親密度", "Thân mật "),
-        ("（", " ("),
-        ("）", ")"),
-        ("１", "1"), ("２", "2"), ("３", "3"), ("４", "4"), ("５", "5"),
-    ];
-
-    /// <summary>Vietnamese rendering of a script title (the titles are a small fixed set).</summary>
-    public static string TranslateTitle(string title)
-    {
-        // "２への導入Ｈ" = lead-in to level 2 (H scene).
-        title = LeadIn().Replace(title, m => $"mở đầu mức {m.Groups[1].Value[0] - '０'}{(m.Groups[2].Success ? " (H)" : "")}");
-        foreach (var (japanese, vietnamese) in TitleWords)
-            title = title.Replace(japanese, vietnamese);
-        return title;
     }
 
     /// <summary>Girl id from a voice file name (pe02_… → 2), or null.</summary>

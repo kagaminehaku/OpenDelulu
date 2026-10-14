@@ -69,7 +69,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
     protected override void OnOpenGlLost()
     {
         base.OnOpenGlLost();
-        Failed?.Invoke("Mất ngữ cảnh OpenGL");
+        Failed?.Invoke(Localization.Translator.Get("gfx.glLost"));
     }
 
     void InitializeGl(GlInterface gl)

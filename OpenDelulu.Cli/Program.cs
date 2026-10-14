@@ -16,6 +16,9 @@ using OpenDelulu.Formats.Xx;
 
 Console.OutputEncoding = Encoding.UTF8;
 
+if (args.Length >= 2 && args[0] == "lang-check")
+    return LangCheck(args[1], args.Length > 2 ? args[2] : null);
+
 if (args.Length < 2)
 {
     Console.WriteLine("""
@@ -33,6 +36,7 @@ if (args.Length < 2)
           delulu verify  <gameFolder> [.ext]                  parse every supported file (or one type), report failures
           delulu sdt     <gameFolder> <archive.pp> <file.sdt> print an event/dialogue script
           delulu saves   <gameFolder> [pictureDir]            parse data/save/*.sav (optionally export character pictures)
+          delulu lang-check <xx.json> [en.json]               check a UI translation against English (see docs/TRANSLATING.md)
 
         <gameFolder> is the folder that contains SexyBeach3 (and optionally SexyBeach3Plus / SexyBeach3PlusG).
         """);
@@ -217,6 +221,69 @@ static void PrintCommands(IEnumerable<SdtCommand> commands, string indent)
             PrintCommands(command.Blocks[i], indent + "    ");
         }
     }
+}
+
+// Compares a translation with the English source: missing/extra keys, placeholders, empty strings.
+static int LangCheck(string translationPath, string? sourcePath)
+{
+    sourcePath ??= new[] { "OpenDelulu/Assets/Lang/en.json", "../OpenDelulu/Assets/Lang/en.json", Path.Combine(Path.GetDirectoryName(translationPath) ?? ".", "en.json") }
+        .FirstOrDefault(File.Exists);
+    if (sourcePath is null || !File.Exists(translationPath))
+    {
+        Console.Error.WriteLine("Usage: delulu lang-check <xx.json> [en.json]");
+        return 1;
+    }
+    Dictionary<string, string> Read(string path)
+    {
+        using var stream = File.OpenRead(path);
+        using var document = System.Text.Json.JsonDocument.Parse(stream, new System.Text.Json.JsonDocumentOptions
+        {
+            CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+        });
+        return document.RootElement.EnumerateObject()
+            .Where(p => p.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+            .ToDictionary(p => p.Name, p => p.Value.GetString()!);
+    }
+    Dictionary<string, string> source, translation;
+    try
+    {
+        source = Read(sourcePath);
+        translation = Read(translationPath);
+    }
+    catch (System.Text.Json.JsonException ex)
+    {
+        Console.Error.WriteLine($"Invalid JSON: {ex.Message}");
+        return 1;
+    }
+
+    static string Placeholders(string text) => string.Join(",",
+        System.Text.RegularExpressions.Regex.Matches(text, @"\{(\d+)[^}]*\}").Select(m => m.Groups[1].Value).Distinct().Order());
+
+    int problems = 0;
+    void Report(string message)
+    {
+        Console.WriteLine(message);
+        problems++;
+    }
+    if (!translation.ContainsKey("_language"))
+        Report("missing \"_language\": the language's own name, shown in the language menu");
+    foreach (var key in source.Keys.Where(k => !k.StartsWith('_')))
+    {
+        if (!translation.TryGetValue(key, out var text))
+            Report($"missing   {key}  (English: {source[key]})");
+        else if (text.Trim().Length == 0)
+            Report($"empty     {key}");
+        else if (Placeholders(text) != Placeholders(source[key]))
+            Report($"placeholders differ  {key}: English uses {{{Placeholders(source[key])}}}, translation {{{Placeholders(text)}}}");
+    }
+    foreach (var key in translation.Keys.Where(k => !k.StartsWith('_') && !source.ContainsKey(k)))
+        Report($"unknown   {key}  (not in English; renamed or removed?)");
+
+    int translated = source.Keys.Count(k => !k.StartsWith('_') && translation.ContainsKey(k));
+    int total = source.Keys.Count(k => !k.StartsWith('_'));
+    Console.WriteLine($"{Path.GetFileName(translationPath)}: {translated}/{total} strings, {problems} problem(s).");
+    return problems == 0 ? 0 : 1;
 }
 
 // Parses every file in <edition>/data/save; optionally exports the character pictures as PNG.

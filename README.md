@@ -1,96 +1,97 @@
 # Open Delulu
 
-Viết lại trình chạy cho **Sexy Beach 3** (Illusion, 2006) bằng C# + Avalonia UI.
-Dự án đọc trực tiếp dữ liệu từ bản game người dùng đã cài, **không cần file exe gốc** và
-**không chứa hay phát tán tài nguyên của game**.
+**English** · [Tiếng Việt](README.vi.md)
 
-## Cấu trúc solution (`OpenDelulu.slnx`, mở bằng Visual Studio 2026)
+A reimplementation of the **Sexy Beach 3** player (Illusion, 2006) in C# + Avalonia UI.
+It reads the data of a game the user has installed, **does not need the original executable**, and
+**does not contain or distribute any game assets**.
 
-| Project | Vai trò | Nền tảng |
+## Solution layout (`OpenDelulu.slnx`, open with Visual Studio 2026)
+
+| Project | Role | Platform |
 |---|---|---|
-| `OpenDelulu.Formats` | Đọc định dạng: `.pp`, `.lst`, `.xx`, ảnh `.tga/.bmp/.ema` | net10.0, thuần C# |
-| `OpenDelulu.Engine` | Phát hiện bản cài, hệ thống file ảo, dựng model để render | net10.0, thuần C# |
-| `OpenDelulu` | Giao diện Avalonia dùng chung + trình xem 3D OpenGL ES | net10.0 |
-| `OpenDelulu.Desktop` | Bản Windows / Linux / macOS | net10.0 |
-| `OpenDelulu.Android` | Bản Android | net10.0-android |
-| `OpenDelulu.iOS` | Bản iOS (build cần máy Mac) | net10.0-ios |
-| `OpenDelulu.Cli` | Công cụ dòng lệnh `delulu` để kiểm tra / giải nén | net10.0 |
-| `tools/OpenDelulu.ShaderCompiler` | Biên dịch shader Vulkan (GLSL → SPIR-V) | net10.0 |
+| `OpenDelulu.Formats` | Parsers for every game format (`.pp`, `.lst`, `.xx`, `.xa`, `.sdt`, `.sav`, audio…) | net10.0, plain C# |
+| `OpenDelulu.Engine` | Install detection, virtual file system, models, animation, audio, scripts, stages, game progress | net10.0, plain C# |
+| `OpenDelulu` | Shared Avalonia UI, 3D viewer (OpenGL ES / Vulkan), UI translations | net10.0 |
+| `OpenDelulu.Desktop` | Windows / Linux / macOS | net10.0 |
+| `OpenDelulu.Android` | Android | net10.0-android |
+| `OpenDelulu.iOS` | iOS (building needs a Mac; not a priority yet) | net10.0-ios |
+| `OpenDelulu.Cli` | `delulu` command line tool to inspect and verify the data | net10.0 |
+| `tools/OpenDelulu.ShaderCompiler` | Compiles the Vulkan shaders (GLSL → SPIR-V) | net10.0 |
 
-## Đồ họa
+Platform priority: Windows, Linux and Android first; iOS and macOS later.
 
-Trình xem 3D có hai backend, chọn ở góc trên bên phải ("Đồ họa: …") hoặc bằng `--backend auto|gl|vulkan`:
+## Running
 
-| Backend | Nền tảng | Cách hiển thị |
+```
+dotnet run --project OpenDelulu.Desktop
+dotnet run --project OpenDelulu.Desktop -- --game "D:\Sexy Beach 3" --play 1 1 2
+dotnet run --project OpenDelulu.Desktop -- --game "D:\Sexy Beach 3" --character 3 --swimsuit 2
+dotnet run --project OpenDelulu.Cli -- verify "D:\Sexy Beach 3"
+```
+
+The game folder is the one that contains `SexyBeach3` (and optionally `SexyBeach3Plus`, `SexyBeach3PlusG`).
+Other desktop options: `--open <archive.pp> <file>`, `--script <name>`, `--backend auto|gl|vulkan`, `--lang <code>`,
+`--mute`, `--zoom <factor>`.
+
+**Android:** copy the `Sexy Beach 3` folder into `Android/data/com.opendelulu.app/files/` (over USB), then press *Open*.
+That folder needs no storage permission.
+
+## Languages
+
+The interface is in English by default; pick another language in the top right corner (or run with `--lang vi`).
+Translations are JSON files in `OpenDelulu/Assets/Lang/`. Contributions are welcome:
+see [docs/TRANSLATING.md](docs/TRANSLATING.md).
+
+## Graphics
+
+The 3D viewer has two backends, chosen in the top bar ("Graphics: …") or with `--backend auto|gl|vulkan`:
+
+| Backend | Platforms | How frames reach the window |
 |---|---|---|
-| **Vulkan** | Windows, Linux (Android: thử, tự lùi về OpenGL nếu compositor không nhận ảnh Vulkan) | Render bằng device Vulkan riêng, trao ảnh cho compositor của Avalonia qua `ICompositionGpuInterop` (Windows: texture D3D11 chia sẻ + keyed mutex; Linux: file descriptor + semaphore), không chép qua CPU |
-| **OpenGL ES** | Mọi nền tảng (Windows chạy qua ANGLE → Direct3D 11) | `OpenGlControlBase` |
+| **Vulkan** | Windows, Linux (Android: tried, falls back to OpenGL when the compositor rejects Vulkan images) | Own Vulkan device; frames are handed to Avalonia's compositor through `ICompositionGpuInterop` (Windows: shared D3D11 texture + keyed mutex; Linux: file descriptor + semaphore), no CPU copy |
+| **OpenGL ES** | Everywhere (Windows runs it on ANGLE → Direct3D 11) | `OpenGlControlBase` |
 
-- **Tự động**: giao diện chạy ANGLE (Direct3D 11) như mặc định của Avalonia; khung 3D thử Vulkan trước
-  (trao ảnh qua texture D3D11 chia sẻ), lỗi thì lùi về OpenGL ES.
-- **Vulkan** ("Vulkan thuần"): từ lần mở app sau, cả giao diện Avalonia cũng chạy trên Vulkan
-  (`Win32RenderingMode.Vulkan` / `X11RenderingMode.Vulkan`), khung 3D trao ảnh Vulkan trực tiếp, không qua D3D11.
-  OpenGL không dùng được trong chế độ này.
-- **OpenGL ES**: chỉ dùng `OpenGlControlBase`.
+- **Automatic**: the UI runs on ANGLE (Direct3D 11) as Avalonia does by default; the 3D view tries Vulkan first
+  (shared D3D11 texture) and falls back to OpenGL ES.
+- **Vulkan** ("pure Vulkan"): from the next start the whole Avalonia UI runs on Vulkan too
+  (`Win32RenderingMode.Vulkan` / `X11RenderingMode.Vulkan`) and frames are shared as Vulkan images. OpenGL is not
+  available in this mode.
+- **OpenGL ES**: `OpenGlControlBase` only.
 
-Backend nào không khởi tạo được trong 3 giây thì khung xem tự chuyển sang backend còn lại và ghi lý do.
-Góc trái khung xem ghi backend, GPU và cách trao ảnh đang dùng (`D3D11 shared texture` hoặc `Vulkan NT handle`).
-Thử nghiệm: `--backend auto|gl|vulkan`, `--compositor vulkan|default` (không lưu vào cài đặt).
-Skinning hiện chạy trên CPU (dùng chung cho cả hai backend).
-Sửa shader Vulkan trong `OpenDelulu/Rendering/Vulkan/Shaders/*.vert|frag` rồi chạy:
+A backend that does not start within 3 seconds is replaced by the other one, and the viewer says why. Skinning runs
+on the CPU for both. Blend modes (additive light shafts, darkening shadow decals…) follow the flags stored in the
+models, as the original executable does. After editing `OpenDelulu/Rendering/Vulkan/Shaders/*.vert|frag`, run:
 
 ```
 dotnet run --project tools/OpenDelulu.ShaderCompiler -- OpenDelulu/Rendering/Vulkan/Shaders
 ```
 
-Toàn bộ logic nằm trong các thư viện không phụ thuộc nền tảng, nên mang lên điện thoại
-chỉ cần một project "đầu vào" mỏng cho từng nền tảng.
+## Done so far
 
-## Chạy
+- [x] Every `.pp` archive of all three editions (52 archives, 18,412 files)
+- [x] `.lst` tables decrypted (XOR key found; 278/278 files) with typed readers for the gameplay tables
+- [x] `.xx` models: frames, meshes, bones, materials, embedded textures (393/393); `.tga`, `.bmp`, `.ema` images
+- [x] Data browser with previews of tables, images, 3D models, sounds and scripts
+- [x] Character assembly from the tables: 8 girls, 5 hairstyles, 168 swimsuits (**Characters** tab)
+- [x] `.xa` animation: skeletal clips, facial morphs, blinking, eyes following the camera
+- [x] Vulkan backend (Silk.NET) next to OpenGL ES, with automatic fallback
+- [x] Audio: software mixer (wav/ogg, resampling, music/ambience/effects/voice buses) on waveOut (Windows),
+      PulseAudio/PipeWire (Linux) and AudioTrack (Android); voices with lip sync (`.vss` + level)
+- [x] `.sdt` script player (**Scripts** tab): voiced lines with lip sync, menus, Goto/SetVar/Switch; all 180 scripts run
+- [x] Stages: 9 maps × 5 times of day (`ld02_01`), the girl stands at a date point, lit for the time of day
+- [x] Basic game loop (**Play** tab): pick girl/stage/time → meeting → talk, move, go to the next intimacy level,
+      say goodbye; progress saved in `%LOCALAPPDATA%/OpenDelulu/progress.json`
+- [x] All other formats parse: `.vss`, `.xl`, `.kys`, `.eyes`/`.neck`, `.tty`, `.ptcl`/`.glare`, `.xm`, `.sav`
+- [x] UI translations (English, Vietnamese) with runtime switching
 
-```
-dotnet run --project OpenDelulu.Desktop
-dotnet run --project OpenDelulu.Desktop -- --game "D:\Sexy Beach 3" --open sb3_0400.pp mp01_01_00_00_00.xx
-dotnet run --project OpenDelulu.Desktop -- --game "D:\Sexy Beach 3" --character 3 --swimsuit 2
-dotnet run --project OpenDelulu.Cli -- verify "D:\Sexy Beach 3"
-```
+## Roadmap
 
-Thư mục game là thư mục chứa `SexyBeach3` (và tùy chọn `SexyBeach3Plus`, `SexyBeach3PlusG`).
+1. **Graphics**: GPU skinning, Vulkan on Android, shadows and lighting closer to the original.
+2. **Characters**: accessories (`lc*`), pareo, tan lines.
+3. **Gameplay**: dates / oil / H scenes at the `Point_*` spots, clickable spots on the map, background music per scene,
+   stage animation (waves), particles and glare, swimsuit choice in game, an in-game UI like the original.
+4. **Saves**: the structure of `data/save/*.sav` is read (`delulu saves`); field meanings and writing remain.
+5. **Video**: the `.mpg` files (MPEG-1) with a cross-platform decoder.
 
-**Android:** chép thư mục `Sexy Beach 3` vào `Android/data/com.opendelulu.app/files/` (qua USB),
-rồi bấm *Mở*. Thư mục này không cần cấp quyền truy cập bộ nhớ.
-
-**iOS:** chép thư mục `Sexy Beach 3` vào Open Delulu bằng ứng dụng Tệp (Files) hoặc Finder.
-
-## Đã làm được (mốc 1)
-
-- [x] Đọc mọi archive `.pp` của cả 3 bản (52 archive, 18.412 file)
-- [x] Giải mã bảng `.lst` (tìm ra khóa XOR; 278/278 file)
-- [x] Đọc model `.xx`: cây frame, mesh, bone, material, texture nhúng (393/393 file)
-- [x] Giải mã ảnh `.tga`, `.bmp`, `.ema`
-- [x] Trình duyệt dữ liệu + xem trước bảng, ảnh, model 3D (OpenGL ES 2/3 và GL 3.3, xoay/zoom bằng chuột hoặc cảm ứng)
-- [x] Build được cho Desktop, Android, iOS
-- [x] Ghép nhân vật từ bảng `.lst`: 8 nhân vật, 5 kiểu tóc, 168 bộ đồ bơi (tab **Nhân vật**)
-- [x] Animation `.xa`: khung xương (clip, tự chuyển clip, tốc độ), biểu cảm mặt bằng morph, chớp mắt; skinning trên CPU
-- [x] Backend Vulkan (Silk.NET) bên cạnh OpenGL ES, tự lùi về OpenGL khi cần
-- [x] Âm thanh: bộ trộn phần mềm (wav/ogg, resample, kênh nhạc/môi trường/hiệu ứng/giọng), xuất qua waveOut (Windows),
-      PulseAudio/PipeWire (Linux), AudioTrack (Android); giọng nói kèm khẩu hình (`.vss` + âm lượng)
-- [x] Trình chạy kịch bản `.sdt` (tab **Kịch bản**): thoại có giọng và khẩu hình, menu lựa chọn, Goto/SetVar/Switch;
-      chạy hết được cả 180 kịch bản
-- [x] Sân khấu: 9 map × 5 thời điểm (`ld02_01`), chế độ trộn đúng như game (cộng/làm tối/alpha), nhân vật đứng ở điểm hẹn
-      và nhuộm theo ánh sáng của giờ trong ngày
-- [x] Vòng lặp game cơ bản (tab **Chơi**): chọn cô gái/sân khấu/giờ → gặp mặt → nói chuyện, đổi chỗ, tiến tới mức thân mật
-      sau, tạm biệt; tiến độ lưu ở `%LOCALAPPDATA%/OpenDelulu/progress.json`
-- [x] Đọc `.vss` (khẩu hình), `.xl` (đèn), `.kys` (tóc), `.eyes`/`.neck`, `.tty`, `.ptcl`/`.glare`, `.xm`, `.sav`, `.sdt` (kịch bản) và các bảng gameplay (100% file)
-
-## Lộ trình
-
-1. **Đồ họa**: skinning trên GPU, Vulkan trên Android (compositor Vulkan), bóng đổ/đổ sáng gần với game gốc.
-2. **Ghép nhân vật (tiếp)**: phụ kiện (`lc*`), khăn pareo, vệt rám nắng, mắt/biểu cảm.
-3. ~~**Âm thanh**~~: đã có (xem bên trên); còn bảng nhạc nền theo cảnh, âm lượng trong cài đặt.
-4. **Gameplay tiếp**: hẹn hò/xoa dầu/H theo các điểm `Point_*`, ô bấm trên map, nhạc nền theo cảnh, animation sân khấu
-   (sóng nước), hạt và lóa sáng, chọn đồ bơi trong game, UI trong game giống bản gốc.
-5. **Lưu game**: đã đọc được cấu trúc `data/save/*.sav` (`delulu saves`); còn ý nghĩa từng trường và ghi lại.
-6. **Video**: các file `.mpg` (MPEG-1), dùng thư viện giải mã đa nền tảng.
-
-Chi tiết định dạng: [docs/formats.md](docs/formats.md).
+File formats: [docs/formats.md](docs/formats.md) (written in Vietnamese; an English version is welcome).

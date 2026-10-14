@@ -25,7 +25,7 @@ public partial class AppDelegate : AvaloniaAppDelegate<App>
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         AppHost.SuggestedGameFolder = Path.Combine(documents, "Sexy Beach 3");
         AudioSystem.OutputFactory = () => new IosAudioOutput();
-        AppHost.StorageHint = "Dùng ứng dụng Tệp (Files) hoặc Finder để chép thư mục \"Sexy Beach 3\" vào Open Delulu, rồi bấm Mở.";
+        AppHost.StorageHintKey = "hint.ios";
 
         return base.CustomizeAppBuilder(builder)
             .WithInterFont()

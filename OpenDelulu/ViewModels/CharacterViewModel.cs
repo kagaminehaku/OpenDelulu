@@ -11,6 +11,7 @@ using OpenDelulu.Engine.Animation;
 using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
+using OpenDelulu.Localization;
 using OpenDelulu.Rendering;
 using OpenDelulu.Services;
 
@@ -36,14 +37,18 @@ public partial class CharacterViewModel : ViewModelBase
         _assembler = new CharacterAssembler(fs, database);
         _voices = voices;
         Girls = database.Girls;
-        Cuts = ["Theo đồ bơi", .. Enumerable.Range(1, Girls.Count == 0 ? 0 : Girls.Max(g => g.Bodies.Count)).Select(i => $"Kiểu thân {i}")];
-        TableInfo = $"Bảng dữ liệu: {database.TableArchive}, {Girls.Count} nhân vật";
+        Cuts = [new("char.cutAuto"), .. Enumerable.Range(1, Girls.Count == 0 ? 0 : Girls.Max(g => g.Bodies.Count)).Select(i => new LocalizedText(() => F("char.cutN", i)))];
+        _tableArchive = database.TableArchive;
     }
 
     public IReadOnlyList<GirlInfo> Girls { get; }
-    public IReadOnlyList<string> Cuts { get; }
-    public string TableInfo { get; }
-    public ObservableCollection<string> Hairs { get; } = [];
+    readonly string _tableArchive;
+
+    public IReadOnlyList<LocalizedText> Cuts { get; }
+    public string TableInfo => F("char.tableInfo", _tableArchive, Girls.Count);
+    public ObservableCollection<LocalizedText> Hairs { get; } = [];
+
+    protected override void OnLanguageChanged() => OnPropertyChanged(nameof(TableInfo));
     public ObservableCollection<SwimsuitInfo> Swimsuits { get; } = [];
     public ObservableCollection<AssetRef> Animations { get; } = [];
     public ObservableCollection<AnimationClipInfo> Clips { get; } = [];
@@ -66,7 +71,7 @@ public partial class CharacterViewModel : ViewModelBase
     [ObservableProperty] public partial bool IsBusy { get; set; }
 
     /// <summary>Indexes match <see cref="VoiceGroupCodes"/>.</summary>
-    public string[] VoiceGroups { get; } = ["Giọng: tất cả", "Giọng: po", "Giọng: ph", "Giọng: pd", "Giọng: sự kiện (pe)"];
+    public LocalizedText[] VoiceGroups { get; } = [new("char.voiceAll"), new("char.voicePo"), new("char.voicePh"), new("char.voicePd"), new("char.voicePe")];
     static readonly string?[] VoiceGroupCodes = [null, "po", "ph", "pd", "pe"];
     [ObservableProperty] public partial int SelectedVoiceGroupIndex { get; set; }
     [ObservableProperty] public partial string VoiceInfo { get; set; } = "";
@@ -84,7 +89,10 @@ public partial class CharacterViewModel : ViewModelBase
         if (value is not null)
         {
             for (int i = 0; i < value.Hairs.Count; i++)
-                Hairs.Add($"Kiểu tóc {i + 1}");
+            {
+                int number = i + 1;
+                Hairs.Add(new LocalizedText(() => F("char.hairN", number)));
+            }
             foreach (var suit in value.Swimsuits)
                 Swimsuits.Add(suit);
         }
@@ -129,7 +137,7 @@ public partial class CharacterViewModel : ViewModelBase
             var model = character.Model;
             int visible = model.Meshes.Count(m => m.Visible);
             Preview = new ModelPreviewViewModel(model.Name,
-                $"{visible}/{model.Meshes.Count} mesh hiển thị, {model.Meshes.Sum(m => m.Vertices.Length / RenderModel.VertexStride):N0} đỉnh",
+                F("char.previewDetails", visible, model.Meshes.Count, model.Meshes.Sum(m => m.Vertices.Length / RenderModel.VertexStride)),
                 _scene!);
             Status = "";
             if (AppHost.StartupSpeak is { } group)
@@ -144,7 +152,7 @@ public partial class CharacterViewModel : ViewModelBase
         catch (Exception ex)
         {
             if (version == _buildVersion)
-                Status = "Lỗi ghép nhân vật: " + ex.Message;
+                Status = F("char.buildError", ex.Message);
         }
         finally
         {
@@ -192,7 +200,7 @@ public partial class CharacterViewModel : ViewModelBase
         var lines = _voices.For(character.Girl.Id).Where(l => group is null || l.Group == group).ToList();
         if (lines.Count == 0)
         {
-            VoiceInfo = "Nhân vật này không có giọng trong nhóm đã chọn.";
+            VoiceInfo = T("char.noVoices");
             return;
         }
         var line = lines[Random.Shared.Next(lines.Count)];
@@ -203,11 +211,11 @@ public partial class CharacterViewModel : ViewModelBase
             _scene?.NotifyChanged();
             string text = speech.Script is { } vss ? $" · {vss.Text}" : "";
             VoiceInfo = $"{line.File} ({speech.Voice.Duration?.TotalSeconds:0.0} s){text}"
-                + (AudioSystem.Shared.OutputError is { } error ? $" · Không mở được thiết bị âm thanh: {error}" : "");
+                + (AudioSystem.Shared.OutputError is { } error ? " · " + F("audio.deviceError", error) : "");
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException)
         {
-            VoiceInfo = $"Không phát được {line.File}: {ex.Message}";
+            VoiceInfo = F("audio.playError", line.File, ex.Message);
         }
     }
 
@@ -241,7 +249,7 @@ public partial class CharacterViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Status = $"Không tải được {asset.File}: {ex.Message}";
+            Status = F("char.animationError", asset.File, ex.Message);
             return;
         }
         if (version != _animationVersion || !ReferenceEquals(character, _character))
@@ -251,7 +259,7 @@ public partial class CharacterViewModel : ViewModelBase
         character.Animator.Body = player;
         ApplyBody(player);
         ApplyPlaybackSettings();
-        Status = player is null ? $"{asset.File} không có animation khung xương." : "";
+        Status = player is null ? F("char.noSkeleton", asset.File) : "";
     }
 
     void ApplyBody(AnimationPlayer? body)

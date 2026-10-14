@@ -12,6 +12,7 @@ using OpenDelulu.Engine.Characters;
 using OpenDelulu.Engine.Game;
 using OpenDelulu.Engine.Script;
 using OpenDelulu.Engine.Stages;
+using OpenDelulu.Localization;
 using OpenDelulu.Rendering;
 using OpenDelulu.Services;
 
@@ -19,7 +20,7 @@ namespace OpenDelulu.ViewModels;
 
 public sealed record GirlChoice(int Id, string Name, int Intimacy)
 {
-    public string Display => $"{Name} · thân mật {Intimacy}";
+    public string Display => Translator.Format("play.girlChoice", Name, Intimacy);
 }
 
 /// <summary>
@@ -53,7 +54,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             Speaker3D = () => _girl is { } girl && Scene is { } scene ? (girl, scene) : null,
         };
-        StageNames = stages.Stages.Select(s => $"Sân khấu {s.Id}").ToList();
+        StageNames = stages.Stages.Select(s => new LocalizedText(() => F("play.stageN", s.Id))).ToList();
         RefreshGirls(characters.Girls.Select(g => g.Id).Where(id => GameEvents.Levels(library, id).Count > 0).ToList());
         SelectedGirl = Girls.FirstOrDefault();
         if (AppHost.StartupPlay is var (girl, stage, time))
@@ -68,8 +69,8 @@ public sealed partial class PlayViewModel : ViewModelBase
 
     public DialogueViewModel Dialogue { get; }
     public List<GirlChoice> Girls { get; private set; } = [];
-    public IReadOnlyList<string> StageNames { get; }
-    public string[] Times { get; } = ["Sáng", "Trưa", "Chiều tối", "Đêm", "Khuya"];
+    public IReadOnlyList<LocalizedText> StageNames { get; }
+    public LocalizedText[] Times { get; } = [new("time.morning"), new("time.noon"), new("time.evening"), new("time.night"), new("time.lateNight")];
 
     [ObservableProperty] public partial GirlChoice? SelectedGirl { get; set; }
     [ObservableProperty] public partial int SelectedStageIndex { get; set; }
@@ -77,7 +78,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     [ObservableProperty] public partial ModelScene? Scene { get; set; }
     [ObservableProperty] public partial bool IsBusy { get; set; }
     [ObservableProperty] public partial bool InGame { get; set; }
-    [ObservableProperty] public partial string Status { get; set; } = "Chọn cô gái, sân khấu và thời gian rồi bấm Vào game.";
+    [ObservableProperty] public partial string Status { get; set; } = T("play.prompt");
 
     StageTime Time => (StageTime)(SelectedTimeIndex + 1);
     bool IsNight => Time is StageTime.Night or StageTime.LateNight;
@@ -109,7 +110,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (stageInfo.At(Time) is not { } variant)
             return;
         IsBusy = true;
-        Status = "Đang tải sân khấu…";
+        Status = T("play.loading");
         Dialogue.Hide();
         try
         {
@@ -121,13 +122,13 @@ public sealed partial class PlayViewModel : ViewModelBase
             Scene = new ModelScene([(stage.Model, null), (girl.Model, girl.Animator)], subject: 1);
             Scene.SetLight(1, CharacterLight(stage, Time));
             InGame = true;
-            Status = $"{choice.Name} · {StageNames[SelectedStageIndex]} · {Times[SelectedTimeIndex]}";
+            Status = F("play.where", choice.Name, StageNames[SelectedStageIndex], Times[SelectedTimeIndex]);
             PlayAmbience(stageInfo.Id);
             Meet();
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
         {
-            Status = "Không tải được: " + ex.Message;
+            Status = F("play.loadError", ex.Message);
         }
         finally
         {
@@ -145,7 +146,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         _stage = null;
         InGame = false;
         RefreshGirls(Girls.Select(g => g.Id).ToList());
-        Status = "Chọn cô gái, sân khấu và thời gian rồi bấm Vào game.";
+        Status = T("play.prompt");
     }
 
     void PlaceGirl()
@@ -238,12 +239,12 @@ public sealed partial class PlayViewModel : ViewModelBase
         int girl = _girl.Girl.Id;
         var options = new List<(string, Action)>
         {
-            ("Nói chuyện", () => RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu)),
-            ("Đi chỗ khác", () => { _point++; PlaceGirl(); ShowMenu(); }),
+            (T("play.talk"), () => RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu)),
+            (T("play.move"), () => { _point++; PlaceGirl(); ShowMenu(); }),
         };
         int maxLevel = GameEvents.Levels(_library, girl).DefaultIfEmpty(1).Max();
         if (progress.Intimacy < maxLevel && GameEvents.Find(_library, girl, progress.Intimacy, EventKind.LeadIn) is not null)
-            options.Add(($"Tiến tới thân mật {progress.Intimacy + 1}", () => RunEvent(EventKind.LeadIn, () =>
+            options.Add((F("play.nextLevel", progress.Intimacy + 1), () => RunEvent(EventKind.LeadIn, () =>
             {
                 // The H scene that follows the lead-in is not implemented yet; the level still goes up.
                 progress.Intimacy++;
@@ -251,7 +252,7 @@ public sealed partial class PlayViewModel : ViewModelBase
                 _progress.Save(ProgressPath);
                 Meet();
             })));
-        options.Add(("Tạm biệt", () => RunEvent(EventKind.Parting, Leave)));
-        Dialogue.ShowMenu($"{CharacterDatabase.NameOf(girl)} · thân mật {progress.Intimacy}. Làm gì tiếp?", options);
+        options.Add((T("play.goodbye"), () => RunEvent(EventKind.Parting, Leave)));
+        Dialogue.ShowMenu(F("play.menu", CharacterDatabase.NameOf(girl), progress.Intimacy), options);
     }
 }

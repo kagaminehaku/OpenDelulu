@@ -1,4 +1,4 @@
-﻿using Android.App;
+using Android.App;
 using Android.Runtime;
 using Avalonia;
 using Avalonia.Android;
@@ -22,8 +22,8 @@ namespace OpenDelulu.Android
             if (external is not null)
             {
                 AppHost.SuggestedGameFolder = System.IO.Path.Combine(external, "Sexy Beach 3");
-                AppHost.StorageHint =
-                    $"Chép thư mục \"Sexy Beach 3\" (chứa SexyBeach3, SexyBeach3Plus…) vào {external} rồi bấm Mở.";
+                AppHost.StorageHintKey = "hint.android";
+                AppHost.StorageHintArgs = [external];
             }
             AudioSystem.OutputFactory = () => new AndroidAudioOutput();
             base.OnCreate();

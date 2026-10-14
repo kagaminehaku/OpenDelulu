@@ -68,14 +68,14 @@ internal sealed class VulkanModelView : Control, IModelViewBackend
             var self = ElementComposition.GetElementVisual(this);
             if (self is null)
             {
-                Failed?.Invoke("Không có composition visual");
+                Failed?.Invoke(Localization.Translator.Get("gfx.noVisual"));
                 return;
             }
             _compositor = self.Compositor;
             var interop = await _compositor.TryGetCompositionGpuInterop();
             if (interop is null)
             {
-                Failed?.Invoke("Compositor hiện tại không hỗ trợ GPU interop");
+                Failed?.Invoke(Localization.Translator.Get("gfx.noInterop"));
                 return;
             }
 

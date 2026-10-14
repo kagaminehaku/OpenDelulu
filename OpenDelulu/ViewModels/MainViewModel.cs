@@ -22,6 +22,7 @@ using OpenDelulu.Formats.Pp;
 using OpenDelulu.Formats.Script;
 using OpenDelulu.Formats.Voice;
 using OpenDelulu.Formats.Xx;
+using OpenDelulu.Localization;
 using OpenDelulu.Rendering;
 using OpenDelulu.Services;
 
@@ -47,6 +48,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public MainViewModel()
     {
+        Translator.Instance.SetLanguage(AppHost.StartupLanguage ?? _settings.Language);
+        _initializing = true;
+        SelectedLanguage = Languages.FirstOrDefault(l => l.Code == Translator.Instance.Language);
+        _initializing = false;
         var backend = RenderBackendSettings.Parse(AppHost.StartupBackend ?? _settings.RenderBackend);
         RenderBackendSettings.Preferred = backend;
         _initializing = true; // a --backend override must not be saved as the user's choice
@@ -55,11 +60,26 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (AppHost.StartupMute)
             AudioSystem.Shared.Mixer.MasterVolume = 0;
         GameFolder = AppHost.StartupGameFolder ?? _settings.LastGameFolder ?? AppHost.SuggestedGameFolder ?? "";
-        StorageHint = AppHost.StorageHint ?? "Chọn thư mục chứa SexyBeach3 (và SexyBeach3Plus / SexyBeach3PlusG nếu có).";
     }
 
+    public IReadOnlyList<LanguageInfo> Languages => Translator.Instance.Languages;
+
+    [ObservableProperty]
+    public partial LanguageInfo? SelectedLanguage { get; set; }
+
+    partial void OnSelectedLanguageChanged(LanguageInfo? value)
+    {
+        if (_initializing || value is null)
+            return;
+        Translator.Instance.SetLanguage(value.Code);
+        _settings.Language = value.Code;
+        _settings.Save();
+    }
+
+    protected override void OnLanguageChanged() => OnPropertyChanged(nameof(StorageHint));
+
     /// <summary>Indexes match <see cref="RenderBackendKind"/>.</summary>
-    public string[] Backends { get; } = ["Đồ họa: Tự động", "Đồ họa: OpenGL ES", "Đồ họa: Vulkan"];
+    public LocalizedText[] Backends { get; } = [new("backend.auto"), new("backend.gl"), new("backend.vulkan")];
 
     [ObservableProperty]
     public partial int SelectedBackendIndex { get; set; }
@@ -77,20 +97,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         bool wantsVulkanCompositor = RenderBackendSettings.Preferred == RenderBackendKind.Vulkan;
         if (AppHost.SupportsVulkanCompositor && wantsVulkanCompositor != RenderBackendSettings.VulkanCompositor)
             Status = wantsVulkanCompositor
-                ? "Mở lại app để cả giao diện cũng chạy bằng Vulkan (Vulkan thuần, không qua D3D11)."
-                : "Mở lại app để giao diện quay về ANGLE/D3D11.";
+                ? T("backend.restartVulkan")
+                : T("backend.restartDefault");
     }
 
     /// <summary>Set by the view: shows the platform folder picker, returns a local path or null.</summary>
     public Func<Task<string?>>? PickFolder { get; set; }
 
-    public string StorageHint { get; }
+    public string StorageHint => AppHost.StorageHintKey is { } key ? F(key, AppHost.StorageHintArgs) : AppHost.StorageHint ?? T("hint.default");
 
     [ObservableProperty]
     public partial string GameFolder { get; set; }
 
     [ObservableProperty]
-    public partial string Status { get; set; } = "Chưa mở dữ liệu game.";
+    public partial string Status { get; set; } = T("status.noData");
 
     [ObservableProperty]
     public partial bool IsBusy { get; set; }
@@ -158,7 +178,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (IsBusy)
             return;
         IsBusy = true;
-        Status = "Đang quét dữ liệu...";
+        Status = T("status.scanning");
         try
         {
             string folder = GameFolder.Trim();
@@ -203,14 +223,16 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             }
 
             var editions = string.Join(", ", fileSystem.Install.Editions.Select(e => e.Edition));
-            Status = $"{editions}: {items.Count} archive, {items.Sum(i => i.FileCount):N0} file"
-                + (characters is null ? $". Không đọc được bảng nhân vật: {characterError}" : $", {characters.Value.db.Girls.Count} nhân vật.");
+            string summary = F("status.loaded", editions, items.Count, items.Sum(i => i.FileCount));
+            Status = characters is null
+                ? F("status.noCharacterTables", summary, characterError)
+                : F("status.loadedCharacters", summary, characters.Value.db.Girls.Count);
             _settings.LastGameFolder = folder;
             _settings.Save();
         }
         catch (Exception ex)
         {
-            Status = "Lỗi: " + ex.Message;
+            Status = F("status.error", ex.Message);
         }
         finally
         {
@@ -257,7 +279,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             {
                 RgbaImage image => new ImagePreviewViewModel(title, $"{image.Width} × {image.Height}, {item.Size}", ToBitmap(image)),
                 RenderModel model => new ModelPreviewViewModel(title,
-                    $"{model.Meshes.Count} mesh, {model.Meshes.Sum(m => m.Vertices.Length / RenderModel.VertexStride):N0} đỉnh, {model.Textures.Count} texture",
+                    F("preview.model", model.Meshes.Count, model.Meshes.Sum(m => m.Vertices.Length / RenderModel.VertexStride), model.Textures.Count),
                     new ModelScene(model)),
                 PreviewViewModel ready => ready,
                 _ => null,
@@ -266,7 +288,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             if (version == _previewVersion)
-                Preview = new TextPreviewViewModel(title, "Không đọc được file", ex.ToString());
+                Preview = new TextPreviewViewModel(title, T("preview.unreadable"), ex.ToString());
         }
     }
 
@@ -280,7 +302,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (ext == ".lst")
         {
             var table = LstTable.Decode(archive.ReadAllBytes(item.Entry), item.Entry.Name);
-            return new TextPreviewViewModel(title, $"Bảng dữ liệu, {table.Rows.Count} dòng", table.Text);
+            return new TextPreviewViewModel(title, F("preview.table", table.Rows.Count), table.Text);
         }
         if (AudioSources.IsAudio(item.Entry.Name))
         {
@@ -289,12 +311,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             string vssName = Path.ChangeExtension(item.Entry.Name, ".vss");
             string? lipSync = archive.Find(vssName) is { } vss ? VssFile.Read(archive.ReadAllBytes(vss)).Text : null;
             return new AudioPreviewViewModel(title,
-                $"{source.Duration?.TotalSeconds:0.00} s, {source.SampleRate} Hz, {source.Channels} kênh, {item.Size}", bytes, lipSync);
+                F("preview.audio", source.Duration?.TotalSeconds ?? 0, source.SampleRate, source.Channels, item.Size), bytes, lipSync);
         }
         if (ext == ".vss")
         {
             var vss = VssFile.Read(archive.ReadAllBytes(item.Entry));
-            return new TextPreviewViewModel(title, $"Khẩu hình, {vss.DurationMs} ms, {vss.Morae.Count} âm tiết",
+            return new TextPreviewViewModel(title, F("preview.vss", vss.DurationMs, vss.Morae.Count),
                 string.Join(Environment.NewLine, vss.Morae.Select((m, i) => $"{i * vss.DurationMs / Math.Max(1, vss.Morae.Count),6} ms  {m.Kana,-2} {m.Shape}")));
         }
         if (ext == ".sdt")
@@ -303,10 +325,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             var text = new StringBuilder();
             foreach (var scene in script.Scenes)
             {
-                text.AppendLine($"== cảnh {scene.Id} ({scene.Value})");
+                text.AppendLine(F("preview.scene", scene.Id, scene.Value));
                 AppendCommands(text, scene.Commands, "  ");
             }
-            return new TextPreviewViewModel(title, $"Kịch bản, {script.Scenes.Count} cảnh", text.ToString());
+            return new TextPreviewViewModel(title, F("preview.script", script.Scenes.Count), text.ToString());
         }
         if (ext == ".xx")
             return RenderModel.FromXx(XxReader.Read(archive.ReadAllBytes(item.Entry)), item.Entry.Name);
@@ -315,7 +337,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         // Unknown or not yet supported: show a hex dump of the beginning.
         var data = archive.ReadAllBytes(item.Entry);
-        return new TextPreviewViewModel(title, $"{item.Size} · chưa hỗ trợ xem trước định dạng {ext}", HexDump(data, 4096));
+        return new TextPreviewViewModel(title, F("preview.unsupported", item.Size, ext), HexDump(data, 4096));
     }
 
     static void AppendCommands(StringBuilder text, IEnumerable<SdtCommand> commands, string indent)
@@ -359,7 +381,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             sb.AppendLine();
         }
         if (data.Length > max)
-            sb.AppendLine($"... ({data.Length - max:N0} byte nữa)");
+            sb.AppendLine(F("preview.moreBytes", data.Length - max));
         return sb.ToString();
     }
 

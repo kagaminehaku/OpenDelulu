@@ -17,6 +17,11 @@ public static class AppHost
     /// <summary>Short hint shown in the UI about where to put the game data on this platform.</summary>
     public static string? StorageHint { get; set; }
 
+    /// <summary>Translation key of the storage hint (overrides <see cref="StorageHint"/>), with its arguments.</summary>
+    public static string? StorageHintKey { get; set; }
+
+    public static object?[] StorageHintArgs { get; set; } = [];
+
     /// <summary>Optional startup override (desktop: <c>--game &lt;folder&gt;</c>).</summary>
     public static string? StartupGameFolder { get; set; }
 
@@ -47,6 +52,9 @@ public static class AppHost
     /// <summary>Enter the game right away (desktop: <c>--play &lt;girl&gt; [stage] [time 1..5]</c>).</summary>
     public static (int Girl, int Stage, int Time)? StartupPlay { get; set; }
 
+    /// <summary>UI language for this run, not saved (desktop: <c>--lang vi</c>).</summary>
+    public static string? StartupLanguage { get; set; }
+
     /// <summary>Start with all sound muted (desktop: <c>--mute</c>), e.g. for automated screenshots.</summary>
     public static bool StartupMute { get; set; }
 
@@ -60,6 +68,9 @@ public sealed class AppSettings
 
     /// <summary>"Auto", "OpenGl" or "Vulkan".</summary>
     public string? RenderBackend { get; set; }
+
+    /// <summary>UI language code (en, vi…); null = English.</summary>
+    public string? Language { get; set; }
 
     static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenDelulu", "settings.json");

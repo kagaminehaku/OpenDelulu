@@ -7,6 +7,7 @@
              xmlns:ch="using:OpenDelulu.Engine.Characters"
              xmlns:anim="using:OpenDelulu.Engine.Animation"
              xmlns:script="using:OpenDelulu.Engine.Script"
+             xmlns:l="using:OpenDelulu.Localization"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              x:Class="OpenDelulu.Views.MainView"
              x:DataType="vm:MainViewModel">
@@ -24,6 +25,12 @@
             <ScrollViewer HorizontalScrollBarVisibility="Auto">
                 <SelectableTextBlock Text="{Binding Text}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
             </ScrollViewer>
+        </DataTemplate>
+        <DataTemplate DataType="l:LocalizedText">
+            <TextBlock Text="{Binding Text}" />
+        </DataTemplate>
+        <DataTemplate DataType="l:LanguageInfo">
+            <TextBlock Text="{Binding Name}" />
         </DataTemplate>
         <DataTemplate DataType="vm:DialogueViewModel">
             <!-- Dialogue box over the 3D view -->
@@ -47,7 +54,7 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Button Content="Tiếp ▶" HorizontalAlignment="Right" Command="{Binding NextCommand}"
+                    <Button Content="{l:Tr dialogue.next}" HorizontalAlignment="Right" Command="{Binding NextCommand}"
                             IsVisible="{Binding CanAdvance}" />
                 </StackPanel>
             </Border>
@@ -55,11 +62,11 @@
         <DataTemplate DataType="vm:AudioPreviewViewModel">
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Content="▶ Phát" Classes="accent" Command="{Binding PlayCommand}" />
-                    <Button Content="■ Dừng" Command="{Binding StopCommand}" />
-                    <CheckBox Content="Lặp lại" IsChecked="{Binding Loop}" />
+                    <Button Content="{l:Tr audio.play}" Classes="accent" Command="{Binding PlayCommand}" />
+                    <Button Content="{l:Tr audio.stop}" Command="{Binding StopCommand}" />
+                    <CheckBox Content="{l:Tr audio.loop}" IsChecked="{Binding Loop}" />
                 </StackPanel>
-                <TextBlock Text="{Binding LipSyncText, StringFormat='Khẩu hình (.vss): {0}'}" IsVisible="{Binding HasLipSync}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding LipSyncLabel}" IsVisible="{Binding HasLipSync}" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding Device}" Opacity="0.6" FontSize="12" />
             </StackPanel>
         </DataTemplate>
@@ -72,7 +79,7 @@
             <Grid RowDefinitions="*,Auto">
                 <r:ModelViewer Scene="{Binding Scene}" KeepCamera="True" />
                 <Expander Grid.Row="1" Margin="0,8,0,0" HorizontalAlignment="Stretch"
-                          Header="{Binding Meshes.Count, StringFormat='Mesh ({0}): bật/tắt từng phần'}">
+                          Header="{Binding MeshesHeader}">
                     <ListBox ItemsSource="{Binding Meshes}" MaxHeight="220">
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:MeshToggleViewModel">
@@ -89,11 +96,13 @@
         <!-- Game folder bar -->
         <Border Grid.Row="0" Padding="12,10" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
             <StackPanel Spacing="6">
-                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                    <TextBox Text="{Binding GameFolder}" PlaceholderText="Thư mục game, ví dụ D:\Sexy Beach 3" />
-                    <Button Grid.Column="1" Content="Chọn…" Command="{Binding BrowseCommand}" />
-                    <Button Grid.Column="2" Content="Mở" Classes="accent" Command="{Binding LoadCommand}" />
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
+                    <TextBox Text="{Binding GameFolder}" PlaceholderText="{l:Tr top.folderPlaceholder}" />
+                    <Button Grid.Column="1" Content="{l:Tr top.browse}" Command="{Binding BrowseCommand}" />
+                    <Button Grid.Column="2" Content="{l:Tr top.open}" Classes="accent" Command="{Binding LoadCommand}" />
                     <ComboBox Grid.Column="3" ItemsSource="{Binding Backends}" SelectedIndex="{Binding SelectedBackendIndex}" />
+                    <ComboBox Grid.Column="4" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}"
+                              ToolTip.Tip="{l:Tr top.language}" />
                 </Grid>
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.85" />
@@ -103,11 +112,11 @@
         </Border>
 
         <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTab}" Padding="0">
-            <TabItem Header="Chơi" IsEnabled="{Binding Play, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TabItem Header="{l:Tr tab.play}" IsEnabled="{Binding Play, Converter={x:Static ObjectConverters.IsNotNull}}">
                 <Grid ColumnDefinitions="300,*" DataContext="{Binding Play}" x:DataType="vm:PlayViewModel">
                     <StackPanel Margin="12" Spacing="8">
                         <StackPanel Spacing="8" IsEnabled="{Binding !InGame}">
-                            <TextBlock Text="Cô gái" Opacity="0.7" />
+                            <TextBlock Text="{l:Tr play.girl}" Opacity="0.7" />
                             <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Girls}" SelectedItem="{Binding SelectedGirl}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:GirlChoice">
@@ -115,14 +124,14 @@
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
-                            <TextBlock Text="Sân khấu" Opacity="0.7" />
+                            <TextBlock Text="{l:Tr play.stage}" Opacity="0.7" />
                             <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding StageNames}" SelectedIndex="{Binding SelectedStageIndex}" />
-                            <TextBlock Text="Thời gian" Opacity="0.7" />
+                            <TextBlock Text="{l:Tr play.time}" Opacity="0.7" />
                             <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Times}" SelectedIndex="{Binding SelectedTimeIndex}" />
-                            <Button Content="Vào game" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            <Button Content="{l:Tr play.enter}" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                     Command="{Binding EnterCommand}" />
                         </StackPanel>
-                        <Button Content="Rời đi" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        <Button Content="{l:Tr play.leave}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Command="{Binding LeaveCommand}" IsVisible="{Binding InGame}" />
                         <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
                         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.8" />
@@ -135,11 +144,11 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Nhân vật" IsEnabled="{Binding Characters, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TabItem Header="{l:Tr tab.characters}" IsEnabled="{Binding Characters, Converter={x:Static ObjectConverters.IsNotNull}}">
                 <Grid x:Name="CharacterBody" ColumnDefinitions="300,*" DataContext="{Binding Characters}" x:DataType="vm:CharacterViewModel">
                     <ScrollViewer Grid.Column="0">
                     <StackPanel x:Name="CharacterOptions" Margin="12" Spacing="8">
-                        <TextBlock Text="Nhân vật" Opacity="0.7" />
+                        <TextBlock Text="{l:Tr char.girl}" Opacity="0.7" />
                         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Girls}" SelectedItem="{Binding SelectedGirl}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="ch:GirlInfo">
@@ -147,9 +156,9 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <TextBlock Text="Kiểu tóc" Opacity="0.7" />
+                        <TextBlock Text="{l:Tr char.hair}" Opacity="0.7" />
                         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Hairs}" SelectedIndex="{Binding SelectedHairIndex}" />
-                        <TextBlock Text="Đồ bơi" Opacity="0.7" />
+                        <TextBlock Text="{l:Tr char.swimsuit}" Opacity="0.7" />
                         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Swimsuits}" SelectedItem="{Binding SelectedSwimsuit}"
                                   MaxDropDownHeight="420">
                             <ComboBox.ItemTemplate>
@@ -161,11 +170,11 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <TextBlock Text="Kiểu thân (biến thể model)" Opacity="0.7" />
+                        <TextBlock Text="{l:Tr char.cut}" Opacity="0.7" />
                         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Cuts}" SelectedIndex="{Binding SelectedCutIndex}" />
 
                         <Separator Margin="0,4" />
-                        <TextBlock Text="Animation (.xa)" Opacity="0.7" />
+                        <TextBlock Text="{l:Tr char.animation}" Opacity="0.7" />
                         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Animations}" SelectedItem="{Binding SelectedAnimation}"
                                   MaxDropDownHeight="420">
                             <ComboBox.ItemTemplate>
@@ -183,25 +192,25 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
                         <WrapPanel>
-                            <ToggleButton IsChecked="{Binding IsPlaying}" Content="Phát" Margin="0,0,8,0" />
-                            <CheckBox IsChecked="{Binding FollowNext}" Content="Tự chuyển clip" />
+                            <ToggleButton IsChecked="{Binding IsPlaying}" Content="{l:Tr char.playing}" Margin="0,0,8,0" />
+                            <CheckBox IsChecked="{Binding FollowNext}" Content="{l:Tr char.followNext}" />
                         </WrapPanel>
                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                            <TextBlock Text="Tốc độ" VerticalAlignment="Center" Opacity="0.7" />
+                            <TextBlock Text="{l:Tr char.speed}" VerticalAlignment="Center" Opacity="0.7" />
                             <Slider Grid.Column="1" Minimum="0.1" Maximum="3" Value="{Binding Speed}" />
                             <TextBlock Grid.Column="2" Text="{Binding Speed, StringFormat='{}{0:0.0}x'}" VerticalAlignment="Center" />
                         </Grid>
-                        <TextBlock Text="Biểu cảm" Opacity="0.7" />
+                        <TextBlock Text="{l:Tr char.expression}" Opacity="0.7" />
                         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Expressions}" SelectedItem="{Binding SelectedExpression}"
                                   MaxDropDownHeight="420" />
-                        <CheckBox IsChecked="{Binding AutoBlink}" Content="Chớp mắt tự động" />
-                        <CheckBox IsChecked="{Binding EyesFollowCamera}" Content="Mắt nhìn theo camera" />
+                        <CheckBox IsChecked="{Binding AutoBlink}" Content="{l:Tr char.autoBlink}" />
+                        <CheckBox IsChecked="{Binding EyesFollowCamera}" Content="{l:Tr char.eyesFollow}" />
 
-                        <TextBlock Text="Giọng nói" Opacity="0.7" />
+                        <TextBlock Text="{l:Tr char.voice}" Opacity="0.7" />
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                             <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding VoiceGroups}" SelectedIndex="{Binding SelectedVoiceGroupIndex}" />
-                            <Button Grid.Column="1" Content="Nói thử" Command="{Binding SpeakCommand}" />
-                            <Button Grid.Column="2" Content="Dừng" Command="{Binding StopVoiceCommand}" />
+                            <Button Grid.Column="1" Content="{l:Tr char.speak}" Command="{Binding SpeakCommand}" />
+                            <Button Grid.Column="2" Content="{l:Tr char.stopVoice}" Command="{Binding StopVoiceCommand}" />
                         </Grid>
                         <TextBlock Text="{Binding VoiceInfo}" TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
 
@@ -220,21 +229,21 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Kịch bản" IsEnabled="{Binding Scripts, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TabItem Header="{l:Tr tab.scripts}" IsEnabled="{Binding Scripts, Converter={x:Static ObjectConverters.IsNotNull}}">
                 <Grid ColumnDefinitions="300,*" DataContext="{Binding Scripts}" x:DataType="vm:ScriptViewModel">
                     <StackPanel Margin="12" Spacing="8">
-                        <TextBlock Text="Kịch bản (.sdt)" Opacity="0.7" />
+                        <TextBlock Text="{l:Tr scripts.script}" Opacity="0.7" />
                         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Scripts}" SelectedItem="{Binding SelectedScript}"
                                   MaxDropDownHeight="480">
                             <ComboBox.ItemTemplate>
-                                <DataTemplate x:DataType="script:ScriptInfo">
+                                <DataTemplate x:DataType="vm:ScriptItem">
                                     <TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" />
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <TextBlock Text="Mức thân mật (cho các nhánh Switch)" Opacity="0.7" />
+                        <TextBlock Text="{l:Tr scripts.intimacy}" Opacity="0.7" />
                         <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding IntimacyLevels}" SelectedIndex="{Binding IntimacyIndex}" />
-                        <Button Content="Bắt đầu" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        <Button Content="{l:Tr scripts.start}" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Command="{Binding StartCommand}" />
                         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
                         <TextBlock Text="{Binding Dialogue.Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
@@ -246,7 +255,7 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Dữ liệu game">
+            <TabItem Header="{l:Tr tab.data}">
                 <Grid x:Name="Body" ColumnDefinitions="340,4,*">
                     <!-- Archive + file browser -->
                     <Grid x:Name="LeftPane" Grid.Column="0" RowDefinitions="Auto,Auto,*" Margin="8">
@@ -262,7 +271,7 @@
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
-                        <TextBox Grid.Row="1" Margin="0,8" Text="{Binding FileFilter}" PlaceholderText="Lọc tên file (vd: .xx, bo01)" />
+                        <TextBox Grid.Row="1" Margin="0,8" Text="{Binding FileFilter}" PlaceholderText="{l:Tr data.filter}" />
                         <ListBox Grid.Row="2" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:FileItem">

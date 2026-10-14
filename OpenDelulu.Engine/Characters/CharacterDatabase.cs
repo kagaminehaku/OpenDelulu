@@ -37,7 +37,7 @@ public sealed record GirlInfo(
     AssetRef? FaceAnimation,
     IReadOnlyList<AssetRef> BodyAnimations)
 {
-    public string DisplayName => $"Nhân vật {Id:00}";
+    public string DisplayName => $"{CharacterDatabase.NameOf(Id)} ({Id:00})";
 }
 
 /// <summary>

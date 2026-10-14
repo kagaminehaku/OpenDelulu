@@ -46,7 +46,16 @@ public sealed partial class AudioPreviewViewModel(string title, string details, 
     public partial bool Loop { get; set; }
 
     public string Device => AudioSystem.Shared.OutputError is { } error
-        ? $"Không mở được thiết bị âm thanh ({error})" : $"Thiết bị: {AudioSystem.Shared.OutputName}";
+        ? F("audio.deviceError", error)
+        : F("audio.device", AudioSystem.Shared.OutputName == "none" ? T("audio.none") : AudioSystem.Shared.OutputName);
+
+    public string LipSyncLabel => F("preview.lipSync", LipSyncText);
+
+    protected override void OnLanguageChanged()
+    {
+        OnPropertyChanged(nameof(Device));
+        OnPropertyChanged(nameof(LipSyncLabel));
+    }
 }
 
 public sealed class ModelPreviewViewModel : PreviewViewModel
@@ -67,6 +76,10 @@ public sealed class ModelPreviewViewModel : PreviewViewModel
 
     public ModelScene Scene { get; }
     public IReadOnlyList<MeshToggleViewModel> Meshes { get; }
+
+    public string MeshesHeader => F("preview.meshes", Meshes.Count);
+
+    protected override void OnLanguageChanged() => OnPropertyChanged(nameof(MeshesHeader));
 }
 
 public sealed partial class MeshToggleViewModel(ModelScene scene, int index) : ViewModelBase

@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using OpenDelulu.Engine;
 using OpenDelulu.Engine.Characters;
 using OpenDelulu.Engine.Script;
+using OpenDelulu.Localization;
 using OpenDelulu.Rendering;
 using OpenDelulu.Services;
 
@@ -34,8 +35,8 @@ public sealed partial class ScriptViewModel : ViewModelBase
         {
             Speaker3D = () => _girl is { } girl && Scene is { } scene ? (girl, scene) : null,
         };
-        Scripts = library.Scripts;
-        SelectedScript = (AppHost.StartupScript is { } name ? library.Find(name) : null) ?? Scripts.FirstOrDefault();
+        Scripts = [.. library.Scripts.Select(s => new ScriptItem(s))];
+        SelectedScript = (AppHost.StartupScript is { } name ? Scripts.FirstOrDefault(s => s.Info.Name == name) : null) ?? Scripts.FirstOrDefault();
         if (AppHost.StartupScript is not null)
         {
             AppHost.StartupScript = null;
@@ -44,10 +45,10 @@ public sealed partial class ScriptViewModel : ViewModelBase
     }
 
     public DialogueViewModel Dialogue { get; }
-    public IReadOnlyList<ScriptInfo> Scripts { get; }
-    public string[] IntimacyLevels { get; } = ["Thân mật 1", "Thân mật 2", "Thân mật 3", "Thân mật 4", "Thân mật 5"];
+    public IReadOnlyList<ScriptItem> Scripts { get; }
+    public LocalizedText[] IntimacyLevels { get; } = [.. Enumerable.Range(1, 5).Select(level => new LocalizedText(() => F("scripts.levelN", level)))];
 
-    [ObservableProperty] public partial ScriptInfo? SelectedScript { get; set; }
+    [ObservableProperty] public partial ScriptItem? SelectedScript { get; set; }
     /// <summary>Intimacy used by Switch commands (0-based index of <see cref="IntimacyLevels"/>).</summary>
     [ObservableProperty] public partial int IntimacyIndex { get; set; }
     [ObservableProperty] public partial ModelScene? Scene { get; set; }
@@ -56,7 +57,7 @@ public sealed partial class ScriptViewModel : ViewModelBase
     [RelayCommand]
     async Task StartAsync()
     {
-        if (SelectedScript is not { } script)
+        if (SelectedScript?.Info is not { } script)
             return;
         if (script.GirlId is int girl)
             await ShowGirlAsync(girl);
@@ -79,7 +80,19 @@ public sealed partial class ScriptViewModel : ViewModelBase
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
         {
-            Status = $"Không ghép được nhân vật {girlId:00}: {ex.Message}";
+            Status = F("scripts.girlError", girlId, ex.Message);
         }
     }
+}
+
+/// <summary>A script in the picker: file name and translated title.</summary>
+public sealed class ScriptItem : ViewModelBase
+{
+    public ScriptItem(ScriptInfo info) => Info = info;
+
+    public ScriptInfo Info { get; }
+
+    public string Display => $"{Info.Name}  {GameText.ScriptTitle(Info.Title)}";
+
+    protected override void OnLanguageChanged() => OnPropertyChanged(nameof(Display));
 }

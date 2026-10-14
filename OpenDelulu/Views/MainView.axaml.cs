@@ -30,7 +30,7 @@ public partial class MainView : UserControl
                 return null;
             var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
             {
-                Title = "Chọn thư mục chứa SexyBeach3",
+                Title = Localization.Translator.Get("picker.title"),
                 AllowMultiple = false,
             });
             return folders.FirstOrDefault()?.TryGetLocalPath();
