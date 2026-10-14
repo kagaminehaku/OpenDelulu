@@ -147,6 +147,13 @@ public sealed class RenderModel
     }
 
     /// <param name="visibility">Initial visibility per mesh; default hides helper meshes only.</param>
+    static BlendMode BlendOf(byte[] flags) => flags.Length == 0 ? BlendMode.Normal : ((flags[0] >> 2) & 7) switch
+    {
+        1 => BlendMode.Additive,
+        2 => BlendMode.Darken,
+        _ => BlendMode.Normal,
+    };
+
     public static RenderModel Build(string name, IReadOnlyList<RenderPart> parts, Func<RenderMesh, bool>? visibility = null)
     {
         // A part attached inside another part's hierarchy belongs to itself only.
@@ -253,8 +260,10 @@ public sealed class RenderModel
                         FrameIndex = rig.FrameIndex[frame],
                         BoneFrames = boneFrames,
                         BoneOffsets = boneOffsets,
+                        Blend = BlendOf(submesh.Unknown1),
                     };
-                    renderMesh.Visible = visibility?.Invoke(renderMesh) ?? !IsHelperMaterial(renderMesh.MaterialName);
+                    renderMesh.Visible = (submesh.Unknown1.Length == 0 || (submesh.Unknown1[0] & 1) == 0)
+                        && (visibility?.Invoke(renderMesh) ?? !IsHelperMaterial(renderMesh.MaterialName));
                     meshes.Add(renderMesh);
                 }
             }
@@ -272,7 +281,7 @@ public sealed class RenderModel
         {
             // Material alpha below 1 marks overlays/effects: water, glints, blush, the cornea layer (alpha 0 = hidden
             // until an expression or effect raises it).
-            mesh.HasAlpha = mesh.Diffuse.W < 0.999f
+            mesh.HasAlpha = mesh.Blend != BlendMode.Normal || mesh.Diffuse.W < 0.999f
                 || (mesh.TextureIndex >= 0 && textures[mesh.TextureIndex]?.HasAlpha() == true);
             // Frame the camera on what is actually shown (helper meshes can be huge).
             if (!mesh.Visible)
@@ -302,6 +311,19 @@ public sealed class RenderModel
     }
 }
 
+/// <summary>
+/// How a mesh is blended, from the submesh's first flag byte (bits 2..4), as the exe's draw code sets the
+/// Direct3D states: 0 normal, 1 additive (SRCALPHA, ONE; light shafts, glints, sea), 2 darken
+/// (ZERO, INVSRCCOLOR; baked shadow decals), 3 alpha blend with depth writes (hair, clothes).
+/// Bit 0 hides the mesh.
+/// </summary>
+public enum BlendMode
+{
+    Normal,
+    Additive,
+    Darken,
+}
+
 public sealed class RenderMesh
 {
     public required string PartName { get; init; }
@@ -329,6 +351,9 @@ public sealed class RenderMesh
     /// <summary>Rig index per bone (-1 = bone frame not found); null for rigid meshes.</summary>
     public int[]? BoneFrames { get; init; }
     public Matrix4x4[]? BoneOffsets { get; init; }
+
+    /// <summary>Blending requested by the data (see <see cref="BlendMode"/>).</summary>
+    public BlendMode Blend { get; init; }
 
     public string DisplayName => $"{FrameName} [{SubmeshIndex}]";
 }

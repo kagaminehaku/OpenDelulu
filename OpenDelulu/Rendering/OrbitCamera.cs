@@ -37,25 +37,27 @@ public sealed class OrbitCamera
     /// GLSL's column-major read then equals the transpose needed for <c>M * v</c>.
     /// </summary>
     /// <param name="flipY">Vulkan's clip space points Y down.</param>
-    /// <param name="focus">Current close-up point (e.g. the animated eyes); defaults to the model's bind-pose one.</param>
-    public (Matrix4x4 ViewProjection, Vector3 LightDirection, Vector3 Eye) Compute(RenderModel model, float aspect, bool flipY, Vector3? focus = null)
+    public (Matrix4x4 ViewProjection, Vector3 LightDirection, Vector3 Eye) Compute(CameraSubject subject, float aspect, bool flipY)
     {
-        float radius = model.Radius;
+        float radius = subject.Radius;
         // Zooming in also moves the orbit centre from the middle of the model to its focus point (between a
         // character's eyes), so close-ups are not seen from waist height.
         float raise = Math.Clamp((1f - Zoom) / 0.6f, 0f, 1f);
-        var aim = focus ?? model.FocusPoint ?? model.Center + new Vector3(0, (model.BoundsMax.Y - model.Center.Y) * 0.85f, 0);
-        var target = Vector3.Lerp(model.Center, aim, raise);
+        var target = Vector3.Lerp(subject.Center, subject.Aim, raise);
         float distance = radius * 2.4f * Zoom;
+        float yaw = Yaw - subject.FacingYaw; // DefaultYaw looks at the subject's face
         var eyeDir = new Vector3(
-            MathF.Sin(Yaw) * MathF.Cos(Pitch),
+            MathF.Sin(yaw) * MathF.Cos(Pitch),
             MathF.Sin(Pitch),
-            -MathF.Cos(Yaw) * MathF.Cos(Pitch));
+            -MathF.Cos(yaw) * MathF.Cos(Pitch));
         var eye = target + eyeDir * distance;
 
+        // A stage around the subject reaches much further than the subject itself.
+        bool staged = subject.SceneRadius > radius * 1.5f;
+        float near = staged ? MathF.Max(radius * 0.02f, 0.05f) : MathF.Max(distance - radius * 1.5f, radius * 0.01f);
+        float far = distance + MathF.Max(radius * 3f, subject.SceneRadius * 2f);
         var view = Matrix4x4.CreateLookAtLeftHanded(eye, target, Vector3.UnitY);
-        var projection = Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(
-            MathF.PI / 4, aspect, MathF.Max(distance - radius * 1.5f, radius * 0.01f), distance + radius * 3f);
+        var projection = Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(MathF.PI / 4, aspect, near, far);
         var viewProjection = view * projection;
         if (flipY)
             viewProjection *= Matrix4x4.CreateScale(1, -1, 1);

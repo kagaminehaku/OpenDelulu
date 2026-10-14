@@ -1,4 +1,5 @@
 using System;
+using OpenDelulu.Engine.Assets;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
@@ -16,7 +17,7 @@ namespace OpenDelulu.Rendering.Gl;
 /// </summary>
 internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
 {
-    sealed record GpuMesh(int VertexBuffer, int IndexBuffer, int IndexCount, int TextureIndex, Vector4 Diffuse, Vector4 Ambient, Vector4 Emissive, bool HasAlpha);
+    sealed record GpuMesh(int VertexBuffer, int IndexBuffer, int IndexCount, int TextureIndex, Vector4 Diffuse, Vector4 Ambient, Vector4 Emissive, bool HasAlpha, BlendMode Blend);
 
     GlExtras? _ext;
     int _program, _vao, _whiteTexture;
@@ -146,9 +147,8 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         if (scene is null || _uploaded != scene || _meshes.Count == 0)
             return;
 
-        var (mvp, light, eye) = Camera.Compute(scene.Model, width / (float)height, flipY: false, scene.Animator?.Focus);
-        if (scene.Animator is { } lookAnimator)
-            lookAnimator.LookTarget = eye;
+        var (mvp, light, eye) = Camera.Compute(scene.Subject, width / (float)height, flipY: false);
+        scene.SetLookTarget(eye);
         AnimateScene(gl, scene);
 
 
@@ -168,11 +168,9 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.Uniform1f(_uAlphaPass, 0f);
         DrawMeshes(gl, scene, translucentOnly: false);
 
-        // Pass 2: soft edges of alpha-textured meshes, blended, depth write off.
+        // Pass 2: soft edges of alpha-textured meshes and the additive/darken effects, blended, depth write off.
         gl.DepthMask(0);
         gl.Enable(GlExtras.GL_BLEND);
-        _ext.BlendFunc(GlExtras.GL_SRC_ALPHA, GlExtras.GL_ONE_MINUS_SRC_ALPHA);
-        gl.Uniform1f(_uAlphaPass, 1f);
         DrawMeshes(gl, scene, translucentOnly: true);
 
         gl.DepthMask(1);
@@ -182,17 +180,15 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.UseProgram(0);
     }
 
-    /// <summary>Advances the animator, re-uploads the re-skinned vertices and keeps frames coming while it moves.</summary>
+    /// <summary>Advances the animators, re-uploads the re-skinned vertices and keeps frames coming while they move.</summary>
     unsafe void AnimateScene(GlInterface gl, ModelScene scene)
     {
-        if (scene.Animator is not { } animator)
-            return;
-        if (animator.Update(_clock.Tick(), scene.IsVisible))
+        if (scene.Update(_clock.Tick()))
         {
-            var meshes = scene.Model.Meshes;
+            var meshes = scene.Meshes;
             for (int i = 0; i < _meshes.Count; i++)
             {
-                if (!scene.IsVisible(i))
+                if (!scene.IsVisible(i) || !scene.IsDynamic(i))
                     continue;
                 var vertices = meshes[i].Vertices;
                 gl.BindBuffer(GL_ARRAY_BUFFER, _meshes[i].VertexBuffer);
@@ -202,27 +198,50 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             gl.BindBuffer(GL_ARRAY_BUFFER, 0);
         }
 
-        if (animator.IsAnimating)
+        if (scene.IsAnimating)
             RequestNextFrameRendering();
         else
             _clock.Pause();
     }
 
     const int GL_DYNAMIC_DRAW = 0x88E8;
+    const int GL_ZERO = 0, GL_ONE = 1, GL_ONE_MINUS_SRC_COLOR = 0x0301;
 
     void DrawMeshes(GlInterface gl, ModelScene scene, bool translucentOnly)
     {
         for (int i = 0; i < _meshes.Count; i++)
         {
             var mesh = _meshes[i];
-            if (!scene.IsVisible(i) || (translucentOnly && !mesh.HasAlpha))
+            if (!scene.IsVisible(i) || (translucentOnly ? !mesh.HasAlpha : mesh.Blend != BlendMode.Normal))
                 continue;
+            if (translucentOnly)
+            {
+                // Pass value 1: only the edges left by pass 1; 2: every texel (effects skipped by pass 1).
+                switch (mesh.Blend)
+                {
+                    case BlendMode.Additive:
+                        _ext!.BlendFunc(GlExtras.GL_SRC_ALPHA, GL_ONE);
+                        gl.Uniform1f(_uAlphaPass, 2f);
+                        break;
+                    case BlendMode.Darken:
+                        _ext!.BlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
+                        gl.Uniform1f(_uAlphaPass, 2f);
+                        break;
+                    default:
+                        _ext!.BlendFunc(GlExtras.GL_SRC_ALPHA, GlExtras.GL_ONE_MINUS_SRC_ALPHA);
+                        gl.Uniform1f(_uAlphaPass, 1f);
+                        break;
+                }
+            }
 
             gl.BindTexture(GL_TEXTURE_2D, mesh.TextureIndex >= 0 ? _textures[mesh.TextureIndex] : _whiteTexture);
+            var light = scene.Light(i);
             var d = mesh.Diffuse;
-            _ext!.Uniform4f(_uDiffuse, d.X, d.Y, d.Z, d.W);
-            _ext.Uniform4f(_uAmbient, mesh.Ambient.X, mesh.Ambient.Y, mesh.Ambient.Z, 0);
-            _ext.Uniform4f(_uEmissive, mesh.Emissive.X, mesh.Emissive.Y, mesh.Emissive.Z, 0);
+            var a = mesh.Ambient * new Vector4(light, 1);
+            var e = mesh.Emissive * new Vector4(light, 1);
+            _ext!.Uniform4f(_uDiffuse, d.X * light.X, d.Y * light.Y, d.Z * light.Z, d.W);
+            _ext.Uniform4f(_uAmbient, a.X, a.Y, a.Z, 0);
+            _ext.Uniform4f(_uEmissive, e.X, e.Y, e.Z, 0);
 
             gl.BindBuffer(GL_ARRAY_BUFFER, mesh.VertexBuffer);
             const int stride = RenderModelStride * sizeof(float);
@@ -241,12 +260,12 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
 
     unsafe void UploadScene(GlInterface gl, ModelScene scene)
     {
-        var model = scene.Model;
-        foreach (var image in model.Textures)
+        foreach (var image in scene.Textures)
             _textures.Add(image is null ? _whiteTexture : CreateTexture(gl, image.Width, image.Height, image.Pixels));
 
-        foreach (var mesh in model.Meshes)
+        for (int m = 0; m < scene.Meshes.Count; m++)
         {
+            var mesh = scene.Meshes[m];
             int vbo = gl.GenBuffer();
             gl.BindBuffer(GL_ARRAY_BUFFER, vbo);
             fixed (float* v = mesh.Vertices)
@@ -260,7 +279,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             var diffuse = mesh.Diffuse;
             if (diffuse.X + diffuse.Y + diffuse.Z < 0.05f)
                 diffuse = new Vector4(1, 1, 1, diffuse.W); // some materials only use ambient/emissive; keep their opacity
-            _meshes.Add(new GpuMesh(vbo, ibo, mesh.Indices.Length, mesh.TextureIndex, diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha));
+            _meshes.Add(new GpuMesh(vbo, ibo, mesh.Indices.Length, scene.TextureIndex(m), diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha, mesh.Blend));
         }
         gl.BindBuffer(GL_ARRAY_BUFFER, 0);
         gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -327,7 +346,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             }
             """;
 
-        // uAlphaPass 0: opaque texels (alpha test). 1: translucent edges only.
+        // uAlphaPass 0: opaque texels (alpha test). 1: translucent edges only. 2: every texel (additive/darken).
         public const string Fragment = """
             uniform sampler2D uTex;
             uniform vec4 uDiffuse;
@@ -343,8 +362,10 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
                 float alpha = texel.a * uDiffuse.a;
                 if (uAlphaPass < 0.5) {
                     if (alpha < 0.5) discard;
-                } else {
+                } else if (uAlphaPass < 1.5) {
                     if (alpha >= 0.5 || alpha < 0.02) discard;
+                } else if (alpha < 0.004) {
+                    discard;
                 }
                 // Direct3D 9 fixed-function material lighting (two-sided): emissive + ambient * scene ambient
                 // + diffuse * light * N.L. Keep in sync with the Vulkan shader (model.frag).

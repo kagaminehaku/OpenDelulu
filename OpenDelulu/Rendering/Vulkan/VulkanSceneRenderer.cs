@@ -37,7 +37,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         public DescriptorSet Set;
     }
 
-    sealed class GpuMesh(VulkanBuffer vertices, VulkanBuffer indices, int indexCount, int texture, Vector4 diffuse, Vector4 ambient, Vector4 emissive, bool hasAlpha)
+    sealed class GpuMesh(VulkanBuffer vertices, VulkanBuffer indices, int indexCount, int texture, Vector4 diffuse, Vector4 ambient, Vector4 emissive, bool hasAlpha, BlendMode blend)
     {
         public Vector4 Ambient { get; } = ambient;
         public Vector4 Emissive { get; } = emissive;
@@ -47,6 +47,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         public int Texture { get; } = texture;
         public Vector4 Diffuse { get; } = diffuse;
         public bool HasAlpha { get; } = hasAlpha;
+        public BlendMode Blend { get; } = blend;
     }
 
     readonly VulkanContext _vk;
@@ -55,7 +56,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
     readonly DescriptorSetLayout _setLayout;
     readonly PipelineLayout _pipelineLayout;
     readonly RenderPass _renderPass;
-    readonly Pipeline _opaque, _translucent;
+    readonly Pipeline _opaque, _translucent, _additive, _darken;
     readonly Sampler _sampler;
 
     PixelSize _size;
@@ -115,6 +116,8 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         _renderPass = CreateRenderPass();
         _opaque = CreatePipeline(translucent: false);
         _translucent = CreatePipeline(translucent: true);
+        _additive = CreatePipeline(translucent: true, BlendFactor.SrcAlpha, BlendFactor.One);
+        _darken = CreatePipeline(translucent: true, BlendFactor.Zero, BlendFactor.OneMinusSrcColor);
 
         var samplerInfo = new SamplerCreateInfo
         {
@@ -146,18 +149,18 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
 
         // No Y flip: Vulkan's clip space points down, but the compositor samples the shared image with its
         // origin at the bottom (verified on the D3D11 and Vulkan sharing paths), and the two cancel out.
-        var camera3 = scene is null ? default : camera.Compute(scene.Model, _size.Width / (float)_size.Height, flipY: false, scene.Animator?.Focus);
+        var camera3 = scene is null ? default : camera.Compute(scene.Subject, _size.Width / (float)_size.Height, flipY: false);
 
         // The swapchain waited for the previous frame, so the mapped vertex buffers are free to rewrite.
         bool animating = false;
-        if (scene?.Animator is { } animator)
+        if (scene is not null)
         {
-            animator.LookTarget = camera3.Eye;
-            if (animator.Update(deltaSeconds, scene.IsVisible))
+            scene.SetLookTarget(camera3.Eye);
+            if (scene.Update(deltaSeconds))
                 for (int i = 0; i < _meshes.Count; i++)
-                    if (scene.IsVisible(i))
-                        _meshes[i].Vertices.Write<float>(scene.Model.Meshes[i].Vertices);
-            animating = animator.IsAnimating;
+                    if (scene.IsVisible(i) && scene.IsDynamic(i))
+                        _meshes[i].Vertices.Write<float>(scene.Meshes[i].Vertices);
+            animating = scene.IsAnimating;
         }
 
         var commands = _vk.Pool.CreateCommandBuffer();
@@ -202,6 +205,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
 
     void DrawPass(CommandBuffer cmd, ModelScene scene, Pipeline pipeline, Matrix4x4 viewProjection, Vector3 light, bool translucent)
     {
+        var bound = pipeline;
         Api.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, pipeline);
         var push = new PushConstants
         {
@@ -211,14 +215,26 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         for (int i = 0; i < _meshes.Count; i++)
         {
             var mesh = _meshes[i];
-            if (!scene.IsVisible(i) || (translucent && !mesh.HasAlpha))
+            if (!scene.IsVisible(i) || (translucent ? !mesh.HasAlpha : mesh.Blend != BlendMode.Normal))
                 continue;
+            if (translucent)
+            {
+                // Pass value 1: only the edges left by pass 1; 2: every texel (effects skipped by pass 1).
+                var wanted = mesh.Blend switch { BlendMode.Additive => _additive, BlendMode.Darken => _darken, _ => pipeline };
+                if (wanted.Handle != bound.Handle)
+                {
+                    Api.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, wanted);
+                    bound = wanted;
+                }
+                push.LightAndPass.W = mesh.Blend == BlendMode.Normal ? 1f : 2f;
+            }
 
             var set = (mesh.Texture >= 0 ? _textures[mesh.Texture] : _white!).Set;
             Api.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, _pipelineLayout, 0, 1, &set, 0, null);
-            push.Diffuse = mesh.Diffuse;
-            push.Ambient = mesh.Ambient;
-            push.Emissive = mesh.Emissive;
+            var tint = new Vector4(scene.Light(i), 1);
+            push.Diffuse = mesh.Diffuse * tint;
+            push.Ambient = mesh.Ambient * tint;
+            push.Emissive = mesh.Emissive * tint;
             Api.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
                 0, (uint)sizeof(PushConstants), &push);
             var buffer = mesh.Vertices.Handle;
@@ -233,8 +249,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
 
     void UploadScene(ModelScene scene)
     {
-        var model = scene.Model;
-        int textureCount = model.Textures.Count + 1;
+        int textureCount = scene.Textures.Count + 1;
         var poolSize = new DescriptorPoolSize(DescriptorType.CombinedImageSampler, (uint)textureCount);
         var poolInfo = new DescriptorPoolCreateInfo
         {
@@ -250,15 +265,16 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         var commands = _vk.Pool.CreateCommandBuffer();
         commands.BeginRecording();
         _white = CreateTexture(commands.Handle, new RgbaImage(1, 1, [255, 255, 255, 255]), staging);
-        foreach (var image in model.Textures)
+        foreach (var image in scene.Textures)
             _textures.Add(image is null ? _white : CreateTexture(commands.Handle, image, staging));
         commands.Submit();
         Api.QueueWaitIdle(_vk.Queue).ThrowOnError();
         foreach (var buffer in staging)
             buffer.Dispose();
 
-        foreach (var mesh in model.Meshes)
+        for (int m = 0; m < scene.Meshes.Count; m++)
         {
+            var mesh = scene.Meshes[m];
             var vertices = new VulkanBuffer(_vk, (ulong)(mesh.Vertices.Length * sizeof(float)), BufferUsageFlags.VertexBufferBit);
             vertices.Write<float>(mesh.Vertices);
             var indices = new VulkanBuffer(_vk, (ulong)(mesh.Indices.Length * sizeof(ushort)), BufferUsageFlags.IndexBufferBit);
@@ -266,7 +282,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             var diffuse = mesh.Diffuse;
             if (diffuse.X + diffuse.Y + diffuse.Z < 0.05f)
                 diffuse = new Vector4(1, 1, 1, diffuse.W); // some materials only use ambient/emissive; keep their opacity
-            _meshes.Add(new GpuMesh(vertices, indices, mesh.Indices.Length, mesh.TextureIndex, diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha));
+            _meshes.Add(new GpuMesh(vertices, indices, mesh.Indices.Length, scene.TextureIndex(m), diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha, mesh.Blend));
         }
     }
 
@@ -562,7 +578,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         return renderPass;
     }
 
-    Pipeline CreatePipeline(bool translucent)
+    Pipeline CreatePipeline(bool translucent, BlendFactor source = BlendFactor.SrcAlpha, BlendFactor destination = BlendFactor.OneMinusSrcAlpha)
     {
         using var entry = new ByteString("main");
         var stages = stackalloc PipelineShaderStageCreateInfo[2];
@@ -629,8 +645,8 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         var blendAttachment = new PipelineColorBlendAttachmentState
         {
             BlendEnable = translucent,
-            SrcColorBlendFactor = BlendFactor.SrcAlpha,
-            DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
+            SrcColorBlendFactor = source,
+            DstColorBlendFactor = destination,
             ColorBlendOp = BlendOp.Add,
             SrcAlphaBlendFactor = BlendFactor.One,
             DstAlphaBlendFactor = BlendFactor.OneMinusSrcAlpha,
@@ -680,6 +696,8 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         Api.DestroySampler(Device, _sampler, null);
         Api.DestroyPipeline(Device, _opaque, null);
         Api.DestroyPipeline(Device, _translucent, null);
+        Api.DestroyPipeline(Device, _additive, null);
+        Api.DestroyPipeline(Device, _darken, null);
         Api.DestroyRenderPass(Device, _renderPass, null);
         Api.DestroyPipelineLayout(Device, _pipelineLayout, null);
         Api.DestroyDescriptorSetLayout(Device, _setLayout, null);

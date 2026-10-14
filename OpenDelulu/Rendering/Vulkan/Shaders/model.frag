@@ -18,10 +18,13 @@ void main()
 {
     vec4 texel = texture(uTex, vUV);
     float alpha = texel.a * pc.diffuse.a;
+    // Pass 0: opaque texels (alpha test). 1: translucent edges only. 2: every texel (additive/darken effects).
     if (pc.lightAndPass.w < 0.5) {
         if (alpha < 0.5) discard;
-    } else {
+    } else if (pc.lightAndPass.w < 1.5) {
         if (alpha >= 0.5 || alpha < 0.02) discard;
+    } else if (alpha < 0.004) {
+        discard;
     }
     // Direct3D 9 fixed-function material lighting (two-sided); keep in sync with GlModelView's shader.
     float lambert = abs(dot(normalize(vNormal), pc.lightAndPass.xyz));

@@ -15,6 +15,7 @@ using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
 using OpenDelulu.Engine.Script;
+using OpenDelulu.Engine.Stages;
 using OpenDelulu.Formats.Imaging;
 using OpenDelulu.Formats.Lst;
 using OpenDelulu.Formats.Pp;
@@ -114,13 +115,17 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     public partial CharacterViewModel? Characters { get; set; }
 
+    /// <summary>The game itself (basic loop); null until stages, characters and scripts are loaded.</summary>
+    [ObservableProperty]
+    public partial PlayViewModel? Play { get; set; }
+
     /// <summary>Event script player; null until game data with scripts is loaded.</summary>
     [ObservableProperty]
     public partial ScriptViewModel? Scripts { get; set; }
 
-    /// <summary>0 = character maker, 1 = scripts, 2 = data browser.</summary>
+    /// <summary>0 = play, 1 = character maker, 2 = scripts, 3 = data browser.</summary>
     [ObservableProperty]
-    public partial int SelectedTab { get; set; } = 2;
+    public partial int SelectedTab { get; set; } = 3;
 
     /// <summary>Opens the last used folder automatically if it still looks valid.</summary>
     public async Task TryAutoLoadAsync()
@@ -157,6 +162,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         try
         {
             string folder = GameFolder.Trim();
+            StageDatabase? stageDb = null;
             var (fileSystem, items, characters, characterError) = await Task.Run(() =>
             {
                 var fs = new GameFileSystem(GameInstall.Detect(folder));
@@ -167,6 +173,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException) { error = ex.Message; }
                 (CharacterDatabase db, VoiceLibrary voices, ScriptLibrary scripts)? loaded =
                     db is null ? null : (db, new VoiceLibrary(fs), new ScriptLibrary(fs));
+                StageDatabase? stages = null;
+                try { stages = StageDatabase.Load(fs); }
+                catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException) { }
+                stageDb = stages;
                 return (fs, list, loaded, error);
             });
 
@@ -180,6 +190,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             bool openScript = AppHost.StartupScript is not null;
             Characters = characters is ({ Girls.Count: > 0 } db, var voices, _) ? new CharacterViewModel(fileSystem, db, voices) : null;
             Scripts = characters is ({ Girls.Count: > 0 } sdb, _, { Scripts.Count: > 0 } library) ? new ScriptViewModel(fileSystem, sdb, library) : null;
+            Play = characters is ({ Girls.Count: > 0 } pdb, _, { Scripts.Count: > 0 } plib) && stageDb is { Stages.Count: > 0 }
+                ? new PlayViewModel(fileSystem, pdb, stageDb, plib) : null;
             if (Characters is not null)
             {
                 Characters.SelectedGirl = Characters.Girls.FirstOrDefault(g => g.Id == AppHost.StartupCharacter) ?? Characters.Girls[0];
@@ -187,7 +199,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     Characters.SelectedSwimsuit = swimsuit;
                 if (AppHost.StartupCut is int cut && cut > 0 && cut < Characters.Cuts.Count)
                     Characters.SelectedCutIndex = cut;
-                SelectedTab = AppHost.StartupFile is not null ? 2 : openScript ? 1 : 0;
+                SelectedTab = AppHost.StartupFile is not null ? 3 : openScript ? 2 : AppHost.StartupCharacter is not null ? 1 : 0;
             }
 
             var editions = string.Join(", ", fileSystem.Install.Editions.Select(e => e.Edition));

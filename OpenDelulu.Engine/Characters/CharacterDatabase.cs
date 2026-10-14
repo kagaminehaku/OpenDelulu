@@ -67,6 +67,20 @@ public sealed class CharacterDatabase
 
     public GirlInfo? FindGirl(int id) => Girls.FirstOrDefault(g => g.Id == id);
 
+    /// <summary>Names as written in the English patch's menus (the scripts keep the Japanese ones).</summary>
+    public static string NameOf(int id) => id switch
+    {
+        1 => "Manami",
+        2 => "Maya",
+        3 => "Esk",
+        4 => "Eo",
+        5 => "Reiko",
+        6 => "Maria",
+        11 => "Bael",
+        12 => "Fei",
+        _ => $"#{id:00}",
+    };
+
     public static CharacterDatabase Load(GameFileSystem fs)
     {
         string tableArchive = TableArchives.FirstOrDefault(fs.HasArchive)

@@ -77,6 +77,10 @@ rồi bấm *Mở*. Thư mục này không cần cấp quyền truy cập bộ n
       PulseAudio/PipeWire (Linux), AudioTrack (Android); giọng nói kèm khẩu hình (`.vss` + âm lượng)
 - [x] Trình chạy kịch bản `.sdt` (tab **Kịch bản**): thoại có giọng và khẩu hình, menu lựa chọn, Goto/SetVar/Switch;
       chạy hết được cả 180 kịch bản
+- [x] Sân khấu: 9 map × 5 thời điểm (`ld02_01`), chế độ trộn đúng như game (cộng/làm tối/alpha), nhân vật đứng ở điểm hẹn
+      và nhuộm theo ánh sáng của giờ trong ngày
+- [x] Vòng lặp game cơ bản (tab **Chơi**): chọn cô gái/sân khấu/giờ → gặp mặt → nói chuyện, đổi chỗ, tiến tới mức thân mật
+      sau, tạm biệt; tiến độ lưu ở `%LOCALAPPDATA%/OpenDelulu/progress.json`
 - [x] Đọc `.vss` (khẩu hình), `.xl` (đèn), `.kys` (tóc), `.eyes`/`.neck`, `.tty`, `.ptcl`/`.glare`, `.xm`, `.sav`, `.sdt` (kịch bản) và các bảng gameplay (100% file)
 
 ## Lộ trình
@@ -84,8 +88,8 @@ rồi bấm *Mở*. Thư mục này không cần cấp quyền truy cập bộ n
 1. **Đồ họa**: skinning trên GPU, Vulkan trên Android (compositor Vulkan), bóng đổ/đổ sáng gần với game gốc.
 2. **Ghép nhân vật (tiếp)**: phụ kiện (`lc*`), khăn pareo, vệt rám nắng, mắt/biểu cảm.
 3. ~~**Âm thanh**~~: đã có (xem bên trên); còn bảng nhạc nền theo cảnh, âm lượng trong cài đặt.
-4. **Cảnh và vòng lặp game**: sân khấu (map), camera, chọn nhân vật/điểm hẹn, mức thân mật tăng dần, UI trong game
-   (trình chạy kịch bản đã có).
+4. **Gameplay tiếp**: hẹn hò/xoa dầu/H theo các điểm `Point_*`, ô bấm trên map, nhạc nền theo cảnh, animation sân khấu
+   (sóng nước), hạt và lóa sáng, chọn đồ bơi trong game, UI trong game giống bản gốc.
 5. **Lưu game**: đã đọc được cấu trúc `data/save/*.sav` (`delulu saves`); còn ý nghĩa từng trường và ghi lại.
 6. **Video**: các file `.mpg` (MPEG-1), dùng thư viện giải mã đa nền tảng.
 

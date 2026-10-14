@@ -32,6 +32,14 @@ public sealed class CharacterAnimator
 
     public RenderModel Model { get; }
 
+    Matrix4x4 _placement = Matrix4x4.Identity;
+    /// <summary>Where the character stands (e.g. a stage point); applied on top of the animated pose.</summary>
+    public Matrix4x4 Placement
+    {
+        get => _placement;
+        set { _placement = value; _dirty = true; }
+    }
+
     AnimationPlayer? _body;
     public AnimationPlayer? Body
     {
@@ -75,6 +83,14 @@ public sealed class CharacterAnimator
     /// <summary>Forces a re-skin on the next <see cref="Update"/> (pose, expression or visibility changed).</summary>
     public void Invalidate() => _dirty = true;
 
+    void ComputeWorld()
+    {
+        Model.Rig.ComputeWorld(_local, _world);
+        if (!_placement.IsIdentity)
+            for (int i = 0; i < _world.Length; i++)
+                _world[i] *= _placement;
+    }
+
     /// <summary>Advances time and re-skins visible meshes. Returns false when nothing changed.</summary>
     public bool Update(double seconds, Func<int, bool> isVisible)
     {
@@ -98,11 +114,11 @@ public sealed class CharacterAnimator
             Body.Evaluate(_local);
         else
             Model.Rig.BindLocal.CopyTo(_local, 0);
-        Model.Rig.ComputeWorld(_local, _world);
+        ComputeWorld();
         if (Gaze is not null && _eyesFollow && _lookTarget is { } target)
         {
             Gaze.Apply(_local, _world, target);
-            Model.Rig.ComputeWorld(_local, _world);
+            ComputeWorld();
         }
         if (_focusFrames.Length > 0)
             Focus = _focusFrames.Aggregate(Vector3.Zero, (sum, i) => sum + _world[i].Translation) / _focusFrames.Length;

@@ -44,6 +44,9 @@ public static class AppHost
     /// <summary>Open this script in the script player and start it (desktop: <c>--script c01_01_00</c>).</summary>
     public static string? StartupScript { get; set; }
 
+    /// <summary>Enter the game right away (desktop: <c>--play &lt;girl&gt; [stage] [time 1..5]</c>).</summary>
+    public static (int Girl, int Stage, int Time)? StartupPlay { get; set; }
+
     /// <summary>Start with all sound muted (desktop: <c>--mute</c>), e.g. for automated screenshots.</summary>
     public static bool StartupMute { get; set; }
 

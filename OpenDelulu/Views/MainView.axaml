@@ -25,6 +25,33 @@
                 <SelectableTextBlock Text="{Binding Text}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
             </ScrollViewer>
         </DataTemplate>
+        <DataTemplate DataType="vm:DialogueViewModel">
+            <!-- Dialogue box over the 3D view -->
+            <Border Margin="24,0,24,16" Padding="20,14" CornerRadius="10" IsVisible="{Binding IsVisible}"
+                    Background="#D0101820" BorderBrush="#60FFFFFF" BorderThickness="1">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" Foreground="#FFB0D8FF"
+                               IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="16" Foreground="White" />
+                    <ItemsControl ItemsSource="{Binding Choices}" IsVisible="{Binding HasChoices}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ChoiceOption">
+                                <Button Content="{Binding Text}" Margin="0,0,8,8"
+                                        Command="{Binding $parent[ItemsControl].((vm:DialogueViewModel)DataContext).ChooseCommand}"
+                                        CommandParameter="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="Tiếp ▶" HorizontalAlignment="Right" Command="{Binding NextCommand}"
+                            IsVisible="{Binding CanAdvance}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
         <DataTemplate DataType="vm:AudioPreviewViewModel">
             <StackPanel Spacing="8">
                 <StackPanel Orientation="Horizontal" Spacing="8">
@@ -76,6 +103,38 @@
         </Border>
 
         <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTab}" Padding="0">
+            <TabItem Header="Chơi" IsEnabled="{Binding Play, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Grid ColumnDefinitions="300,*" DataContext="{Binding Play}" x:DataType="vm:PlayViewModel">
+                    <StackPanel Margin="12" Spacing="8">
+                        <StackPanel Spacing="8" IsEnabled="{Binding !InGame}">
+                            <TextBlock Text="Cô gái" Opacity="0.7" />
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Girls}" SelectedItem="{Binding SelectedGirl}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:GirlChoice">
+                                        <TextBlock Text="{Binding Display}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Text="Sân khấu" Opacity="0.7" />
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding StageNames}" SelectedIndex="{Binding SelectedStageIndex}" />
+                            <TextBlock Text="Thời gian" Opacity="0.7" />
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Times}" SelectedIndex="{Binding SelectedTimeIndex}" />
+                            <Button Content="Vào game" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                    Command="{Binding EnterCommand}" />
+                        </StackPanel>
+                        <Button Content="Rời đi" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Command="{Binding LeaveCommand}" IsVisible="{Binding InGame}" />
+                        <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+                        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.8" />
+                        <TextBlock Text="{Binding Dialogue.Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
+                    </StackPanel>
+                    <Grid Grid.Column="1" Margin="8">
+                        <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" />
+                        <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
+                    </Grid>
+                </Grid>
+            </TabItem>
+
             <TabItem Header="Nhân vật" IsEnabled="{Binding Characters, Converter={x:Static ObjectConverters.IsNotNull}}">
                 <Grid x:Name="CharacterBody" ColumnDefinitions="300,*" DataContext="{Binding Characters}" x:DataType="vm:CharacterViewModel">
                     <ScrollViewer Grid.Column="0">
@@ -178,34 +237,11 @@
                         <Button Content="Bắt đầu" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Command="{Binding StartCommand}" />
                         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
+                        <TextBlock Text="{Binding Dialogue.Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
                     </StackPanel>
                     <Grid Grid.Column="1" Margin="8">
                         <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.45" />
-                        <!-- Dialogue box over the 3D view -->
-                        <Border VerticalAlignment="Bottom" Margin="24,0,24,16" Padding="20,14" CornerRadius="10"
-                                Background="#D0101820" BorderBrush="#60FFFFFF" BorderThickness="1">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" Foreground="#FFB0D8FF"
-                                           IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="16" Foreground="White" />
-                                <ItemsControl ItemsSource="{Binding Choices}" IsVisible="{Binding HasChoices}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ChoiceOption">
-                                            <Button Content="{Binding Text}" Margin="0,0,8,8"
-                                                    Command="{Binding $parent[ItemsControl].((vm:ScriptViewModel)DataContext).ChooseCommand}"
-                                                    CommandParameter="{Binding}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <Button Content="Tiếp ▶" HorizontalAlignment="Right" Command="{Binding NextCommand}"
-                                        IsVisible="{Binding CanAdvance}" />
-                            </StackPanel>
-                        </Border>
+                        <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                     </Grid>
                 </Grid>
             </TabItem>
