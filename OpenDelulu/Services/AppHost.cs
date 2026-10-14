@@ -55,6 +55,9 @@ public static class AppHost
     /// <summary>UI language for this run, not saved (desktop: <c>--lang vi</c>).</summary>
     public static string? StartupLanguage { get; set; }
 
+    /// <summary>Start this date activity after entering the game (desktop: <c>--activity &lt;n&gt;</c>).</summary>
+    public static int? StartupActivity { get; set; }
+
     /// <summary>Start with all sound muted (desktop: <c>--mute</c>), e.g. for automated screenshots.</summary>
     public static bool StartupMute { get; set; }
 

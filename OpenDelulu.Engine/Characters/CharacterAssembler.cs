@@ -46,6 +46,34 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         return new Character(girl, model, animator);
     }
 
+    /// <summary>
+    /// Switches the girl to a date activity: her animation, plus the activity's prop (if any) with its own animation
+    /// kept on the same clip as hers (swing seat and girl move together).
+    /// </summary>
+    public (RenderModel Model, CharacterAnimator? Animator)? StartActivity(Character girl, DateActivity activity)
+    {
+        var body = LoadBodyAnimation(girl.Model, activity.Animation);
+        if (body is not null)
+            girl.Animator.Body = body;
+        if (activity.Prop is not { } prop)
+            return null;
+        var propModel = RenderModel.FromXx(LoadModel(prop), prop.File);
+        CharacterAnimator? propAnimator = null;
+        if (activity.PropAnimation is { } xa && TryLoadXa(xa)?.Animation is { } animation)
+        {
+            var player = new AnimationPlayer(propModel.Rig, animation, xa.File);
+            if (player.BoundTracks > 0)
+            {
+                propAnimator = new CharacterAnimator(propModel) { Body = player, EyesFollowTarget = false };
+                if (body?.Current is { } current)
+                    player.Play(current.Index);
+                if (body is not null)
+                    body.ClipChanged += clip => player.Play(clip.Index);
+            }
+        }
+        return (propModel, propAnimator);
+    }
+
     /// <summary>Hair (.kys of the chosen hairstyle) and breast/buttock (.tty) springs; null when none apply.</summary>
     SpringBones? LoadPhysics(GirlInfo girl, RenderModel model, CharacterSpec spec)
     {

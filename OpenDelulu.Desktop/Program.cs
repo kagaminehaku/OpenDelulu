@@ -97,6 +97,11 @@ sealed class Program
             }
             else if (args[i] == "--lang" && i + 1 < args.Length)
                 AppHost.StartupLanguage = args[++i];
+            else if (args[i] == "--activity" && i + 1 < args.Length && int.TryParse(args[i + 1], out int activity))
+            {
+                AppHost.StartupActivity = activity;
+                i++;
+            }
             else if (args[i] == "--mute")
                 AppHost.StartupMute = true;
             else if (args[i] == "--open" && i + 2 < args.Length)

@@ -76,7 +76,9 @@ public sealed class AnimationPlayer
         while (Current is { IsStatic: false } c && Time >= c.End && guard++ < 16)
         {
             double overflow = Time - c.End;
-            var next = FollowNext ? Clips.FirstOrDefault(x => x.Index == c.Next) ?? c : c;
+            // "Next" pointing at a static clip (index 0 is usually the T-pose / initial state) means "loop":
+            // loops such as 平泳ぎループ (breaststroke loop) end with next = 0.
+            var next = FollowNext ? Clips.FirstOrDefault(x => x.Index == c.Next && !x.IsStatic) ?? c : c;
             if (!ReferenceEquals(next, c))
             {
                 Current = next;

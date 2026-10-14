@@ -25,6 +25,13 @@ public sealed record PartRef(AssetRef Model, string ParentFrame, string AttachFr
 /// <param name="Cut">1-based body variant (boXX_NN.xx) whose meshes match this swimsuit's UV layout.</param>
 public sealed record SwimsuitInfo(int Row, string Name, AssetRef Texture, AssetRef? TanTexture, int Cut, AssetRef? Icon);
 
+/// <summary>
+/// A date activity (ld01 rows 151..171): the girl's animation (dtBB_NN.xa for her body type) and an optional prop
+/// with its own animation (di00_NN.xx/.xa: swing, float ring, banana boat…). Activity N happens at the stage's
+/// o01_N_Point_DateNN.
+/// </summary>
+public sealed record DateActivity(int Number, AssetRef Animation, AssetRef? Prop, AssetRef? PropAnimation);
+
 /// <summary>A playable girl, assembled from ld00 (skin), ld01_NN (parts) and lbNN (swimsuits).</summary>
 public sealed record GirlInfo(
     int Id,
@@ -45,6 +52,9 @@ public sealed record GirlInfo(
     /// mosaic tiles, texture mods replace them), or null.
     /// </summary>
     public AssetRef? DetailTexture { get; init; }
+
+    /// <summary>Date activities by number (1..21).</summary>
+    public IReadOnlyList<DateActivity> DateActivities { get; init; } = [];
 
     /// <summary>Breast (ld01 row 31) and buttocks (row 32) jiggle (.tty).</summary>
     public IReadOnlyList<AssetRef> BodyPhysics { get; init; } = [];
@@ -138,6 +148,7 @@ public sealed class CharacterDatabase
 
             var hairRows = Enumerable.Range(11, 5).Where(n => Part(n) is not null).ToList();
             var hairs = hairRows.Select(n => Part(n)!).ToList();
+            AssetRef? Existing(AssetRef? asset) => asset is { } x && fs.ExistsReferenced(x.Archive, x.File) ? x : null;
             AssetRef? Physics(int n, string extension) => rows.TryGetValue(n, out var r) && AssetRef.FromRow(r, 1) is { } a
                 && a.File.EndsWith(extension, StringComparison.OrdinalIgnoreCase) && fs.ExistsReferenced(a.Archive, a.File) ? a : null;
             // Tables of the Bonus Disc list a 7th variant that only exists for some body types.
@@ -158,6 +169,12 @@ public sealed class CharacterDatabase
             {
                 HairPhysics = hairRows.Select(n => Physics(n + 5, ".kys")).ToList(),
                 DetailTexture = details.TryGetValue(id, out var detail) ? detail : null,
+                DateActivities = Enumerable.Range(151, 25)
+                    .Select(n => rows.TryGetValue(n, out var r) && AssetRef.FromRow(r, 1) is { } anim
+                        && anim.File.EndsWith(".xa", StringComparison.OrdinalIgnoreCase) && fs.ExistsReferenced(anim.Archive, anim.File)
+                            ? new DateActivity(n - 150, anim, Existing(AssetRef.FromRow(r, 3)), Existing(AssetRef.FromRow(r, 5)))
+                            : null)
+                    .OfType<DateActivity>().ToList(),
                 BodyPhysics = new[] { Physics(31, ".tty"), Physics(32, ".tty") }.OfType<AssetRef>().ToList(),
             });
         }

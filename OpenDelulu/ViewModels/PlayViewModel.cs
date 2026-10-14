@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenDelulu.Engine;
+using OpenDelulu.Engine.Animation;
+using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
 using OpenDelulu.Engine.Game;
@@ -42,6 +44,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     Character? _girl;
     Stage? _stage;
     int _point;
+    (RenderModel Model, CharacterAnimator? Animator)? _prop;
 
     public PlayViewModel(GameFileSystem fs, CharacterDatabase characters, StageDatabase stages, ScriptLibrary library)
     {
@@ -118,10 +121,15 @@ public sealed partial class PlayViewModel : ViewModelBase
             _stage = stage;
             _girl = girl;
             _point = 0;
+            _prop = null;
             PlaceGirl();
-            Scene = new ModelScene([(stage.Model, stage.Animator), (girl.Model, girl.Animator)], subject: 1);
-            Scene.SetLight(1, CharacterLight(stage, Time));
+            BuildScene();
             InGame = true;
+            if (AppHost.StartupActivity is int startup && girl.Girl.DateActivities.FirstOrDefault(a => a.Number == startup) is { } first)
+            {
+                AppHost.StartupActivity = null;
+                StartActivity(first);
+            }
             Status = F("play.where", choice.Name, StageNames[SelectedStageIndex], Times[SelectedTimeIndex]);
             PlayAmbience(stageInfo.Id);
             Meet();
@@ -144,6 +152,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         Scene = null;
         _girl = null;
         _stage = null;
+        _prop = null;
         InGame = false;
         RefreshGirls(Girls.Select(g => g.Id).ToList());
         Status = T("play.prompt");
@@ -154,8 +163,80 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (_girl is null || _stage is null)
             return;
         var points = _stage.PointGroup("Date");
-        _girl.Animator.Placement = points.Count > 0 ? Upright(points[_point % points.Count].Transform) : Matrix4x4.Identity;
+        var placement = points.Count > 0 ? Upright(points[_point % points.Count].Transform) : Matrix4x4.Identity;
+        _girl.Animator.Placement = placement;
+        if (_prop?.Animator is { } propAnimator)
+            propAnimator.Placement = placement;
         Scene?.NotifyChanged();
+    }
+
+    /// <summary>Stage, girl and the current activity's prop; the camera frames the girl.</summary>
+    void BuildScene()
+    {
+        if (_stage is null || _girl is null)
+            return;
+        var objects = new List<(RenderModel, CharacterAnimator?)> { (_stage.Model, _stage.Animator), (_girl.Model, _girl.Animator) };
+        if (_prop is { } prop)
+            objects.Add(prop);
+        Scene = new ModelScene(objects, subject: 1);
+        var light = CharacterLight(_stage, Time);
+        for (int i = 1; i < objects.Count; i++)
+            Scene.SetLight(i, light);
+    }
+
+    /// <summary>Date activity N plays at the stage's o01_N_Point_DateNN, with its prop.</summary>
+    void StartActivity(DateActivity activity)
+    {
+        if (_girl is null || _stage is null)
+            return;
+        try
+        {
+            var prop = _assembler.StartActivity(_girl, activity);
+            // A prop without its own animation still has to follow the point: give it a static animator.
+            _prop = prop is { } p ? (p.Model, p.Animator ?? new CharacterAnimator(p.Model) { EyesFollowTarget = false }) : null;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or EndOfStreamException)
+        {
+            Status = F("date.loadError", ex.Message);
+            return;
+        }
+        var points = _stage.PointGroup("Date");
+        int index = points.ToList().FindIndex(p => p.Name == $"o01_N_Point_Date{DatePoint(activity.Number):00}");
+        _point = index >= 0 ? index : activity.Number - 1;
+        _girl.Animator.Physics?.Reset();
+        PlaceGirl();
+        BuildScene();
+    }
+
+    /// <summary>
+    /// Stage point for a date activity. The exe picks points with an algorithm not decoded yet; the data shows that
+    /// points 08..10 lie under water on every stage with a sea (negative heights), so the water activities
+    /// (4 swimming, 7 float ring, 18 kicking) go there and trade places with activities 8..10; the rest keep their
+    /// own number (3 sunbathing on the raised deck at point 03, 13 boat ride at the jetty point 13, …).
+    /// </summary>
+    static int DatePoint(int activity) => activity switch
+    {
+        4 => 8,
+        7 => 9,
+        18 => 10,
+        8 => 4,
+        9 => 7,
+        10 => 18,
+        _ => activity,
+    };
+
+    static string ActivityName(int number) =>
+        Translator.Instance[$"date.activity{number}"] is var name && name != $"date.activity{number}" ? name : Translator.Format("date.activityN", number);
+
+    void ShowActivities()
+    {
+        if (_girl is null)
+            return;
+        var options = _girl.Girl.DateActivities
+            .Select(a => (ActivityName(a.Number), (Action)(() => { StartActivity(a); ShowMenu(); })))
+            .ToList();
+        options.Add((T("date.back"), ShowMenu));
+        Dialogue.ShowMenu(F("date.choose", CharacterDatabase.NameOf(_girl.Girl.Id)), options);
     }
 
     /// <summary>Keeps position and heading of a stage point, drops any tilt or scale.</summary>
@@ -240,6 +321,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         var options = new List<(string, Action)>
         {
             (T("play.talk"), () => RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu)),
+            (T("play.date"), ShowActivities),
             (T("play.move"), () => { _point++; PlaceGirl(); ShowMenu(); }),
         };
         int maxLevel = GameEvents.Levels(_library, girl).DefaultIfEmpty(1).Max();
