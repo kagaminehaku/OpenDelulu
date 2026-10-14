@@ -269,6 +269,9 @@ static int Verify(GameFileSystem fs, string? only = null)
         [".kys"] = (d, _) => { KysFile.Read(d); return null; },
         [".eyes"] = (d, _) => LookSummary(LookFile.Read(d)),
         [".neck"] = (d, _) => LookSummary(LookFile.Read(d)),
+        [".ptcl"] = (d, _) => Environment.GetEnvironmentVariable("DELULU_VERBOSE") is null ? Ignore(PtclFile.Read(d))
+            : PtclFile.Read(d) is var pt ? $"info: {pt.Emitters.Count} emitters: {string.Join(", ", pt.Emitters.Take(4).Select(e => $"{e.Model.Textures.FirstOrDefault()?.Name}@{e.AttachFrame} keys {e.Curve17.Count}/{e.Curve7.Count}"))}" : null,
+        [".glare"] = (d, _) => { GlareFile.Read(d); return null; },
         [".tty"] = (d, _) => Environment.GetEnvironmentVariable("DELULU_VERBOSE") is null ? Ignore(TtyFile.Read(d))
             : TtyFile.Read(d) is var t ? $"info: header {Convert.ToHexString(t.Header)} joints {string.Join("/", t.Joints)}; sets {string.Join(", ", t.Sets.Select(x => $"{x.Name}[{x.Entries.Count}] g={x.Float(10):F3}"))}" : null,
     };

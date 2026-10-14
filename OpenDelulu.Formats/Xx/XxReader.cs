@@ -37,6 +37,18 @@ public sealed class XxReader
         head.CopyTo(header, 0);
         reader.BaseStream.ReadExactly(header.AsSpan(head.Length));
 
+        var model = ReadBody(reader, format, header);
+        if (stream.CanSeek && stream.Position != stream.Length)
+            throw new InvalidDataException($"xx parsing stopped at 0x{stream.Position:X} of 0x{stream.Length:X}.");
+        return model;
+    }
+
+    /// <summary>
+    /// Reads frames, materials, textures (and the format-2 footer) at the reader's position. Used for .xx files
+    /// and for models embedded in other files (.ptcl), which carry their own header.
+    /// </summary>
+    public static XxModel ReadBody(BinaryReader reader, int format, byte[] header)
+    {
         var parser = new XxReader(reader, format);
         var root = parser.ReadFrame(null);
 
@@ -52,9 +64,6 @@ public sealed class XxReader
             textures.Add(parser.ReadTexture());
 
         byte[]? footer = format >= 2 ? reader.ReadExactBytes(10) : null;
-
-        if (stream.CanSeek && stream.Position != stream.Length)
-            throw new InvalidDataException($"xx parsing stopped at 0x{stream.Position:X} of 0x{stream.Length:X}.");
 
         return new XxModel
         {
