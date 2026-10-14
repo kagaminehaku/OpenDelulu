@@ -3,9 +3,12 @@ using System.Text;
 using OpenDelulu.Engine;
 using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Characters;
+using OpenDelulu.Formats.Character;
 using OpenDelulu.Formats.Imaging;
 using OpenDelulu.Formats.Lst;
 using OpenDelulu.Formats.Pp;
+using OpenDelulu.Formats.Scene;
+using OpenDelulu.Formats.Voice;
 using OpenDelulu.Formats.Xa;
 using OpenDelulu.Formats.Xx;
 
@@ -25,7 +28,7 @@ if (args.Length < 2)
           delulu extract <gameFolder> <archive.pp> <outDir>   extract (and decode .lst to .txt)
           delulu chars   <gameFolder>                         characters, hairstyles, swimsuits (from the .lst tables)
           delulu cutfit  <gameFolder> <girlId>                 diagnostic: swimsuit texture vs body variant UV fit
-          delulu verify  <gameFolder>                         parse every .lst/.xx/image, report failures
+          delulu verify  <gameFolder> [.ext]                  parse every supported file (or one type), report failures
 
         <gameFolder> is the folder that contains SexyBeach3 (and optionally SexyBeach3Plus / SexyBeach3PlusG).
         """);
@@ -177,7 +180,7 @@ switch (args[0])
         return CutFit(fs, int.Parse(args[2]));
 
     case "verify":
-        return Verify(fs);
+        return Verify(fs, args.Length > 2 ? args[2] : null);
 
     default:
         Console.Error.WriteLine($"Unknown command {args[0]}");
@@ -244,19 +247,33 @@ static int CutFit(GameFileSystem fs, int girlId)
     }
 }
 
-static int Verify(GameFileSystem fs)
+static int Verify(GameFileSystem fs, string? only = null)
 {
     var watch = Stopwatch.StartNew();
     var counts = new Dictionary<string, (int Ok, int Failed)>();
     var failures = new List<string>();
 
-    void Count(string kind, bool ok, string what, Exception? ex = null)
+    // Extension -> parser. A parser throws on malformed data and may return warnings.
+    var checks = new Dictionary<string, Func<byte[], string, string?>>(StringComparer.OrdinalIgnoreCase)
     {
-        counts.TryGetValue(kind, out var c);
-        counts[kind] = ok ? (c.Ok + 1, c.Failed) : (c.Ok, c.Failed + 1);
-        if (!ok)
-            failures.Add($"{what}: {ex?.GetType().Name}: {ex?.Message}");
-    }
+        [".lst"] = (d, n) => { LstTable.Decode(d, n); return null; },
+        [".xa"] = (d, _) => XaReader.Read(d).Footer.Length is > 0 and var extra ? $"{extra} unparsed trailing bytes" : null,
+        [".xx"] = (d, n) =>
+        {
+            var render = RenderModel.FromXx(XxReader.Read(d), n);
+            int missing = render.Textures.Count(t => t is null);
+            return missing > 0 ? $"{missing} embedded texture(s) could not be decoded" : null;
+        },
+        [".vss"] = (d, _) => { VssFile.Read(d); return null; },
+        [".xl"] = (d, _) => { XlFile.Read(d); return null; },
+        [".kys"] = (d, _) => { KysFile.Read(d); return null; },
+        [".eyes"] = (d, _) => LookSummary(LookFile.Read(d)),
+        [".neck"] = (d, _) => LookSummary(LookFile.Read(d)),
+        [".tty"] = (d, _) => Environment.GetEnvironmentVariable("DELULU_VERBOSE") is null ? Ignore(TtyFile.Read(d))
+            : TtyFile.Read(d) is var t ? $"info: header {Convert.ToHexString(t.Header)} joints {string.Join("/", t.Joints)}; sets {string.Join(", ", t.Sets.Select(x => $"{x.Name}[{x.Entries.Count}] g={x.Float(10):F3}"))}" : null,
+    };
+    foreach (var image in ImageDecoder.Extensions)
+        checks[image] = (d, n) => { ImageDecoder.Decode(d, n); return null; };
 
     foreach (var info in fs.Archives)
     {
@@ -265,32 +282,12 @@ static int Verify(GameFileSystem fs)
         {
             string what = $"{info.Name}/{entry.Name}";
             string ext = entry.Extension;
-            if (ext is not (".lst" or ".xx" or ".xa") && !ImageDecoder.IsImage(entry.Name))
+            if (!checks.TryGetValue(ext, out var check) || (only is not null && !ext.Equals(only, StringComparison.OrdinalIgnoreCase)))
                 continue;
             try
             {
-                var data = archive.ReadAllBytes(entry);
-                switch (ext)
-                {
-                    case ".lst":
-                        LstTable.Decode(data, entry.Name);
-                        break;
-                    case ".xa":
-                        var anim = XaReader.Read(data);
-                        if (anim.Footer.Length > 0)
-                            failures.Add($"{what}: {anim.Footer.Length} unparsed trailing bytes");
-                        break;
-                    case ".xx":
-                        var model = XxReader.Read(data);
-                        var render = RenderModel.FromXx(model, entry.Name);
-                        int missing = render.Textures.Count(t => t is null);
-                        if (missing > 0)
-                            failures.Add($"{what}: {missing} embedded texture(s) could not be decoded");
-                        break;
-                    default:
-                        ImageDecoder.Decode(data, entry.Name);
-                        break;
-                }
+                if (check(archive.ReadAllBytes(entry), entry.Name) is { } warning)
+                    failures.Add($"{what}: {warning}");
                 Count(ext, true, what);
             }
             catch (Exception ex)
@@ -308,4 +305,19 @@ static int Verify(GameFileSystem fs)
         Console.WriteLine($"  ... {failures.Count - 50} more");
     Console.WriteLine($"Done in {watch.Elapsed.TotalSeconds:F1}s");
     return counts.Values.Any(c => c.Failed > 0) ? 2 : 0;
+
+    static string? Ignore(object _) => null;
+
+    // Informational line (shown with the warnings) so the decoded names can be eyeballed.
+    static string? LookSummary(LookFile look) =>
+        Environment.GetEnvironmentVariable("DELULU_VERBOSE") is null ? null
+            : $"info: frames {string.Join("/", look.Frames)}; {string.Join(", ", look.Behaviors.Select(b => $"{b.Name}({b.MaxYaw:F3},{b.MaxPitch:F3})"))}";
+
+    void Count(string kind, bool ok, string what, Exception? ex = null)
+    {
+        counts.TryGetValue(kind, out var c);
+        counts[kind] = ok ? (c.Ok + 1, c.Failed) : (c.Ok, c.Failed + 1);
+        if (!ok)
+            failures.Add($"{what}: {ex?.GetType().Name}: {ex?.Message}");
+    }
 }
