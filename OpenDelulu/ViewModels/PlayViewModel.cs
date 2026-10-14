@@ -51,7 +51,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     DateActivity? _activity;
     VoiceLibrary? _voices;
     OilSession? _oil;
-    int _handObject = -1;
+    int _propObject = -1;
     readonly DispatcherTimer _oilTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
     readonly Stopwatch _oilClock = new();
     readonly ISceneTouchHandler _oilTouch;
@@ -208,11 +208,13 @@ public sealed partial class PlayViewModel : ViewModelBase
         var objects = new List<(RenderModel, CharacterAnimator?)> { (_stage.Model, _stage.Animator), (_girl.Model, _girl.Animator) };
         if (_prop is { } prop)
             objects.Add(prop);
-        _handObject = -1;
-        if (_oil is { Hand: { } hand, HandAnimator: { } handAnimator })
+        _propObject = -1;
+        if (_oil is { } oilProps)
         {
-            _handObject = objects.Count;
-            objects.Add((hand, handAnimator));
+            // Hands and oil drips, shown only while used.
+            _propObject = objects.Count;
+            foreach (var (model, animator) in oilProps.Props)
+                objects.Add((model, animator));
         }
         var scene = new ModelScene(objects, subject: 1);
         if (_oil is { } oil)
@@ -287,6 +289,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         oil.End();
         _oil = null;
         _statusHoldUntil = 0;
+        oil.Girl.Animator.Face?.SetExpression(0, 0);
         if (!restore || _girl is not { } girl)
             return;
         if (girl.Girl.BodyAnimations.FirstOrDefault() is { } idle)
@@ -335,7 +338,15 @@ public sealed partial class PlayViewModel : ViewModelBase
             ShowMenu();
             return;
         }
+        var oil = _oil;
+        bool pour = oil.Mode == OilMode.Pour;
         var options = new List<(string, Action)>
+        {
+            (pour ? T("oil.handMode") : T("oil.pourMode"), () => SetOilMode(pour ? OilMode.Hand : OilMode.Pour)),
+        };
+        if (pour && oil.OilKinds > 1)
+            options.Add((F("oil.kind", oil.OilKind + 1, oil.OilKinds), () => CycleOil(1)));
+        options.AddRange(new List<(string, Action)>
         {
             (T("oil.changePose"), ShowOilPoses),
             (TouchHandler is null ? T("oil.rubMode") : T("oil.cameraMode"), () =>
@@ -348,8 +359,48 @@ public sealed partial class PlayViewModel : ViewModelBase
                 StopOil(restore: true);
                 ShowMenu();
             }),
-        };
-        Dialogue.ShowMenu(F("oil.menu", CharacterDatabase.NameOf(_girl.Girl.Id)), options);
+        });
+        Dialogue.ShowMenu(F(pour ? "oil.menuPour" : "oil.menu", CharacterDatabase.NameOf(_girl.Girl.Id)), options);
+    }
+
+    void SetOilMode(OilMode mode)
+    {
+        if (_oil is null)
+            return;
+        _oil.Mode = mode;
+        ShowOilMenu();
+    }
+
+    void CycleOil(int step)
+    {
+        if (_oil is not { OilKinds: > 0 } oil)
+            return;
+        oil.OilKind = (oil.OilKind + step + oil.OilKinds) % oil.OilKinds;
+        ShowOilMenu();
+    }
+
+    /// <summary>The original's oil keys: Z pour, X hand, A / S previous / next oil. True when used.</summary>
+    public bool HandleOilKey(Avalonia.Input.Key key)
+    {
+        if (_oil is null)
+            return false;
+        switch (key)
+        {
+            case Avalonia.Input.Key.Z:
+                SetOilMode(OilMode.Pour);
+                return true;
+            case Avalonia.Input.Key.X:
+                SetOilMode(OilMode.Hand);
+                return true;
+            case Avalonia.Input.Key.A:
+                CycleOil(-1);
+                return true;
+            case Avalonia.Input.Key.S:
+                CycleOil(1);
+                return true;
+            default:
+                return false;
+        }
     }
 
     void OilTick()
@@ -373,8 +424,10 @@ public sealed partial class PlayViewModel : ViewModelBase
 
     void SyncHand()
     {
-        if (Scene is { } scene && _handObject >= 0)
-            scene.SetObjectVisible(_handObject, _oil?.HandVisible == true);
+        if (Scene is not { } scene || _propObject < 0 || _oil is not { } oil)
+            return;
+        for (int i = 0; i < oil.Props.Count; i++)
+            scene.SetObjectVisible(_propObject + i, oil.IsPropVisible(i));
     }
 
     /// <summary>Passes the viewer's touches to the oil scene.</summary>

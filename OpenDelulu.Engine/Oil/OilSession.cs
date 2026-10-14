@@ -8,67 +8,103 @@ using OpenDelulu.Formats.Xx;
 
 namespace OpenDelulu.Engine.Oil;
 
+/// <summary>What a press on her does: rub with the hand, or pour oil from the bottle (the original's Z/X keys).</summary>
+public enum OilMode
+{
+    Hand,
+    Pour,
+}
+
 /// <summary>
-/// The sun-oil scene (exe module 07_oil): the girl in one of her oil poses (onGG_PP.xa), the player's hand (te01) and
-/// oil spread by rubbing. Touching a hidden "o01_A_*" area of the la01 table makes her wait for touches on that part
-/// of the body and react; breasts, buttocks and crotch are refused until the intimacy level unlocks them.
-/// <para>
-/// Clip numbers are those of the onGG_PP.xa files (the same ~198 clips for every girl and pose). How the exe times
-/// reactions and picks voice rows (lh01 tables) is not decoded yet: reactions come every few seconds of rubbing, and
-/// voices use lp rows 1..17 while rubbing, 21 when refusing and 91/92 (moans) with the reactions.
-/// </para>
+/// The sun-oil scene (exe module 07_oil): the girl in one of her oil poses (onBB_PP.xa), the player's hands (te01/te02),
+/// the oil drips (ek01..03) and oil spread on the skin.
+/// <list type="bullet">
+/// <item>Rubbing: a press on a hidden "o01_A_*" area of la01 makes her wait for touches there and react; breasts,
+/// buttocks and crotch are refused until the intimacy level unlocks them. Unlocked special areas start the lf01 action
+/// (kneading…): the hand then holds on to a body locator instead of following the pointer.</item>
+/// <item>Pouring: the stream falls while the button is held and leaves a puddle; she reacts by body part (head, upper or
+/// lower body) or refuses.</item>
+/// <item>Each clip she enters applies its lh01 row: eye/mouth expressions and a voice line by priority.</item>
+/// </list>
+/// Clip numbers are those of the onBB_PP.xa files (the same ~198 clips for every girl and pose).
 /// </summary>
 public sealed class OilSession
 {
-    // onGG_PP.xa
+    // onBB_PP.xa
     public const int ClipIdle = 7;                 // Kループ
-    const int ClipToIdleFromUpperBody = 64;        // 触り待機(上半身)→K
     const int ClipRefuseBreasts = 85, ClipRefuseCrotch = 88, ClipRefuseButtocks = 91;
-    const int ClipBreastMassage = 109, ClipButtocksMassage = 144, ClipCrotchTouch = 154;
-    // te01.xa
-    const int HandRubBody = 9, HandBreastMassage = 13;
-
-    // Voice rows of lp01_LL.
-    static readonly int[] RubbingVoices = Enumerable.Range(1, 17).ToArray();
-    const int RefusalVoice = 21, SmallReactionVoice = 91, BigReactionVoice = 92;
+    const int ClipPourHead = 36, ClipPourUpper = 39, ClipPourLower = 42;
+    // Refusing oil on the breasts / crotch / buttocks: start, then a loop until the way back.
+    static readonly (int Start, int Loop, int Back) PourRefuseBreasts = (45, 46, 49), PourRefuseCrotch = (50, 51, 54),
+        PourRefuseButtocks = (55, 56, 59);
+    // te01/te02.xa
+    const int HandRubBody = 9;
+    // ek01..03.xa: the stream, then one of three puddles.
+    const int DripStream = 1;
+    static readonly int[] DripPuddles = [2, 3, 4];
 
     const float BrushRadius = 1.4f;
     /// <summary>A new area has to stay under the pointer this long before she changes what she does (area borders).</summary>
     const double SwitchDelay = 0.35;
+
+    sealed class Prop(RenderModel model, CharacterAnimator animator)
+    {
+        public readonly RenderModel Model = model;
+        public readonly CharacterAnimator Animator = animator;
+        public bool Visible;
+    }
 
     readonly OilTables _tables;
     readonly VoiceLibrary? _voices;
     readonly AudioSystem? _audio;
     readonly Dictionary<string, RenderMesh> _areaMeshes = new(StringComparer.Ordinal);
     readonly Random _random = new();
+    readonly List<Prop> _props = [];
+    readonly Prop? _rightHand, _leftHand;
+    readonly List<Prop> _drips = [];
 
     OilTouchArea? _area;
     (int Start, int Loop, int Small, int Big, int Back)? _state;
+    OilAction? _action;
+    Prop? _actionHand;
+    int _actionLocator = -1;
     OilTouchArea? _pending;
     double _pendingTime;
     Vector3 _point, _lastPoint;
-    double _nextReaction, _nextVoice;
-    bool _touching, _refused;
+    double _nextReaction, _refusing, _puddleLeft;
+    (int Start, int Loop, int Back)? _pourRefusal;
+    bool _touching, _refused, _pouring;
+    int _speakingPriority;
 
     public Character Girl { get; }
     public OilPose Pose { get; }
     public AnimationPlayer Body { get; }
     public OilCoating Coating { get; }
     public int Level { get; }
+    public OilMode Mode { get; set; }
 
-    /// <summary>The player's hand (te01) and its animator (rub motions are morphs on the hand's timeline); null if missing.</summary>
-    public RenderModel? Hand { get; }
-    public CharacterAnimator? HandAnimator { get; }
-    public bool HandVisible { get; private set; }
+    /// <summary>Which oil (0..2 = ek01..03, the original's three oils).</summary>
+    public int OilKind { get; set; }
+    public int OilKinds => _drips.Count;
+
+    /// <summary>Body type letter of the pose files (onBB: 01 = A, 02 = B, 03 = C), used to pick lf01 variants.</summary>
+    public char BodyType { get; }
+
+    /// <summary>Extra objects to draw with her: right hand, left hand, then the drips. Show only the visible ones.</summary>
+    public IReadOnlyList<(RenderModel Model, CharacterAnimator Animator)> Props => _props.Select(p => (p.Model, p.Animator)).ToList();
+    public bool IsPropVisible(int index) => _props[index].Visible;
 
     /// <summary>The touched area, or null.</summary>
     public OilTouchArea? Area => _touching ? _area : null;
 
-    /// <summary>Raised when she refuses a touch (for a message).</summary>
+    /// <summary>The special touch going on (kneading…), or null.</summary>
+    public OilAction? Action => _touching ? _action : null;
+
+    /// <summary>Raised when she refuses a touch or oil there (for a message).</summary>
     public event Action<OilTouchArea>? Refused;
 
     OilSession(Character girl, OilPose pose, AnimationPlayer body, OilTables tables, int level, VoiceLibrary? voices, AudioSystem? audio,
-        RenderModel? hand, CharacterAnimator? handAnimator)
+        Prop? rightHand, Prop? leftHand, IEnumerable<Prop> drips)
     {
         Girl = girl;
         Pose = pose;
@@ -77,42 +113,56 @@ public sealed class OilSession
         Level = level;
         _voices = voices;
         _audio = audio;
-        Hand = hand;
-        HandAnimator = handAnimator;
+        _rightHand = rightHand;
+        _leftHand = leftHand;
+        _drips.AddRange(drips);
+        if (rightHand is not null)
+            _props.Add(rightHand);
+        if (leftHand is not null)
+            _props.Add(leftHand);
+        _props.AddRange(_drips);
         Coating = new OilCoating(girl.Model);
         foreach (var mesh in girl.Model.Meshes)
             if (mesh.PartName == "body" && mesh.FrameName.StartsWith("o01_A_", StringComparison.Ordinal))
                 _areaMeshes.TryAdd(mesh.FrameName, mesh);
+        string file = pose.Animation.File;
+        BodyType = file.Length >= 4 && int.TryParse(file.AsSpan(2, 2), out int type) && type is >= 1 and <= 3 ? (char)('A' + type - 1) : 'A';
+        body.ClipChanged += OnClipChanged;
         body.Play(ClipIdle);
     }
 
     /// <summary>
-    /// Loads an oil pose and the hand (can run on a worker thread); <see cref="Attach"/> then puts her in the pose.
-    /// Throws if the pose's animation cannot be read.
+    /// Loads an oil pose, the hands and the drips (can run on a worker thread); <see cref="Attach"/> then puts her in the
+    /// pose. Throws if the pose's animation cannot be read.
     /// </summary>
     public static OilSession Start(GameFileSystem fs, CharacterAssembler assembler, Character girl, OilPose pose, int level,
         VoiceLibrary? voices = null, AudioSystem? audio = null)
     {
         var body = assembler.LoadBodyAnimation(girl.Model, pose.Animation)
             ?? throw new InvalidDataException($"{pose.Animation.File} has no animation.");
-        var tables = OilTables.Load(fs, assembler.Database.TableArchive, level);
+        var tables = OilTables.Load(fs, assembler.Database.TableArchive, level, pose.Number);
 
-        RenderModel? hand = null;
-        CharacterAnimator? handAnimator = null;
-        if (tables.Hand is { } handRef && fs.ExistsReferenced(handRef.Archive, handRef.File))
+        Prop? Load(AssetRef? modelRef, AssetRef? xaRef)
         {
-            hand = RenderModel.FromXx(XxReader.Read(fs.ReadReferenced(handRef.Archive, handRef.File)), handRef.File);
-            handAnimator = new CharacterAnimator(hand) { EyesFollowTarget = false };
-            if (tables.HandAnimation is { } xaRef && fs.ExistsReferenced(xaRef.Archive, xaRef.File))
+            if (modelRef is not { } m || !fs.ExistsReferenced(m.Archive, m.File))
+                return null;
+            var model = RenderModel.FromXx(XxReader.Read(fs.ReadReferenced(m.Archive, m.File)), m.File);
+            var animator = new CharacterAnimator(model) { EyesFollowTarget = false };
+            if (xaRef is { } x && fs.ExistsReferenced(x.Archive, x.File))
             {
-                var xa = XaReader.Read(fs.ReadReferenced(xaRef.Archive, xaRef.File));
+                var xa = XaReader.Read(fs.ReadReferenced(x.Archive, x.File));
                 if (xa.Animation is { } animation)
-                    handAnimator.Body = new AnimationPlayer(hand.Rig, animation, xaRef.File) { FollowNext = false };
+                    animator.Body = new AnimationPlayer(model.Rig, animation, x.File) { FollowNext = false };
                 if (xa.Morphs is { } morphs)
-                    handAnimator.Morph = new TimelineMorph(hand, morphs);
+                    animator.Morph = new TimelineMorph(model, morphs);
             }
+            return new Prop(model, animator);
         }
-        return new OilSession(girl, pose, body, tables, level, voices, audio, hand, handAnimator);
+
+        var right = Load(tables.Hand, tables.HandAnimation);
+        var left = Load(tables.LeftHand, tables.LeftHandAnimation);
+        var drips = tables.Drips.Select(d => Load(d.Model, d.Animation)).OfType<Prop>().ToList();
+        return new OilSession(girl, pose, body, tables, level, voices, audio, right, left, drips);
     }
 
     /// <summary>Gives her the pose's animation (on the thread that renders).</summary>
@@ -120,6 +170,8 @@ public sealed class OilSession
     {
         Girl.Animator.Body = Body;
         Girl.Animator.Physics?.Reset();
+        if (Body.Current is { } clip)
+            OnClipChanged(clip);
     }
 
     /// <summary>The touch area under the ray (nearest), or null.</summary>
@@ -151,7 +203,9 @@ public sealed class OilSession
         return best;
     }
 
-    /// <summary>Starts touching at the ray; false when it misses her (the caller may orbit the camera instead).</summary>
+    // ------------------------------------------------------------------ input
+
+    /// <summary>Starts touching (or pouring) at the ray; false when it misses her (the caller may orbit the camera).</summary>
     /// <param name="up">The screen's up direction in world space (the hand's fingers point that way).</param>
     public bool Begin(in Ray ray, Vector3 up)
     {
@@ -161,18 +215,28 @@ public sealed class OilSession
         _refused = false;
         _pending = null;
         _nextReaction = 2.5 + _random.NextDouble() * 2.5;
-        _nextVoice = 0.6;
-        Touch(picked.Area, PickBody(ray) ?? picked.Hit, up, immediate: true);
+        var hit = PickBody(ray) ?? picked.Hit;
+        if (Mode == OilMode.Pour)
+            BeginPour(picked.Area, hit);
+        else
+            Touch(picked.Area, hit, up, immediate: true);
         _lastPoint = _point;
         return true;
     }
 
     public void Move(in Ray ray, Vector3 up)
     {
-        // After a refusal the hand stays off until the player lets go.
+        // After a refusal the hand stays off until the player lets go; the stream follows the pointer.
         if (!_touching || _refused || PickArea(ray) is not { } picked)
             return;
-        Touch(picked.Area, PickBody(ray) ?? picked.Hit, up, immediate: false);
+        var hit = PickBody(ray) ?? picked.Hit;
+        if (_pouring)
+        {
+            _point = hit.Point;
+            PlaceDrip(hit);
+            return;
+        }
+        Touch(picked.Area, hit, up, immediate: false);
     }
 
     public void End()
@@ -180,18 +244,38 @@ public sealed class OilSession
         if (!_touching)
             return;
         _touching = false;
-        HandVisible = false;
+        if (_pouring)
+        {
+            _pouring = false;
+            if (ActiveDrip is { } drip)
+            {
+                drip.Animator.Body?.Play(DripPuddles[_random.Next(DripPuddles.Length)]);
+                _puddleLeft = 2.5;
+            }
+        }
+        HideHands();
         if (_state is { } state)
             Body.Play(state.Back);
         _state = null;
         _area = null;
+        _action = null;
+        _actionHand = null;
         _pending = null;
     }
+
+    void HideHands()
+    {
+        foreach (var hand in new[] { _rightHand, _leftHand })
+            if (hand is not null)
+                hand.Visible = false;
+    }
+
+    // ------------------------------------------------------------------ rubbing
 
     void Touch(OilTouchArea area, MeshHit hit, Vector3 up, bool immediate)
     {
         // Sliding over a border into an area with another reaction: wait until the pointer stays there.
-        if (!immediate && _area is { } current && (area.Refuses || StateFor(area) != StateFor(current)))
+        if (!immediate && _area is { } current && (area.Refuses || StateFor(area).State != StateFor(current).State))
         {
             if (_pending != area)
             {
@@ -201,9 +285,9 @@ public sealed class OilSession
             if (_pendingTime < SwitchDelay)
             {
                 // Keep rubbing where she lets you; a place she would refuse gets no oil meanwhile.
-                if (!area.Refuses)
+                if (!area.Refuses && _action is null)
                 {
-                    PlaceHand(hit, up);
+                    PlaceHand(_rightHand, hit, up);
                     _point = hit.Point;
                 }
                 return;
@@ -216,40 +300,91 @@ public sealed class OilSession
             Refuse(area);
             _refused = true;
             _area = area;
-            HandVisible = false;
+            HideHands();
             return;
         }
 
-        var state = StateFor(area);
+        var (state, action) = StateFor(area);
         if (_state != state)
         {
             _state = state;
             Body.Play(state.Start);
             _nextReaction = 2.5 + _random.NextDouble() * 2.5;
+            StartHand(area, action);
         }
-        if (_area?.Special != area.Special || _area?.HandClip != area.HandClip || !HandVisible)
-            HandAnimator?.Body?.Play(area.Special >= 0 && area.Region == OilRegion.Breasts ? HandBreastMassage : area.HandClip > 0 ? area.HandClip : HandRubBody);
         _area = area;
-        PlaceHand(hit, up);
+        if (_action is null)
+            PlaceHand(_rightHand, hit, up);
     }
 
-    /// <summary>What she does while touched there: start, loop, small and big reaction, back to idle.</summary>
-    static (int Start, int Loop, int Small, int Big, int Back) StateFor(OilTouchArea area)
+    /// <summary>The hand for a touch: the right hand rubbing under the pointer, or the lf01 action's hand on its locator.</summary>
+    void StartHand(OilTouchArea area, OilAction? action)
     {
-        if (area.Unlocked && area.Special >= 0)
+        HideHands();
+        _action = action;
+        _actionHand = null;
+        _actionLocator = -1;
+        if (action is not null)
         {
-            int start = area.Region switch
+            var hand = action.Hand == 2 ? _leftHand ?? _rightHand : _rightHand;
+            string locatorName = action.Hand == 2 && action.LeftLocator.StartsWith("o01_", StringComparison.Ordinal) ? action.LeftLocator : action.Locator;
+            int locator = Girl.Model.Rig.Find(locatorName);
+            if (hand is not null && locator >= 0)
             {
-                OilRegion.Breasts => ClipBreastMassage,
-                OilRegion.Buttocks => ClipButtocksMassage,
-                OilRegion.Crotch => ClipCrotchTouch,
-                _ => 0,
-            };
-            if (start > 0)
-                return (start, start + 1, start + 2, start + 3, ClipToIdleFromUpperBody);
+                _actionHand = hand;
+                _actionLocator = locator;
+                PlayLoop(hand, action.HandClip);
+                FollowLocator();
+                return;
+            }
+            _action = null;
+        }
+        _rightHand?.Animator.Body?.Play(area.HandClip > 0 ? area.HandClip : HandRubBody);
+    }
+
+    /// <summary>Plays a hand clip and holds the loop it leads to ("…(ル)"), as long as the touch lasts.</summary>
+    static void PlayLoop(Prop hand, int clip)
+    {
+        if (hand.Animator.Body is not { } player)
+            return;
+        var clips = player.Clips;
+        var current = clips.FirstOrDefault(c => c.Index == clip);
+        static bool IsLoop(AnimationClipInfo c) => !c.Name.Contains('→')
+            && (c.Name.EndsWith("(ル)", StringComparison.Ordinal) || c.Name.EndsWith("ループ", StringComparison.Ordinal));
+        for (int guard = 0; current is not null && guard < 6 && !IsLoop(current); guard++)
+        {
+            int next = current.Next;
+            current = clips.FirstOrDefault(c => c.Index == next);
+        }
+        player.Play(current?.Index ?? clip);
+    }
+
+    /// <summary>
+    /// What she does while touched there: start, loop, small and big reaction, back to idle; for an unlocked special
+    /// area, the lf01 action matching her body type and outfit.
+    /// </summary>
+    ((int Start, int Loop, int Small, int Big, int Back) State, OilAction? Action) StateFor(OilTouchArea area)
+    {
+        if (area.Unlocked && area.Special >= 0 && FindAction(area.Special) is { GirlClip: > 0 } action)
+        {
+            int start = action.GirlClip;
+            return ((start, start + 1, start + 2, start + 3, start + 4), action);
         }
         int wait = area.GirlClip > 0 ? area.GirlClip : 60;
-        return (wait, wait + 1, wait + 2, wait + 3, wait + 4);
+        return ((wait, wait + 1, wait + 2, wait + 3, wait + 4), null);
+    }
+
+    OilAction? FindAction(int group)
+    {
+        var rows = _tables.Actions.Where(a => a.Group == group && a.HandClip > 0).ToList();
+        if (rows.Count == 0)
+            return null;
+        // She still wears her swimsuit: prefer this body type's "with the top" / "swimsuit" variant.
+        string type = $"{BodyType}体型";
+        return rows.FirstOrDefault(a => a.Name.Contains(type) && (a.Name.Contains("ブラあり") || a.Name.Contains("水着")))
+            ?? rows.FirstOrDefault(a => a.Name.Contains(type))
+            ?? rows.FirstOrDefault(a => a.Name.Contains("ブラあり") || a.Name.Contains("水着"))
+            ?? rows[0];
     }
 
     void Refuse(OilTouchArea area)
@@ -261,13 +396,12 @@ public sealed class OilSession
             OilRegion.Crotch => ClipRefuseCrotch,
             _ => ClipRefuseButtocks,
         });
-        Say(RefusalVoice, interrupt: true);
         Refused?.Invoke(area);
     }
 
-    void PlaceHand(MeshHit hit, Vector3 up)
+    static void PlaceHand(Prop? hand, MeshHit hit, Vector3 up)
     {
-        if (HandAnimator is null)
+        if (hand is null)
             return;
         // te01: fingers along +Y, palm facing -Z, wrist near the origin. Palm onto the skin, fingers up the screen.
         var normal = hit.Normal;
@@ -277,53 +411,144 @@ public sealed class OilSession
         fingers = Vector3.Normalize(fingers);
         var right = Vector3.Normalize(Vector3.Cross(fingers, normal));
         var position = hit.Point + normal * 0.12f - fingers * 0.2f;
-        HandAnimator.Placement = new Matrix4x4(
+        hand.Animator.Placement = new Matrix4x4(
             right.X, right.Y, right.Z, 0,
             fingers.X, fingers.Y, fingers.Z, 0,
             normal.X, normal.Y, normal.Z, 0,
             position.X, position.Y, position.Z, 1);
-        HandVisible = true;
+        hand.Visible = true;
     }
 
-    /// <summary>Advances the scene: spreads oil under the hand, reactions and voices. Returns true if the skin changed.</summary>
+    /// <summary>An lf01 action's hand sits on its body locator (the hand model is made in the locator's space).</summary>
+    void FollowLocator()
+    {
+        if (_actionHand is null || _actionLocator < 0)
+            return;
+        var world = Girl.Animator.WorldOf(_actionLocator);
+        _actionHand.Animator.Placement = world;
+        _actionHand.Visible = true;
+        _point = world.Translation;
+    }
+
+    // ------------------------------------------------------------------ pouring
+
+    Prop? ActiveDrip => _drips.Count > 0 ? _drips[Math.Clamp(OilKind, 0, _drips.Count - 1)] : null;
+
+    void BeginPour(OilTouchArea area, MeshHit hit)
+    {
+        _point = hit.Point;
+        _area = area;
+        _state = null;
+        if (area.Refuses)
+        {
+            var refusal = area.Region switch
+            {
+                OilRegion.Breasts => PourRefuseBreasts,
+                OilRegion.Crotch => PourRefuseCrotch,
+                _ => PourRefuseButtocks,
+            };
+            _pourRefusal = refusal;
+            _refusing = 2.5;
+            Body.Play(refusal.Start);
+            _refused = true;
+            Refused?.Invoke(area);
+            return;
+        }
+        _pouring = true;
+        Body.Play(area.Region switch
+        {
+            OilRegion.Head => ClipPourHead,
+            OilRegion.LeftLeg or OilRegion.RightLeg or OilRegion.Buttocks or OilRegion.Crotch => ClipPourLower,
+            _ => ClipPourUpper,
+        });
+        foreach (var drip in _drips)
+            drip.Visible = false;
+        if (ActiveDrip is { } active)
+        {
+            active.Animator.Body?.Play(DripStream);
+            PlaceDrip(hit);
+        }
+    }
+
+    /// <summary>The drip model stands on the skin: origin at the point, +Z along the normal (the stream rises 2.4 units).</summary>
+    void PlaceDrip(MeshHit hit)
+    {
+        if (ActiveDrip is not { } drip)
+            return;
+        var normal = hit.Normal;
+        var side = Vector3.Normalize(Vector3.Cross(normal, MathF.Abs(normal.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX));
+        var forward = Vector3.Cross(side, normal);
+        drip.Animator.Placement = new Matrix4x4(
+            side.X, side.Y, side.Z, 0,
+            forward.X, forward.Y, forward.Z, 0,
+            normal.X, normal.Y, normal.Z, 0,
+            hit.Point.X, hit.Point.Y, hit.Point.Z, 1);
+        drip.Visible = true;
+    }
+
+    // ------------------------------------------------------------------ time
+
+    /// <summary>Advances the scene: spreads oil, reactions, the action hand, puddles. Returns true if the skin changed.</summary>
     public bool Update(double seconds)
     {
         _pendingTime += seconds;
+
+        if (_puddleLeft > 0 && (_puddleLeft -= seconds) <= 0 && !_pouring)
+            foreach (var drip in _drips)
+                drip.Visible = false;
+
+        if (_pourRefusal is { } refusal && (_refusing -= seconds) <= 0)
+        {
+            if (Body.Current?.Index == refusal.Loop)
+                Body.Play(refusal.Back);
+            _pourRefusal = null;
+        }
+
+        if (_pouring)
+            return Coating.Paint(_point, BrushRadius * 1.2f, (float)seconds * 2.5f);
+
         if (!_touching || _state is not { } state)
             return false;
+        FollowLocator();
         float moved = Vector3.Distance(_point, _lastPoint);
         _lastPoint = _point;
 
-        // Rubbing spreads more oil than holding still.
-        bool changed = Coating.Paint(_point, BrushRadius, (float)seconds * 0.8f + moved * 0.35f);
+        // Rubbing spreads more oil than holding still; a kneading hand spreads it around its locator.
+        bool changed = Coating.Paint(_point, BrushRadius, (float)seconds * (_action is null ? 0.8f : 0.5f) + moved * 0.35f);
 
         _nextReaction -= seconds;
         if (_nextReaction <= 0 && Body.Current?.Index == state.Loop)
         {
-            bool big = _random.NextDouble() < 0.25;
-            Body.Play(big ? state.Big : state.Small);
-            Say(big ? BigReactionVoice : SmallReactionVoice, interrupt: false);
+            Body.Play(_random.NextDouble() < 0.25 ? state.Big : state.Small);
             _nextReaction = 3 + _random.NextDouble() * 3;
-        }
-        _nextVoice -= seconds;
-        if (_nextVoice <= 0)
-        {
-            Say(RubbingVoices[_random.Next(RubbingVoices.Length)], interrupt: false);
-            _nextVoice = 6 + _random.NextDouble() * 4;
         }
         return changed;
     }
 
-    /// <summary>Plays a random line of an lp row, unless she is already speaking (or <paramref name="interrupt"/>).</summary>
-    void Say(int row, bool interrupt)
+    // ------------------------------------------------------------------ lh01: expressions and voices
+
+    void OnClipChanged(AnimationClipInfo clip)
+    {
+        if (!_tables.ClipEvents.TryGetValue(clip.Index, out var e))
+            return;
+        Girl.Animator.Face?.SetExpression(e.Eyes, e.Mouth);
+        Girl.Animator.Invalidate();
+        if (e.VoiceRow > 0)
+            Say(e.VoiceRow, e.Priority);
+    }
+
+    /// <summary>Plays a random line of an lp row unless she is saying something more important.</summary>
+    void Say(int row, int priority)
     {
         if (_voices is null || _audio is null || !_tables.Voices.TryGetValue(row, out var files))
             return;
-        if (!interrupt && Girl.Animator.Speech is not null)
+        if (Girl.Animator.Speech is not null && priority < _speakingPriority)
             return;
         string name = string.Format(System.Globalization.CultureInfo.InvariantCulture, files[_random.Next(files.Count)], Girl.Girl.Id);
         var line = _voices.For(Girl.Girl.Id).FirstOrDefault(l => string.Equals(l.File, name, StringComparison.OrdinalIgnoreCase));
-        if (line is not null)
-            Girl.Animator.Speech = _voices.Speak(line, _audio);
+        if (line is null)
+            return;
+        Girl.Animator.Speech = _voices.Speak(line, _audio);
+        _speakingPriority = priority;
     }
 }

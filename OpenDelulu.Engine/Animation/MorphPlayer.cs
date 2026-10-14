@@ -26,7 +26,7 @@ public sealed partial class MorphPlayer
 
     readonly List<Channel> _channels = [];
     readonly Dictionary<RenderMesh, XxVertex[]> _morphed = new();
-    int _block;
+    int _block, _mouthBlock;
 
     public MorphPlayer(RenderModel model, XaMorphSection morphs, string partName)
     {
@@ -67,7 +67,14 @@ public sealed partial class MorphPlayer
     public string Expression
     {
         get => _block < Expressions.Count ? Expressions[_block] : "";
-        set => _block = Math.Max(0, Expressions.ToList().IndexOf(value));
+        set => _block = _mouthBlock = Math.Max(0, Expressions.ToList().IndexOf(value));
+    }
+
+    /// <summary>Eyes and mouth from different expression blocks (the scene tables set them separately).</summary>
+    public void SetExpression(int eyes, int mouth)
+    {
+        _block = Math.Clamp(eyes, 0, Math.Max(0, Expressions.Count - 1));
+        _mouthBlock = Math.Clamp(mouth, 0, Math.Max(0, Expressions.Count - 1));
     }
 
     /// <summary>0 = eyes open, 1 = closed.</summary>
@@ -108,7 +115,7 @@ public sealed partial class MorphPlayer
             if (!ReferenceEquals(channel.Mesh, mesh))
                 continue;
             float position = channel.IsEyes ? 9f * (1f - EyeClosed) : 9f * MouthOpen;
-            if (!TrySample(channel, _block, position, out var a, out var b, out float f)
+            if (!TrySample(channel, channel.IsEyes ? _block : _mouthBlock, position, out var a, out var b, out float f)
                 && !TrySample(channel, 0, position, out a, out b, out f))
                 continue;
 

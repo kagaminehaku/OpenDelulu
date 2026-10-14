@@ -92,6 +92,8 @@ public partial class MainViewModel
                 return true;
         }
 
+        if (SelectedTab == 0 && Play?.HandleOilKey(key) == true)
+            return true;
         var dialogue = SelectedTab switch
         {
             0 => Play?.Dialogue,
