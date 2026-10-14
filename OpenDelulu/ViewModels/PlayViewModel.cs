@@ -618,8 +618,14 @@ public sealed partial class PlayViewModel : ViewModelBase
         var girl = _girl!.Girl.Id;
         if (GameEvents.Find(_library, girl, Progress.Intimacy, kind) is { } script)
         {
+            // Talking: face to face, close enough to see her expressions; back to the scene's view afterwards.
+            Scene?.RequestCamera(new CameraView(Pitch: 0.05f, Zoom: 0.42f));
             Dialogue.Intimacy = Progress.Intimacy;
-            Dialogue.Run(script, then);
+            Dialogue.Run(script, () =>
+            {
+                Scene?.RequestCamera(null);
+                then();
+            });
         }
         else
             then();

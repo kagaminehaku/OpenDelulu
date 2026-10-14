@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenDelulu.Engine;
@@ -11,6 +13,7 @@ using OpenDelulu.Engine.Characters;
 using OpenDelulu.Engine.Script;
 using OpenDelulu.Localization;
 using OpenDelulu.Rendering;
+using OpenDelulu.Services;
 
 namespace OpenDelulu.ViewModels;
 
@@ -29,7 +32,55 @@ public sealed partial class DialogueViewModel(GameFileSystem fs, ScriptLibrary l
 
     public ObservableCollection<ChoiceOption> Choices { get; } = [];
 
-    [ObservableProperty] public partial string Speaker { get; set; } = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Frame), nameof(FrameMargin), nameof(TextMargin))]
+    public partial string Speaker { get; set; } = "";
+
+    /// <summary>Where the window sits in the 1024x232 bar: right of the portrait with a speaker, full width without.</summary>
+    public Avalonia.Thickness FrameMargin => Speaker.Length > 0 ? new(192, 0, 0, 0) : new(0);
+
+    /// <summary>The text inside the window's box (st06_01_02: box 8..783 × 92..206; st06_01_01: 48..974 × 91..206).</summary>
+    public Avalonia.Thickness TextMargin => Speaker.Length > 0 ? new(228, 104, 96, 28) : new(84, 104, 96, 28);
+
+    /// <summary>Who speaks, as in the original's portraits st06_02_NN (0 = the player, girl ids, 20 = front desk); -1 = nobody.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Portrait))]
+    public partial int SpeakerId { get; set; } = -1;
+
+    // ---- The original dialogue box (60_adv): water window with a name tab, portraits, blue choice buttons.
+    UiTextures? _ui;
+    UiTextures Ui => _ui ??= new UiTextures(fs);
+
+    /// <summary>The speaker's portrait, or null (system messages and menus).</summary>
+    public Bitmap? Portrait => SpeakerId < 0 ? null : Ui.Get($"st06_02_{(SpeakerId is 20 ? 99 : SpeakerId):00}_00_00.tga");
+
+    /// <summary>The window: with the name tab when someone speaks; a plain dark box without the game's textures.</summary>
+    public IBrush Frame => Ui.Get(Speaker.Length > 0 ? "st06_01_02_00_00.tga" : "st06_01_01_00_00.tga") is { } window
+        ? new ImageBrush(window) { Stretch = Stretch.Fill }
+        : new SolidColorBrush(Color.FromArgb(0xD0, 0x10, 0x18, 0x20));
+
+    public IBrush ChoiceBackground => Ui.Get("st06_01_04_00_00.tga") is { } button
+        ? new ImageBrush(button) { Stretch = Stretch.Fill }
+        : new SolidColorBrush(Color.FromArgb(0xFF, 0x35, 0x5C, 0xD8));
+
+    /// <summary>The little dolphin of the "next" button.</summary>
+    public Bitmap? NextIcon => Ui.Get("st06_01_03_00_00.tga");
+
+    /// <summary>Speaker ids of the scripts' Japanese names.</summary>
+    static int SpeakerIdOf(string japanese) => japanese switch
+    {
+        "俺" => 0,
+        "愛美" => 1,
+        "麻矢" => 2,
+        "イスカ" => 3,
+        "イーオ" => 4,
+        "麗子" => 5,
+        "マリア" => 6,
+        "バエル" => 11,
+        "フェイ" => 12,
+        "フロント" => 20,
+        _ => -1,
+    };
     [ObservableProperty] public partial string Text { get; set; } = "";
     [ObservableProperty] public partial bool CanAdvance { get; set; }
     [ObservableProperty] public partial bool HasChoices { get; set; }
@@ -70,6 +121,7 @@ public sealed partial class DialogueViewModel(GameFileSystem fs, ScriptLibrary l
     {
         _runner = null;
         Speaker = "";
+        SpeakerId = -1;
         Text = text;
         CanAdvance = false;
         Choices.Clear();
@@ -130,6 +182,7 @@ public sealed partial class DialogueViewModel(GameFileSystem fs, ScriptLibrary l
         {
             case ScriptMessage message:
                 Speaker = GameText.Speaker(message.Speaker);
+                SpeakerId = SpeakerIdOf(message.Speaker);
                 Text = message.Text;
                 CanAdvance = true;
                 PlayVoice(message.Voice);

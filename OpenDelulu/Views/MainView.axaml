@@ -33,33 +33,55 @@
             <TextBlock Text="{Binding Name}" />
         </DataTemplate>
         <DataTemplate DataType="vm:DialogueViewModel">
-            <!-- Dialogue box over the 3D view -->
-            <Border Margin="24,0,24,16" Padding="20,14" CornerRadius="10" IsVisible="{Binding IsVisible}"
-                    Background="#D0101820" BorderBrush="#60FFFFFF" BorderThickness="1">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" Foreground="#FFB0D8FF"
-                               IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="16" Foreground="White" />
-                    <ScrollViewer MaxHeight="240" IsVisible="{Binding HasChoices}" HorizontalScrollBarVisibility="Disabled">
-                    <ItemsControl ItemsSource="{Binding Choices}">
+            <!-- Dialogue over the 3D view, laid out like the original's 1024x232 bottom bar (60_adv): portrait 0..192,
+                 the window st06_01_02 with its name tab 192..1024 (st06_01_01 across the whole width without a speaker).
+                 Choices are blue st06_01_04 buttons above it. -->
+            <StackPanel IsVisible="{Binding IsVisible}" VerticalAlignment="Bottom" Spacing="2">
+                <ScrollViewer MaxHeight="260" IsVisible="{Binding HasChoices}" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding Choices}" HorizontalAlignment="Center">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <WrapPanel />
+                                <WrapPanel HorizontalAlignment="Center" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:ChoiceOption">
-                                <Button Content="{Binding Text}" Margin="0,0,8,8"
+                                <Button Content="{Binding Text}" Margin="4" Padding="24,8" MinWidth="220" Foreground="White"
+                                        FontWeight="SemiBold" BorderThickness="0" HorizontalContentAlignment="Center"
+                                        Background="{Binding $parent[ItemsControl].((vm:DialogueViewModel)DataContext).ChoiceBackground}"
                                         Command="{Binding $parent[ItemsControl].((vm:DialogueViewModel)DataContext).ChooseCommand}"
                                         CommandParameter="{Binding}" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    </ScrollViewer>
-                    <Button Content="{l:Tr dialogue.next}" HorizontalAlignment="Right" Command="{Binding NextCommand}"
-                            IsVisible="{Binding CanAdvance}" />
-                </StackPanel>
-            </Border>
+                </ScrollViewer>
+                <Viewbox Stretch="Uniform" MaxHeight="240">
+                    <Grid Width="1024" Height="232">
+                        <Image Source="{Binding Portrait}" Width="192" Height="232" HorizontalAlignment="Left" />
+                        <Border Margin="{Binding FrameMargin}" Background="{Binding Frame}" />
+                        <TextBlock Text="{Binding Speaker}" FontWeight="Bold" FontSize="20" Foreground="#FF4A3000"
+                                   Margin="200,58,0,0" Width="143" TextAlignment="Center" HorizontalAlignment="Left"
+                                   VerticalAlignment="Top" TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <TextBlock Text="{Binding Text}" Margin="{Binding TextMargin}" TextWrapping="Wrap" FontSize="22"
+                                   Foreground="White" FontWeight="SemiBold">
+                            <TextBlock.Effect>
+                                <DropShadowEffect BlurRadius="3" OffsetX="1" OffsetY="1" Color="#C0002040" />
+                            </TextBlock.Effect>
+                        </TextBlock>
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,52,24"
+                                Command="{Binding NextCommand}" IsVisible="{Binding CanAdvance}"
+                                Background="Transparent" BorderThickness="0" Padding="4" ToolTip.Tip="{l:Tr dialogue.next}">
+                            <Panel>
+                                <Image Source="{Binding NextIcon}" Width="32" Height="32"
+                                       IsVisible="{Binding NextIcon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                <TextBlock Text="{l:Tr dialogue.next}" Foreground="White" FontSize="20"
+                                           IsVisible="{Binding NextIcon, Converter={x:Static ObjectConverters.IsNull}}" />
+                            </Panel>
+                        </Button>
+                    </Grid>
+                </Viewbox>
+            </StackPanel>
         </DataTemplate>
         <DataTemplate DataType="vm:AudioPreviewViewModel">
             <StackPanel Spacing="8">

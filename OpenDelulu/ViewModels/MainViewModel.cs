@@ -352,15 +352,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
-    static unsafe Bitmap ToBitmap(RgbaImage image)
-    {
-        var bitmap = new WriteableBitmap(new PixelSize(image.Width, image.Height), new Vector(96, 96),
-            PixelFormat.Bgra8888, AlphaFormat.Unpremul);
-        using var locked = bitmap.Lock();
-        var span = new Span<byte>((void*)locked.Address, locked.RowBytes * image.Height);
-        image.CopyToBgra(span, locked.RowBytes);
-        return bitmap;
-    }
+    static Bitmap ToBitmap(RgbaImage image) => UiTextures.ToBitmap(image);
 
     static string HexDump(byte[] data, int max)
     {

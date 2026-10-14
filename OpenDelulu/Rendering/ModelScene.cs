@@ -12,6 +12,9 @@ namespace OpenDelulu.Rendering;
 /// <param name="FacingYaw">Where the subject faces (radians about Y, 0 = +Z); the default view is from the front.</param>
 public readonly record struct CameraSubject(Vector3 Center, float Radius, Vector3 Aim, float SceneRadius, float FacingYaw = 0);
 
+/// <summary>A camera position relative to the subject: pitch (radians), zoom (1 = whole model), yaw offset from her front.</summary>
+public readonly record struct CameraView(float Pitch, float Zoom, float Yaw = 0);
+
 /// <summary>
 /// What the <see cref="ModelViewer"/> draws: one or more models (e.g. a stage and a character standing on it),
 /// per-mesh visibility and optional animators. Meshes and textures of all objects are flattened into one list,
@@ -127,6 +130,11 @@ public sealed class ModelScene
 
     /// <summary>Camera zoom to start from (1 = whole model); null = the viewer's default.</summary>
     public float? CameraZoom { get; set; }
+
+    /// <summary>Asks the viewer to move its camera to a view (null = back to the scene's default view).</summary>
+    public event Action<CameraView?>? CameraRequested;
+
+    public void RequestCamera(CameraView? view) => CameraRequested?.Invoke(view);
 
     /// <summary>Added to the subject's heading for the default view (e.g. pi/2 = from her side).</summary>
     public float CameraYawOffset { get; set; }

@@ -207,9 +207,15 @@ public sealed class ModelViewer : Border
         if (change.Property != SceneProperty)
             return;
         if (change.OldValue is ModelScene oldScene)
+        {
             oldScene.Changed -= RequestFrame;
+            oldScene.CameraRequested -= OnCameraRequested;
+        }
         if (change.NewValue is ModelScene newScene)
+        {
             newScene.Changed += RequestFrame;
+            newScene.CameraRequested += OnCameraRequested;
+        }
         if (!KeepCamera || change.OldValue is null)
         {
             _camera.Reset();
@@ -224,6 +230,26 @@ public sealed class ModelViewer : Border
     }
 
     void RequestFrame() => _backend?.RequestFrame();
+
+    /// <summary>Moves the camera to a view the scene asks for (conversations), or back to the default one.</summary>
+    void OnCameraRequested(CameraView? view)
+    {
+        _camera.Reset();
+        if (view is { } v)
+        {
+            _camera.Yaw += v.Yaw;
+            _camera.Pitch = v.Pitch;
+            _camera.Zoom = v.Zoom;
+        }
+        else
+        {
+            if (Scene?.CameraPitch is { } pitch)
+                _camera.Pitch = pitch;
+            if (Scene?.CameraZoom is { } zoom)
+                _camera.Zoom = zoom;
+        }
+        RequestFrame();
+    }
 
     /// <summary>
     /// Camera keys of the original (its keyboard chart): Q default view, W close-up on the face, T from behind,
