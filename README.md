@@ -44,10 +44,11 @@ rồi bấm *Mở*. Thư mục này không cần cấp quyền truy cập bộ n
 - [x] Trình duyệt dữ liệu + xem trước bảng, ảnh, model 3D (OpenGL ES 2/3 và GL 3.3, xoay/zoom bằng chuột hoặc cảm ứng)
 - [x] Build được cho Desktop, Android, iOS
 - [x] Ghép nhân vật từ bảng `.lst`: 8 nhân vật, 5 kiểu tóc, 168 bộ đồ bơi (tab **Nhân vật**)
+- [x] Animation `.xa`: khung xương (clip, tự chuyển clip, tốc độ), biểu cảm mặt bằng morph, chớp mắt; skinning trên CPU
 
 ## Lộ trình
 
-1. **Animation `.xa`**: keyframe và morph (biểu cảm khuôn mặt), skinning trên GPU.
+1. **Render backend**: tách lớp render, thêm Vulkan (Windows/Android), skinning trên GPU.
 2. **Ghép nhân vật (tiếp)**: phụ kiện (`lc*`), khăn pareo, vệt rám nắng, mắt/biểu cảm.
 3. **Âm thanh**: `.ogg`/`.wav` (giọng nói, nhạc nền), lip-sync (`.vss`?).
 4. **Cảnh và kịch bản**: phân tích `.sdt` và các bảng `lx/ly/lz`; vòng lặp game, camera, UI trong game.

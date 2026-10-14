@@ -1,6 +1,8 @@
 using System.Numerics;
+using OpenDelulu.Engine.Animation;
 using OpenDelulu.Engine.Assets;
 using OpenDelulu.Formats.Imaging;
+using OpenDelulu.Formats.Xa;
 using OpenDelulu.Formats.Xx;
 
 namespace OpenDelulu.Engine.Characters;
@@ -10,6 +12,9 @@ namespace OpenDelulu.Engine.Characters;
 /// <param name="SwimsuitRow">Row in lbNN; null = first swimsuit.</param>
 /// <param name="CutOverride">Force a body variant (1-based) instead of the swimsuit's own.</param>
 public sealed record CharacterSpec(int GirlId, int HairIndex = 0, int? SwimsuitRow = null, int? CutOverride = null);
+
+/// <summary>An assembled, animatable character.</summary>
+public sealed record Character(GirlInfo Girl, RenderModel Model, CharacterAnimator Animator);
 
 /// <summary>
 /// Assembles a character the way the game does: body variant + face + hair attached to the head joint,
@@ -25,7 +30,37 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
 
     public CharacterDatabase Database { get; } = database;
 
-    public RenderModel Build(CharacterSpec spec)
+    /// <summary>Builds the model and its animator (base body animation + face morphs).</summary>
+    public Character Build(CharacterSpec spec)
+    {
+        var girl = Database.FindGirl(spec.GirlId) ?? throw new ArgumentException($"Unknown girl {spec.GirlId}.");
+        var model = BuildModel(spec);
+        var animator = new CharacterAnimator(model);
+
+        if (girl.FaceAnimation is { } faceXa && TryLoadXa(faceXa)?.Morphs is { } morphs)
+            animator.Face = new MorphPlayer(model, morphs, "face");
+        if (girl.BodyAnimations.FirstOrDefault() is { } bodyXa)
+            animator.Body = LoadBodyAnimation(model, bodyXa);
+        return new Character(girl, model, animator);
+    }
+
+    /// <summary>Loads a body .xa for <paramref name="model"/>; null if it has no skeletal animation.</summary>
+    public AnimationPlayer? LoadBodyAnimation(RenderModel model, AssetRef asset) =>
+        TryLoadXa(asset)?.Animation is { } animation ? new AnimationPlayer(model.Rig, animation, asset.File) : null;
+
+    XaModel? TryLoadXa(AssetRef asset)
+    {
+        try
+        {
+            return XaReader.Read(fs.ReadReferenced(asset.Archive, asset.File));
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or EndOfStreamException)
+        {
+            return null;
+        }
+    }
+
+    public RenderModel BuildModel(CharacterSpec spec)
     {
         var girl = Database.FindGirl(spec.GirlId) ?? throw new ArgumentException($"Unknown girl {spec.GirlId}.");
         var swimsuit = girl.Swimsuits.FirstOrDefault(s => s.Row == spec.SwimsuitRow) ?? girl.Swimsuits.FirstOrDefault();

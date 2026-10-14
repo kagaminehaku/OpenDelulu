@@ -190,6 +190,8 @@ public sealed class ModelViewer : OpenGlControlBase
         if (scene is null || _uploaded != scene || _meshes.Count == 0)
             return;
 
+        AnimateScene(gl, scene);
+
         var model = scene.Model;
         float radius = model.Radius;
         var target = model.Center;
@@ -236,6 +238,41 @@ public sealed class ModelViewer : OpenGlControlBase
         if (_vao != 0) gl.BindVertexArray(0);
         gl.UseProgram(0);
     }
+
+    readonly Stopwatch _clock = Stopwatch.StartNew();
+    double _lastTick = -1;
+
+    /// <summary>Advances the animator, re-uploads the re-skinned vertices and keeps frames coming while it moves.</summary>
+    unsafe void AnimateScene(GlInterface gl, ModelScene scene)
+    {
+        if (scene.Animator is not { } animator)
+            return;
+        double now = _clock.Elapsed.TotalSeconds;
+        double dt = _lastTick < 0 ? 0 : Math.Min(0.1, now - _lastTick);
+        _lastTick = now;
+
+        if (animator.Update(dt, scene.IsVisible))
+        {
+            var meshes = scene.Model.Meshes;
+            for (int i = 0; i < _meshes.Count; i++)
+            {
+                if (!scene.IsVisible(i))
+                    continue;
+                var vertices = meshes[i].Vertices;
+                gl.BindBuffer(GL_ARRAY_BUFFER, _meshes[i].VertexBuffer);
+                fixed (float* v = vertices)
+                    gl.BufferData(GL_ARRAY_BUFFER, vertices.Length * sizeof(float), (IntPtr)v, GL_DYNAMIC_DRAW);
+            }
+            gl.BindBuffer(GL_ARRAY_BUFFER, 0);
+        }
+
+        if (animator.IsAnimating)
+            RequestNextFrameRendering();
+        else
+            _lastTick = -1;
+    }
+
+    const int GL_DYNAMIC_DRAW = 0x88E8;
 
     void DrawMeshes(GlInterface gl, ModelScene scene, bool translucentOnly)
     {

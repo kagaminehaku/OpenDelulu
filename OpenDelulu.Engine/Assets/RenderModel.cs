@@ -17,8 +17,48 @@ public sealed record RenderPart(
     IReadOnlyDictionary<string, RgbaImage>? TextureOverrides = null);
 
 /// <summary>
-/// GPU-ready geometry built from one or more .xx models: interleaved vertices in model space
-/// (bind pose), 16-bit indices and decoded textures. Renderer agnostic.
+/// The frame hierarchy of a <see cref="RenderModel"/> flattened into arrays (parents before children),
+/// so a pose is just an array of local matrices.
+/// </summary>
+public sealed class Rig
+{
+    readonly Dictionary<string, int> _byName;
+
+    internal Rig(XxFrame[] frames)
+    {
+        Frames = frames;
+        var index = new Dictionary<XxFrame, int>(frames.Length);
+        for (int i = 0; i < frames.Length; i++)
+            index[frames[i]] = i;
+        Parents = frames.Select(f => f.Parent is { } p && index.TryGetValue(p, out int pi) ? pi : -1).ToArray();
+        BindLocal = frames.Select(f => f.Matrix).ToArray();
+        _byName = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < frames.Length; i++)
+            _byName.TryAdd(frames[i].Name, i);
+        FrameIndex = index;
+    }
+
+    public IReadOnlyList<XxFrame> Frames { get; }
+    public int[] Parents { get; }
+    public Matrix4x4[] BindLocal { get; }
+    internal Dictionary<XxFrame, int> FrameIndex { get; }
+
+    public int Count => Parents.Length;
+
+    /// <summary>First frame with that name (the body's, when parts share names).</summary>
+    public int Find(string name) => _byName.GetValueOrDefault(name, -1);
+
+    public void ComputeWorld(ReadOnlySpan<Matrix4x4> local, Span<Matrix4x4> world)
+    {
+        for (int i = 0; i < Parents.Length; i++)
+            world[i] = Parents[i] < 0 ? local[i] : local[i] * world[Parents[i]];
+    }
+}
+
+/// <summary>
+/// GPU-ready geometry built from one or more .xx models: interleaved vertices in model space,
+/// 16-bit indices and decoded textures. Renderer agnostic. Vertices start in the bind pose and can be
+/// re-skinned for any pose with <see cref="Skin"/> (CPU skinning: works on every GPU API, GLES2 included).
 /// </summary>
 public sealed class RenderModel
 {
@@ -29,6 +69,7 @@ public sealed class RenderModel
     public required IReadOnlyList<RenderMesh> Meshes { get; init; }
     /// <summary>Decoded textures, indexed by <see cref="RenderMesh.TextureIndex"/>. Null = failed to decode.</summary>
     public required IReadOnlyList<RgbaImage?> Textures { get; init; }
+    public required Rig Rig { get; init; }
     public Vector3 BoundsMin { get; init; }
     public Vector3 BoundsMax { get; init; }
 
@@ -42,18 +83,69 @@ public sealed class RenderModel
         material.Contains("Atari", StringComparison.OrdinalIgnoreCase) ||
         material.Contains("Glare", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Re-computes <see cref="RenderMesh.Vertices"/> of one mesh for a pose.
+    /// </summary>
+    /// <param name="world">World matrices for every frame of <see cref="Rig"/>.</param>
+    /// <param name="source">Vertices to skin; defaults to the mesh's own (pass morphed ones for expressions).</param>
+    public static void Skin(RenderMesh mesh, ReadOnlySpan<Matrix4x4> world, ReadOnlySpan<XxVertex> source = default)
+    {
+        if (source.IsEmpty)
+            source = mesh.SourceVertices;
+        var output = mesh.Vertices;
+        var frameWorld = world[mesh.FrameIndex];
+
+        Span<Matrix4x4> skin = mesh.BoneFrames is { } bones ? new Matrix4x4[bones.Length] : default;
+        if (mesh.BoneFrames is { } boneFrames)
+            for (int b = 0; b < boneFrames.Length; b++)
+                skin[b] = boneFrames[b] >= 0 ? mesh.BoneOffsets![b] * world[boneFrames[b]] : frameWorld;
+
+        for (int v = 0; v < source.Length; v++)
+        {
+            ref readonly var src = ref source[v];
+            Vector3 position, normal;
+            if (skin.IsEmpty)
+            {
+                position = Vector3.Transform(src.Position, frameWorld);
+                normal = Vector3.TransformNormal(src.Normal, frameWorld);
+            }
+            else
+            {
+                position = Vector3.Zero;
+                normal = Vector3.Zero;
+                float total = 0;
+                for (int slot = 0; slot < 4; slot++)
+                {
+                    int bone = src.Bone(slot);
+                    float weight = src.Weight(slot);
+                    if (bone == 0xFF || bone >= skin.Length || weight <= 0)
+                        continue;
+                    position += Vector3.Transform(src.Position, skin[bone]) * weight;
+                    normal += Vector3.TransformNormal(src.Normal, skin[bone]) * weight;
+                    total += weight;
+                }
+                if (total > 1e-6f)
+                {
+                    position /= total;
+                }
+                else
+                {
+                    position = Vector3.Transform(src.Position, frameWorld);
+                    normal = Vector3.TransformNormal(src.Normal, frameWorld);
+                }
+            }
+            normal = normal.LengthSquared() > 1e-12f ? Vector3.Normalize(normal) : Vector3.UnitY;
+
+            int o = v * VertexStride;
+            output[o] = position.X; output[o + 1] = position.Y; output[o + 2] = position.Z;
+            output[o + 3] = normal.X; output[o + 4] = normal.Y; output[o + 5] = normal.Z;
+            output[o + 6] = src.UV.X; output[o + 7] = src.UV.Y;
+        }
+    }
+
     /// <param name="visibility">Initial visibility per mesh; default hides helper meshes only.</param>
     public static RenderModel Build(string name, IReadOnlyList<RenderPart> parts, Func<RenderMesh, bool>? visibility = null)
     {
-        // World matrices across the whole (possibly cross-model) hierarchy.
-        var worldCache = new Dictionary<XxFrame, Matrix4x4>();
-        Matrix4x4 World(XxFrame frame)
-        {
-            if (!worldCache.TryGetValue(frame, out var m))
-                worldCache[frame] = m = frame.Parent is null ? frame.Matrix : frame.Matrix * World(frame.Parent);
-            return m;
-        }
-
         // A part attached inside another part's hierarchy belongs to itself only.
         var partRoots = parts.Select(p => p.Root).ToHashSet();
         IEnumerable<XxFrame> FramesOf(RenderPart part)
@@ -69,6 +161,10 @@ public sealed class RenderModel
                         stack.Push(frame.Children[i]);
             }
         }
+
+        // Rig: every frame reachable from the top-most roots, parents first.
+        var topRoots = parts.Select(p => p.Root).Select(r => { while (r.Parent is not null) r = r.Parent; return r; }).Distinct();
+        var rig = new Rig(topRoots.SelectMany(r => r.EnumerateSelfAndDescendants()).ToArray());
 
         // Bone lookup: a part's own frames win, then any frame of any part (e.g. body joints).
         var globalFrames = new Dictionary<string, XxFrame>(StringComparer.Ordinal);
@@ -111,9 +207,6 @@ public sealed class RenderModel
         }
 
         var meshes = new List<RenderMesh>();
-        var min = new Vector3(float.MaxValue);
-        var max = new Vector3(float.MinValue);
-
         for (int p = 0; p < parts.Count; p++)
         {
             var part = parts[p];
@@ -122,53 +215,39 @@ public sealed class RenderModel
                 if (frame.Mesh is not { } mesh)
                     continue;
 
-                var world = World(frame);
-                Matrix4x4[]? skin = null;
+                int[]? boneFrames = null;
+                Matrix4x4[]? boneOffsets = null;
                 if (mesh.IsSkinned)
                 {
-                    skin = new Matrix4x4[mesh.Bones.Count];
-                    for (int b = 0; b < skin.Length; b++)
-                    {
-                        var bone = mesh.Bones[b];
-                        var boneFrame = partFrames[p].GetValueOrDefault(bone.Name) ?? globalFrames.GetValueOrDefault(bone.Name);
-                        skin[b] = boneFrame is not null ? bone.Matrix * World(boneFrame) : world;
-                    }
+                    boneFrames = mesh.Bones
+                        .Select(b => partFrames[p].GetValueOrDefault(b.Name) ?? globalFrames.GetValueOrDefault(b.Name))
+                        .Select(f => f is not null && rig.FrameIndex.TryGetValue(f, out int i) ? i : -1)
+                        .ToArray();
+                    boneOffsets = mesh.Bones.Select(b => b.Matrix).ToArray();
                 }
 
                 for (int s = 0; s < mesh.Submeshes.Count; s++)
                 {
                     var submesh = mesh.Submeshes[s];
-                    var vertices = new float[submesh.Vertices.Length * VertexStride];
-                    for (int v = 0; v < submesh.Vertices.Length; v++)
-                    {
-                        ref readonly var src = ref submesh.Vertices[v];
-                        var (position, normal) = skin is null
-                            ? (Vector3.Transform(src.Position, world), Vector3.TransformNormal(src.Normal, world))
-                            : Skin(src, skin, world);
-                        normal = normal.LengthSquared() > 1e-12f ? Vector3.Normalize(normal) : Vector3.UnitY;
-
-                        int o = v * VertexStride;
-                        vertices[o] = position.X; vertices[o + 1] = position.Y; vertices[o + 2] = position.Z;
-                        vertices[o + 3] = normal.X; vertices[o + 4] = normal.Y; vertices[o + 5] = normal.Z;
-                        vertices[o + 6] = src.UV.X; vertices[o + 7] = src.UV.Y;
-                    }
-
                     var material = submesh.MaterialIndex >= 0 && submesh.MaterialIndex < part.Model.Materials.Count
                         ? part.Model.Materials[submesh.MaterialIndex]
                         : null;
-                    int texture = material is null ? -1 : ResolveTexture(p, material.Textures.FirstOrDefault()?.Name ?? "");
 
                     var renderMesh = new RenderMesh
                     {
                         PartName = part.Name,
                         FrameName = frame.Name,
                         SubmeshIndex = s,
-                        Vertices = vertices,
+                        Vertices = new float[submesh.Vertices.Length * VertexStride],
                         Indices = submesh.Indices,
-                        TextureIndex = texture,
+                        TextureIndex = material is null ? -1 : ResolveTexture(p, material.Textures.FirstOrDefault()?.Name ?? ""),
                         Diffuse = material?.Diffuse ?? Vector4.One,
                         Ambient = material?.Ambient ?? Vector4.Zero,
                         MaterialName = material?.Name ?? "",
+                        SourceVertices = submesh.Vertices,
+                        FrameIndex = rig.FrameIndex[frame],
+                        BoneFrames = boneFrames,
+                        BoneOffsets = boneOffsets,
                     };
                     renderMesh.Visible = visibility?.Invoke(renderMesh) ?? !IsHelperMaterial(renderMesh.MaterialName);
                     meshes.Add(renderMesh);
@@ -176,6 +255,14 @@ public sealed class RenderModel
             }
         }
 
+        // Bind pose.
+        var world = new Matrix4x4[rig.Count];
+        rig.ComputeWorld(rig.BindLocal, world);
+        foreach (var mesh in meshes)
+            Skin(mesh, world);
+
+        var min = new Vector3(float.MaxValue);
+        var max = new Vector3(float.MinValue);
         foreach (var mesh in meshes)
         {
             mesh.HasAlpha = mesh.TextureIndex >= 0 && textures[mesh.TextureIndex]?.HasAlpha() == true;
@@ -189,30 +276,10 @@ public sealed class RenderModel
                 max = Vector3.Max(max, position);
             }
         }
-
         if (min.X > max.X)
             min = max = Vector3.Zero;
 
-        return new RenderModel { Name = name, Meshes = meshes, Textures = textures, BoundsMin = min, BoundsMax = max };
-    }
-
-    static (Vector3 Position, Vector3 Normal) Skin(in XxVertex vertex, Matrix4x4[] skin, Matrix4x4 fallback)
-    {
-        Vector3 position = Vector3.Zero, normal = Vector3.Zero;
-        float total = 0;
-        for (int slot = 0; slot < 4; slot++)
-        {
-            int bone = vertex.Bone(slot);
-            float weight = vertex.Weight(slot);
-            if (bone == 0xFF || bone >= skin.Length || weight <= 0)
-                continue;
-            position += Vector3.Transform(vertex.Position, skin[bone]) * weight;
-            normal += Vector3.TransformNormal(vertex.Normal, skin[bone]) * weight;
-            total += weight;
-        }
-        if (total <= 1e-6f)
-            return (Vector3.Transform(vertex.Position, fallback), Vector3.TransformNormal(vertex.Normal, fallback));
-        return (position / total, normal);
+        return new RenderModel { Name = name, Meshes = meshes, Textures = textures, Rig = rig, BoundsMin = min, BoundsMax = max };
     }
 }
 
@@ -221,6 +288,7 @@ public sealed class RenderMesh
     public required string PartName { get; init; }
     public required string FrameName { get; init; }
     public required int SubmeshIndex { get; init; }
+    /// <summary>Current interleaved vertices (rewritten by <see cref="RenderModel.Skin"/>).</summary>
     public required float[] Vertices { get; init; }
     /// <summary>Triangle list, Direct3D winding (clockwise front faces).</summary>
     public required ushort[] Indices { get; init; }
@@ -232,6 +300,14 @@ public sealed class RenderMesh
     public bool HasAlpha { get; internal set; }
     /// <summary>Initial visibility chosen by whoever built the model.</summary>
     public bool Visible { get; set; } = true;
+
+    /// <summary>Mesh-space vertices from the .xx (bind pose input to skinning and morphs).</summary>
+    public required Formats.Xx.XxVertex[] SourceVertices { get; init; }
+    /// <summary>Rig index of the frame owning the mesh (rigid transform).</summary>
+    public required int FrameIndex { get; init; }
+    /// <summary>Rig index per bone (-1 = bone frame not found); null for rigid meshes.</summary>
+    public int[]? BoneFrames { get; init; }
+    public Matrix4x4[]? BoneOffsets { get; init; }
 
     public string DisplayName => $"{FrameName} [{SubmeshIndex}]";
 }

@@ -6,6 +6,7 @@ using OpenDelulu.Engine.Characters;
 using OpenDelulu.Formats.Imaging;
 using OpenDelulu.Formats.Lst;
 using OpenDelulu.Formats.Pp;
+using OpenDelulu.Formats.Xa;
 using OpenDelulu.Formats.Xx;
 
 Console.OutputEncoding = Encoding.UTF8;
@@ -20,6 +21,7 @@ if (args.Length < 2)
           delulu cat     <gameFolder> <archive.pp> <file>     print a decoded .lst table
           delulu xx      <gameFolder> <archive.pp> <file.xx>  dump the frame tree of a model
           delulu png     <gameFolder> <archive.pp> <image> <out.png>  export a texture as PNG
+          delulu xa      <gameFolder> <archive.pp> <file.xa>  dump clips, tracks and morphs of an animation
           delulu extract <gameFolder> <archive.pp> <outDir>   extract (and decode .lst to .txt)
           delulu chars   <gameFolder>                         characters, hairstyles, swimsuits (from the .lst tables)
           delulu cutfit  <gameFolder> <girlId>                 diagnostic: swimsuit texture vs body variant UV fit
@@ -80,6 +82,61 @@ switch (args[0])
         Console.WriteLine($"{image.Width}x{image.Height} -> {args[4]}");
         return 0;
 
+    case "xa":
+        var xa = XaReader.Read(fs.ReadFile(args[2], args[3]));
+        Console.WriteLine($"format {xa.Format}, materials {xa.Materials?.Materials.Count ?? 0}, morph sets {xa.Morphs?.IndexSets.Count ?? 0}, " +
+                          $"morph keyframes {xa.Morphs?.Keyframes.Count ?? 0}, morph clips {xa.Morphs?.Clips.Count ?? 0}, footer {xa.Footer.Length} bytes");
+        if (xa.Morphs is { } morphs)
+            foreach (var set in morphs.IndexSets)
+                Console.WriteLine($"morph set {set.Name}: {set.MeshIndices.Length} vertices, morph index max {set.MorphIndices.DefaultIfEmpty().Max()}");
+        if (xa.Morphs is { } morphs2)
+            Console.WriteLine($"morph keyframes: {string.Join(", ", morphs2.Keyframes.Take(12).Select(k => $"{k.Name}({k.Positions.Length})"))} ...");
+        if (xa.Morphs is { } morphs3)
+            foreach (var clip in morphs3.Clips)
+                Console.WriteLine($"morph clip {clip.Name} on {clip.MeshName}: {string.Join(", ", clip.KeyframeRefs.Select(r => r.Name))}");
+        if (xa.Animation is { } anim)
+        {
+            foreach (var (index, clip) in anim.UsedClips())
+                Console.WriteLine($"clip #{index,-4} {clip}  next {clip.Next}");
+            foreach (var track in anim.Tracks.Take(args.Length > 4 ? int.Parse(args[4]) : 5))
+            {
+                var k = track.Keyframes.FirstOrDefault();
+                Console.WriteLine($"track {track}: first key #{k.Index} R{k.Rotation} T{k.Translation} S{k.Scaling}");
+            }
+            Console.WriteLine($"{anim.Tracks.Count} tracks, frames {anim.Tracks.Min(t => t.Keyframes.FirstOrDefault().Index)}..{anim.Tracks.Max(t => t.Keyframes.LastOrDefault().Index)}");
+        }
+        return 0;
+
+    case "xacheck":
+    {
+        // Compare keyframe 0 of every track with the bind pose of the matching .xx frame.
+        var bindModel = fs.ReadModel(args[2], args[3]);
+        var clipSet = XaReader.Read(fs.ReadFile(args[4], args[5])).Animation!;
+        double worstAsIs = 0, worstConj = 0;
+        int matched = 0;
+        foreach (var track in clipSet.Tracks)
+        {
+            if (bindModel.FindFrame(track.Name) is not { } frame || track.Keyframes.Length == 0)
+                continue;
+            matched++;
+            var key = track.Keyframes[0];
+            var conj = key with { Rotation = System.Numerics.Quaternion.Conjugate(key.Rotation) };
+            worstAsIs = Math.Max(worstAsIs, MaxDiff(key.ToMatrix(), frame.Matrix));
+            worstConj = Math.Max(worstConj, MaxDiff(conj.ToMatrix(), frame.Matrix));
+        }
+        Console.WriteLine($"{matched}/{clipSet.Tracks.Count} tracks matched; max |key0 - bind|: as-is {worstAsIs:G4}, conjugated {worstConj:G4}");
+        return 0;
+
+        static double MaxDiff(System.Numerics.Matrix4x4 a, System.Numerics.Matrix4x4 b)
+        {
+            double m = 0;
+            for (int r = 0; r < 4; r++)
+                for (int c = 0; c < 4; c++)
+                    m = Math.Max(m, Math.Abs(a[r, c] - b[r, c]));
+            return m;
+        }
+    }
+
     case "extract":
         var archive = fs.GetArchive(args[2]);
         Directory.CreateDirectory(args[3]);
@@ -103,8 +160,16 @@ switch (args[0])
             Console.WriteLine($"{girl.DisplayName}: skin {girl.SkinTexture}, face {girl.Face.Model}, {girl.Hairs.Count} hair, {girl.Bodies.Count} body variants, {girl.Swimsuits.Count} swimsuits");
             foreach (var suit in girl.Swimsuits.Take(args.Length > 2 ? int.Parse(args[2]) : 3))
                 Console.WriteLine($"    #{suit.Row,-3} cut {suit.Cut}  {suit.Name}  {suit.Texture}");
-            var built = assembler.Build(new CharacterSpec(girl.Id));
+            var character = assembler.Build(new CharacterSpec(girl.Id));
+            var built = character.Model;
             Console.WriteLine($"    built: {built.Meshes.Count(m => m.Visible)}/{built.Meshes.Count} meshes visible, {built.Textures.Count(t => t is null)} missing textures");
+            var body = character.Animator.Body;
+            Console.WriteLine($"    animation: {girl.BodyAnimations.Count} body .xa, base {body?.Name} ({body?.BoundTracks} tracks bound, {body?.Clips.Count} clips), " +
+                              $"face morph targets {character.Animator.Face?.TargetCount}, expressions {character.Animator.Face?.Expressions.Count}");
+            var watch = Stopwatch.StartNew();
+            for (int f = 0; f < 30; f++)
+                character.Animator.Update(1 / 30.0, i => built.Meshes[i].Visible);
+            Console.WriteLine($"    skinning: {watch.Elapsed.TotalMilliseconds / 30:F2} ms/frame");
         }
         return 0;
 
@@ -200,7 +265,7 @@ static int Verify(GameFileSystem fs)
         {
             string what = $"{info.Name}/{entry.Name}";
             string ext = entry.Extension;
-            if (ext is not (".lst" or ".xx") && !ImageDecoder.IsImage(entry.Name))
+            if (ext is not (".lst" or ".xx" or ".xa") && !ImageDecoder.IsImage(entry.Name))
                 continue;
             try
             {
@@ -209,6 +274,11 @@ static int Verify(GameFileSystem fs)
                 {
                     case ".lst":
                         LstTable.Decode(data, entry.Name);
+                        break;
+                    case ".xa":
+                        var anim = XaReader.Read(data);
+                        if (anim.Footer.Length > 0)
+                            failures.Add($"{what}: {anim.Footer.Length} unparsed trailing bytes");
                         break;
                     case ".xx":
                         var model = XxReader.Read(data);

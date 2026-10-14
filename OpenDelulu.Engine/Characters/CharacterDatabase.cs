@@ -33,7 +33,9 @@ public sealed record GirlInfo(
     PartRef Face,
     IReadOnlyList<PartRef> Hairs,
     IReadOnlyList<AssetRef> Bodies,
-    IReadOnlyList<SwimsuitInfo> Swimsuits)
+    IReadOnlyList<SwimsuitInfo> Swimsuits,
+    AssetRef? FaceAnimation,
+    IReadOnlyList<AssetRef> BodyAnimations)
 {
     public string DisplayName => $"Nhân vật {Id:00}";
 }
@@ -107,11 +109,34 @@ public sealed class CharacterDatabase
             if (bodies.Count == 0)
                 continue;
 
+            // Row 2: face morphs (.xa next to the face .xx). Row 34: the body type's base animation
+            // "kiNN"; the other animations of that body type are "dtNN_*" in the same archives.
+            AssetRef? Xa(int n) => rows.TryGetValue(n, out var r) && AssetRef.FromRow(r, 1) is { } a
+                && a.File.EndsWith(".xa", StringComparison.OrdinalIgnoreCase) ? a : null;
+            var idle = Xa(34);
+
             girls.Add(new GirlInfo(id, skin, AssetRef.FromRow(row, 3), face, hairs, bodies,
-                ReadSwimsuits(Table($"lb{id:00}_00_00_00_00.lst"), bodies.Count)));
+                ReadSwimsuits(Table($"lb{id:00}_00_00_00_00.lst"), bodies.Count),
+                Xa(2), FindBodyAnimations(fs, idle)));
         }
 
         return new CharacterDatabase(tableArchive, girls.OrderBy(g => g.Id).ToList());
+    }
+
+    static List<AssetRef> FindBodyAnimations(GameFileSystem fs, AssetRef? idle)
+    {
+        var list = new List<AssetRef>();
+        if (idle is not { } baseAnimation)
+            return list;
+        list.Add(baseAnimation);
+        if (baseAnimation.File.Length < 4)
+            return list;
+        string bodyType = baseAnimation.File.Substring(2, 2); // "ki01" -> "01"
+        foreach (var info in fs.Archives)
+            foreach (var entry in fs.GetArchive(info.Name).Entries)
+                if (entry.Extension == ".xa" && entry.Name.StartsWith($"dt{bodyType}_", StringComparison.OrdinalIgnoreCase))
+                    list.Add(new AssetRef(info.Name, entry.Name));
+        return list;
     }
 
     static List<SwimsuitInfo> ReadSwimsuits(LstTable? table, int bodyCount)

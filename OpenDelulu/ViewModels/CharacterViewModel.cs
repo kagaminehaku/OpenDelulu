@@ -5,18 +5,26 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using OpenDelulu.Engine;
+using OpenDelulu.Engine.Animation;
 using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Characters;
 using OpenDelulu.Rendering;
 
 namespace OpenDelulu.ViewModels;
 
-/// <summary>Character maker: pick a girl, hairstyle and swimsuit; the model is rebuilt on every change.</summary>
+/// <summary>
+/// Character maker: pick a girl, hairstyle and swimsuit (rebuilds the model), then an animation file,
+/// clip and expression (applied live to the current model).
+/// </summary>
 public partial class CharacterViewModel : ViewModelBase
 {
     readonly CharacterAssembler _assembler;
     int _buildVersion;
+    int _animationVersion;
     bool _suppressBuild;
+    bool _syncingClip;
+    Character? _character;
+    ModelScene? _scene;
 
     public CharacterViewModel(GameFileSystem fs, CharacterDatabase database)
     {
@@ -31,27 +39,26 @@ public partial class CharacterViewModel : ViewModelBase
     public string TableInfo { get; }
     public ObservableCollection<string> Hairs { get; } = [];
     public ObservableCollection<SwimsuitInfo> Swimsuits { get; } = [];
+    public ObservableCollection<AssetRef> Animations { get; } = [];
+    public ObservableCollection<AnimationClipInfo> Clips { get; } = [];
+    public ObservableCollection<string> Expressions { get; } = [];
 
-    [ObservableProperty]
-    public partial GirlInfo? SelectedGirl { get; set; }
+    [ObservableProperty] public partial GirlInfo? SelectedGirl { get; set; }
+    [ObservableProperty] public partial int SelectedHairIndex { get; set; }
+    [ObservableProperty] public partial SwimsuitInfo? SelectedSwimsuit { get; set; }
+    [ObservableProperty] public partial int SelectedCutIndex { get; set; }
+    [ObservableProperty] public partial AssetRef? SelectedAnimation { get; set; }
+    [ObservableProperty] public partial AnimationClipInfo? SelectedClip { get; set; }
+    [ObservableProperty] public partial string? SelectedExpression { get; set; }
+    [ObservableProperty] public partial bool IsPlaying { get; set; } = true;
+    [ObservableProperty] public partial bool FollowNext { get; set; } = true;
+    [ObservableProperty] public partial bool AutoBlink { get; set; } = true;
+    [ObservableProperty] public partial double Speed { get; set; } = 1;
+    [ObservableProperty] public partial ModelPreviewViewModel? Preview { get; set; }
+    [ObservableProperty] public partial string Status { get; set; } = "";
+    [ObservableProperty] public partial bool IsBusy { get; set; }
 
-    [ObservableProperty]
-    public partial int SelectedHairIndex { get; set; }
-
-    [ObservableProperty]
-    public partial SwimsuitInfo? SelectedSwimsuit { get; set; }
-
-    [ObservableProperty]
-    public partial int SelectedCutIndex { get; set; }
-
-    [ObservableProperty]
-    public partial ModelPreviewViewModel? Preview { get; set; }
-
-    [ObservableProperty]
-    public partial string Status { get; set; } = "";
-
-    [ObservableProperty]
-    public partial bool IsBusy { get; set; }
+    // ------------------------------------------------------------------ model (rebuild)
 
     partial void OnSelectedGirlChanged(GirlInfo? value)
     {
@@ -88,16 +95,28 @@ public partial class CharacterViewModel : ViewModelBase
         int version = ++_buildVersion;
         var spec = new CharacterSpec(girl.Id, Math.Max(0, SelectedHairIndex), SelectedSwimsuit?.Row,
             SelectedCutIndex > 0 ? SelectedCutIndex : null);
+        string? keepAnimation = SelectedAnimation?.File;
+        int? keepClip = SelectedClip?.Index;
         IsBusy = true;
         try
         {
-            var model = await Task.Run(() => _assembler.Build(spec));
+            var character = await Task.Run(() => _assembler.Build(spec));
             if (version != _buildVersion)
                 return;
+
+            // Keep the chosen animation/clip when only the outfit changed.
+            if (keepAnimation is not null && character.Girl.BodyAnimations.FirstOrDefault(a => a.File == keepAnimation) is { } same
+                && same != character.Girl.BodyAnimations.FirstOrDefault())
+                character.Animator.Body = await Task.Run(() => _assembler.LoadBodyAnimation(character.Model, same));
+            if (keepClip is int clip && character.Animator.Body?.Clips.Any(c => c.Index == clip) == true)
+                character.Animator.Body.Play(clip);
+
+            AttachCharacter(character);
+            var model = character.Model;
             int visible = model.Meshes.Count(m => m.Visible);
             Preview = new ModelPreviewViewModel(model.Name,
                 $"{visible}/{model.Meshes.Count} mesh hiển thị, {model.Meshes.Sum(m => m.Vertices.Length / RenderModel.VertexStride):N0} đỉnh",
-                new ModelScene(model));
+                _scene!);
             Status = "";
         }
         catch (Exception ex)
@@ -110,5 +129,121 @@ public partial class CharacterViewModel : ViewModelBase
             if (version == _buildVersion)
                 IsBusy = false;
         }
+    }
+
+    void AttachCharacter(Character character)
+    {
+        if (_character?.Animator.Body is { } oldBody)
+            oldBody.ClipChanged -= OnClipChanged;
+        _character = character;
+        _scene = new ModelScene(character.Model, character.Animator);
+
+        _syncingClip = true;
+        Animations.Clear();
+        foreach (var animation in character.Girl.BodyAnimations)
+            Animations.Add(animation);
+        SelectedAnimation = Animations.FirstOrDefault(a => a.File == character.Animator.Body?.Name);
+
+        Expressions.Clear();
+        foreach (var expression in character.Animator.Face?.Expressions ?? [])
+            Expressions.Add(expression);
+        if (character.Animator.Face is { } face)
+        {
+            if (SelectedExpression is { } keep && Expressions.Contains(keep))
+                face.Expression = keep;
+            SelectedExpression = face.Expression;
+        }
+        _syncingClip = false;
+
+        ApplyBody(character.Animator.Body);
+        ApplyPlaybackSettings();
+    }
+
+    // ------------------------------------------------------------------ animation (live)
+
+    partial void OnSelectedAnimationChanged(AssetRef? value)
+    {
+        if (!_syncingClip && value is { } asset)
+            _ = SwitchAnimationAsync(asset);
+    }
+
+    async Task SwitchAnimationAsync(AssetRef asset)
+    {
+        if (_character is not { } character || character.Animator.Body?.Name == asset.File)
+            return;
+        int version = ++_animationVersion;
+        var player = await Task.Run(() => _assembler.LoadBodyAnimation(character.Model, asset));
+        if (version != _animationVersion || !ReferenceEquals(character, _character))
+            return;
+        if (character.Animator.Body is { } old)
+            old.ClipChanged -= OnClipChanged;
+        character.Animator.Body = player;
+        ApplyBody(player);
+        ApplyPlaybackSettings();
+        Status = player is null ? $"{asset.File} không có animation khung xương." : "";
+    }
+
+    void ApplyBody(AnimationPlayer? body)
+    {
+        _syncingClip = true;
+        Clips.Clear();
+        foreach (var clip in body?.Clips ?? [])
+            Clips.Add(clip);
+        SelectedClip = body?.Current is { } current ? Clips.FirstOrDefault(c => c.Index == current.Index) : null;
+        _syncingClip = false;
+        if (body is not null)
+            body.ClipChanged += OnClipChanged;
+        _scene?.NotifyChanged();
+    }
+
+    void OnClipChanged(AnimationClipInfo clip)
+    {
+        // Raised from the render loop when a clip hands over to its "next" clip.
+        _syncingClip = true;
+        SelectedClip = Clips.FirstOrDefault(c => c.Index == clip.Index);
+        _syncingClip = false;
+    }
+
+    partial void OnSelectedClipChanged(AnimationClipInfo? value)
+    {
+        if (_syncingClip || value is null || _character?.Animator.Body is not { } body)
+            return;
+        body.Play(value.Index);
+        _scene?.NotifyChanged();
+    }
+
+    partial void OnSelectedExpressionChanged(string? value)
+    {
+        if (_syncingClip || value is null || _character?.Animator.Face is not { } face)
+            return;
+        face.Expression = value;
+        _scene?.NotifyChanged();
+    }
+
+    partial void OnIsPlayingChanged(bool value) => ApplyPlaybackSettings();
+
+    partial void OnFollowNextChanged(bool value) => ApplyPlaybackSettings();
+
+    partial void OnAutoBlinkChanged(bool value) => ApplyPlaybackSettings();
+
+    partial void OnSpeedChanged(double value) => ApplyPlaybackSettings();
+
+    void ApplyPlaybackSettings()
+    {
+        if (_character?.Animator is not { } animator)
+            return;
+        if (animator.Body is { } body)
+        {
+            body.IsPlaying = IsPlaying;
+            body.FollowNext = FollowNext;
+            body.SpeedScale = Speed;
+        }
+        if (animator.Face is { } face)
+        {
+            face.AutoBlink = AutoBlink;
+            if (!AutoBlink)
+                face.EyeClosed = 0;
+        }
+        _scene?.NotifyChanged();
     }
 }
