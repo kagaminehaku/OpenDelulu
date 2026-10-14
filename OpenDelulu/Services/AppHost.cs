@@ -41,6 +41,9 @@ public static class AppHost
     /// <summary>Speak a random line of this group once the character is shown (desktop: <c>--speak po|ph|pd|pe|all</c>).</summary>
     public static string? StartupSpeak { get; set; }
 
+    /// <summary>Open this script in the script player and start it (desktop: <c>--script c01_01_00</c>).</summary>
+    public static string? StartupScript { get; set; }
+
     /// <summary>Start with all sound muted (desktop: <c>--mute</c>), e.g. for automated screenshots.</summary>
     public static bool StartupMute { get; set; }
 

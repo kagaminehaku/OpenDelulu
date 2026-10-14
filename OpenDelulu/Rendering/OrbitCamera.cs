@@ -14,11 +14,14 @@ public sealed class OrbitCamera
     public float Pitch { get; set; } = 0.1f;
     public float Zoom { get; set; } = Services.AppHost.StartupZoom ?? 1f;
 
+    /// <summary>Zoom used by <see cref="Reset"/> (a startup --zoom still wins).</summary>
+    public float DefaultZoom { get; set; } = 1f;
+
     public void Reset()
     {
         Yaw = DefaultYaw;
         Pitch = 0.1f;
-        Zoom = Services.AppHost.StartupZoom ?? 1f;
+        Zoom = Services.AppHost.StartupZoom ?? DefaultZoom;
     }
 
     public void Rotate(float deltaYaw, float deltaPitch)

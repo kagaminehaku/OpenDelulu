@@ -6,6 +6,7 @@
              xmlns:r="using:OpenDelulu.Rendering"
              xmlns:ch="using:OpenDelulu.Engine.Characters"
              xmlns:anim="using:OpenDelulu.Engine.Animation"
+             xmlns:script="using:OpenDelulu.Engine.Script"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              x:Class="OpenDelulu.Views.MainView"
              x:DataType="vm:MainViewModel">
@@ -156,6 +157,55 @@
                             <TextBlock Text="{Binding Preview.Details}" Opacity="0.7" />
                         </StackPanel>
                         <ContentControl Grid.Row="1" Content="{Binding Preview}" />
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Kịch bản" IsEnabled="{Binding Scripts, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Grid ColumnDefinitions="300,*" DataContext="{Binding Scripts}" x:DataType="vm:ScriptViewModel">
+                    <StackPanel Margin="12" Spacing="8">
+                        <TextBlock Text="Kịch bản (.sdt)" Opacity="0.7" />
+                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Scripts}" SelectedItem="{Binding SelectedScript}"
+                                  MaxDropDownHeight="480">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="script:ScriptInfo">
+                                    <TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Mức thân mật (cho các nhánh Switch)" Opacity="0.7" />
+                        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding IntimacyLevels}" SelectedIndex="{Binding IntimacyIndex}" />
+                        <Button Content="Bắt đầu" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Command="{Binding StartCommand}" />
+                        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
+                    </StackPanel>
+                    <Grid Grid.Column="1" Margin="8">
+                        <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.45" />
+                        <!-- Dialogue box over the 3D view -->
+                        <Border VerticalAlignment="Bottom" Margin="24,0,24,16" Padding="20,14" CornerRadius="10"
+                                Background="#D0101820" BorderBrush="#60FFFFFF" BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" Foreground="#FFB0D8FF"
+                                           IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="16" Foreground="White" />
+                                <ItemsControl ItemsSource="{Binding Choices}" IsVisible="{Binding HasChoices}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ChoiceOption">
+                                            <Button Content="{Binding Text}" Margin="0,0,8,8"
+                                                    Command="{Binding $parent[ItemsControl].((vm:ScriptViewModel)DataContext).ChooseCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Content="Tiếp ▶" HorizontalAlignment="Right" Command="{Binding NextCommand}"
+                                        IsVisible="{Binding CanAdvance}" />
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Grid>
             </TabItem>

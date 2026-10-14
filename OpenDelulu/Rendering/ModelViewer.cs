@@ -35,6 +35,16 @@ public sealed class ModelViewer : Border
         set => SetValue(KeepCameraProperty, value);
     }
 
+    public static readonly StyledProperty<double> DefaultZoomProperty =
+        AvaloniaProperty.Register<ModelViewer, double>(nameof(DefaultZoom), 1.0);
+
+    /// <summary>Camera distance factor on (re)set: 1 = whole model, ~0.4 = upper body, ~0.2 = face.</summary>
+    public double DefaultZoom
+    {
+        get => GetValue(DefaultZoomProperty);
+        set => SetValue(DefaultZoomProperty, value);
+    }
+
     readonly OrbitCamera _camera = new();
     readonly Grid _layers = new();
     readonly TextBlock _badge = new()
@@ -166,6 +176,13 @@ public sealed class ModelViewer : Border
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (change.Property == DefaultZoomProperty)
+        {
+            _camera.DefaultZoom = (float)DefaultZoom;
+            _camera.Reset();
+            RequestFrame();
+            return;
+        }
         if (change.Property != SceneProperty)
             return;
         if (change.OldValue is ModelScene oldScene)

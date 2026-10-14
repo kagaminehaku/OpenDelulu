@@ -51,7 +51,7 @@ sealed class Program
     /// <summary>
     /// --game &lt;folder&gt;   --character &lt;id&gt;   --swimsuit &lt;row&gt;   --cut &lt;n&gt;
     /// --open &lt;archive.pp&gt; &lt;file&gt;   --backend auto|gl|vulkan   --compositor vulkan|default
-    /// --speak po|ph|pd|pe|all   --mute
+    /// --speak po|ph|pd|pe|all   --mute   --script &lt;name&gt;
     /// </summary>
     static void ParseArguments(string[] args)
     {
@@ -86,6 +86,8 @@ sealed class Program
                 _compositorOverride = args[++i].Equals("vulkan", StringComparison.OrdinalIgnoreCase);
             else if (args[i] == "--speak" && i + 1 < args.Length)
                 AppHost.StartupSpeak = args[++i];
+            else if (args[i] == "--script" && i + 1 < args.Length)
+                AppHost.StartupScript = args[++i];
             else if (args[i] == "--mute")
                 AppHost.StartupMute = true;
             else if (args[i] == "--open" && i + 2 < args.Length)

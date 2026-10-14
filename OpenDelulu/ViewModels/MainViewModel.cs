@@ -14,6 +14,7 @@ using OpenDelulu.Engine;
 using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
+using OpenDelulu.Engine.Script;
 using OpenDelulu.Formats.Imaging;
 using OpenDelulu.Formats.Lst;
 using OpenDelulu.Formats.Pp;
@@ -113,9 +114,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     public partial CharacterViewModel? Characters { get; set; }
 
-    /// <summary>0 = character maker, 1 = data browser.</summary>
+    /// <summary>Event script player; null until game data with scripts is loaded.</summary>
     [ObservableProperty]
-    public partial int SelectedTab { get; set; } = 1;
+    public partial ScriptViewModel? Scripts { get; set; }
+
+    /// <summary>0 = character maker, 1 = scripts, 2 = data browser.</summary>
+    [ObservableProperty]
+    public partial int SelectedTab { get; set; } = 2;
 
     /// <summary>Opens the last used folder automatically if it still looks valid.</summary>
     public async Task TryAutoLoadAsync()
@@ -160,7 +165,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 string? error = null;
                 try { db = CharacterDatabase.Load(fs); }
                 catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException) { error = ex.Message; }
-                (CharacterDatabase db, VoiceLibrary voices)? loaded = db is null ? null : (db, new VoiceLibrary(fs));
+                (CharacterDatabase db, VoiceLibrary voices, ScriptLibrary scripts)? loaded =
+                    db is null ? null : (db, new VoiceLibrary(fs), new ScriptLibrary(fs));
                 return (fs, list, loaded, error);
             });
 
@@ -171,7 +177,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 Archives.Add(item);
             SelectedArchive = Archives.FirstOrDefault();
 
-            Characters = characters is ({ Girls.Count: > 0 } db, var voices) ? new CharacterViewModel(fileSystem, db, voices) : null;
+            bool openScript = AppHost.StartupScript is not null;
+            Characters = characters is ({ Girls.Count: > 0 } db, var voices, _) ? new CharacterViewModel(fileSystem, db, voices) : null;
+            Scripts = characters is ({ Girls.Count: > 0 } sdb, _, { Scripts.Count: > 0 } library) ? new ScriptViewModel(fileSystem, sdb, library) : null;
             if (Characters is not null)
             {
                 Characters.SelectedGirl = Characters.Girls.FirstOrDefault(g => g.Id == AppHost.StartupCharacter) ?? Characters.Girls[0];
@@ -179,7 +187,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     Characters.SelectedSwimsuit = swimsuit;
                 if (AppHost.StartupCut is int cut && cut > 0 && cut < Characters.Cuts.Count)
                     Characters.SelectedCutIndex = cut;
-                SelectedTab = AppHost.StartupFile is null ? 0 : 1;
+                SelectedTab = AppHost.StartupFile is not null ? 2 : openScript ? 1 : 0;
             }
 
             var editions = string.Join(", ", fileSystem.Install.Editions.Select(e => e.Edition));
