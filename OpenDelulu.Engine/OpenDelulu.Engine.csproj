@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Game-side logic: install discovery, virtual file system, asset preparation. No UI dependency. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OpenDelulu.Formats\OpenDelulu.Formats.csproj" />
+  </ItemGroup>
+</Project>
