@@ -301,7 +301,7 @@ static int Verify(GameFileSystem fs, string? only = null)
     // Extension -> parser. A parser throws on malformed data and may return warnings.
     var checks = new Dictionary<string, Func<byte[], string, string?>>(StringComparer.OrdinalIgnoreCase)
     {
-        [".lst"] = (d, n) => { LstTable.Decode(d, n); return null; },
+        [".lst"] = (d, n) => GameTables.Check(LstTable.Decode(d, n)) is { } summary && Environment.GetEnvironmentVariable("DELULU_VERBOSE") is not null ? $"info: {summary}" : null,
         [".xa"] = (d, _) => XaReader.Read(d).Footer.Length is > 0 and var extra ? $"{extra} unparsed trailing bytes" : null,
         [".xx"] = (d, n) =>
         {
