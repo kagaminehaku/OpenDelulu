@@ -98,13 +98,35 @@
         <!-- Game folder bar -->
         <Border Grid.Row="0" Padding="12,10" Background="{DynamicResource SystemControlBackgroundChromeMediumLowBrush}">
             <StackPanel Spacing="6">
-                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8">
                     <TextBox Text="{Binding GameFolder}" PlaceholderText="{l:Tr top.folderPlaceholder}" />
                     <Button Grid.Column="1" Content="{l:Tr top.browse}" Command="{Binding BrowseCommand}" />
                     <Button Grid.Column="2" Content="{l:Tr top.open}" Classes="accent" Command="{Binding LoadCommand}" />
                     <ComboBox Grid.Column="3" ItemsSource="{Binding Backends}" SelectedIndex="{Binding SelectedBackendIndex}" />
                     <ComboBox Grid.Column="4" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}"
                               ToolTip.Tip="{l:Tr top.language}" />
+                    <Button Grid.Column="5" Content="{l:Tr settings.button}">
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedRight">
+                                <StackPanel Width="300" Spacing="4">
+                                    <TextBlock Text="{l:Tr settings.sound}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{l:Tr settings.master}" Opacity="0.7" />
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding MasterVolume}" />
+                                    <TextBlock Text="{l:Tr settings.music}" Opacity="0.7" />
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding MusicVolume}" />
+                                    <TextBlock Text="{l:Tr settings.ambient}" Opacity="0.7" />
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding AmbientVolume}" />
+                                    <TextBlock Text="{l:Tr settings.effects}" Opacity="0.7" />
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding EffectsVolume}" />
+                                    <TextBlock Text="{l:Tr settings.voice}" Opacity="0.7" />
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding VoiceVolume}" />
+                                    <CheckBox Content="{l:Tr settings.mute}" IsChecked="{Binding IsMuted}" />
+                                    <TextBlock Text="{l:Tr settings.keys}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                                    <TextBlock Text="{l:Tr settings.keyList}" TextWrapping="Wrap" Opacity="0.8" />
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                 </Grid>
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.85" />
@@ -301,5 +323,10 @@
                 </Grid>
             </TabItem>
         </TabControl>
+
+        <!-- Emergency screen (B / Pause): covers everything until a key or click. -->
+        <Border Grid.RowSpan="2" Background="Black" IsVisible="{Binding IsEmergency}" PointerPressed="OnEmergencyPressed">
+            <Image Source="{Binding EmergencyImage}" Stretch="Fill" />
+        </Border>
     </Grid>
 </UserControl>

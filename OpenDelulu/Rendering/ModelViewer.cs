@@ -87,9 +87,13 @@ public sealed class ModelViewer : Border
         });
     }
 
+    TopLevel? _keyHost;
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        _keyHost = TopLevel.GetTopLevel(this);
+        _keyHost?.AddHandler(KeyDownEvent, OnCameraKey);
         RenderBackendSettings.Changed += OnPreferenceChanged;
         StartPreferred();
     }
@@ -97,6 +101,8 @@ public sealed class ModelViewer : Border
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
+        _keyHost?.RemoveHandler(KeyDownEvent, OnCameraKey);
+        _keyHost = null;
         RenderBackendSettings.Changed -= OnPreferenceChanged;
         RemoveBackend();
     }
@@ -218,6 +224,57 @@ public sealed class ModelViewer : Border
     }
 
     void RequestFrame() => _backend?.RequestFrame();
+
+    /// <summary>
+    /// Camera keys of the original (its keyboard chart): Q default view, W close-up on the face, T from behind,
+    /// Home/End zoom, arrows turn around and tilt, Page Up/Down tilt.
+    /// </summary>
+    void OnCameraKey(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled || Scene is null || !IsEffectivelyVisible || e.KeyModifiers != KeyModifiers.None
+            || e.Source is TextBox or ComboBox)
+            return;
+        switch (e.Key)
+        {
+            case Key.Q:
+                _camera.Reset();
+                if (Scene.CameraPitch is { } pitch)
+                    _camera.Pitch = pitch;
+                if (Scene.CameraZoom is { } zoom)
+                    _camera.Zoom = zoom;
+                break;
+            case Key.W:
+                _camera.Yaw = OrbitCamera.DefaultYaw;
+                _camera.Pitch = 0.05f;
+                _camera.Zoom = 0.25f;
+                break;
+            case Key.T:
+                _camera.Yaw += MathF.PI;
+                break;
+            case Key.Home:
+                _camera.ZoomBy(0.88f);
+                break;
+            case Key.End:
+                _camera.ZoomBy(1 / 0.88f);
+                break;
+            case Key.Left:
+                _camera.Rotate(0.1f, 0);
+                break;
+            case Key.Right:
+                _camera.Rotate(-0.1f, 0);
+                break;
+            case Key.Up or Key.PageUp:
+                _camera.Rotate(0, 0.08f);
+                break;
+            case Key.Down or Key.PageDown:
+                _camera.Rotate(0, -0.08f);
+                break;
+            default:
+                return;
+        }
+        e.Handled = true;
+        RequestFrame();
+    }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {

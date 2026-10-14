@@ -87,6 +87,13 @@ public sealed class AppSettings
     /// <summary>UI language code (en, vi…); null = English.</summary>
     public string? Language { get; set; }
 
+    /// <summary>Volumes in percent; null = default.</summary>
+    public int? MasterVolume { get; set; }
+    public int? MusicVolume { get; set; }
+    public int? AmbientVolume { get; set; }
+    public int? EffectsVolume { get; set; }
+    public int? VoiceVolume { get; set; }
+
     static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenDelulu", "settings.json");
 

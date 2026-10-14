@@ -57,8 +57,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _initializing = true; // a --backend override must not be saved as the user's choice
         SelectedBackendIndex = (int)backend;
         _initializing = false;
-        if (AppHost.StartupMute)
-            AudioSystem.Shared.Mixer.MasterVolume = 0;
+        LoadSoundSettings();
         GameFolder = AppHost.StartupGameFolder ?? _settings.LastGameFolder ?? AppHost.SuggestedGameFolder ?? "";
     }
 

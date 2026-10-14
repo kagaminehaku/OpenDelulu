@@ -1,6 +1,8 @@
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using OpenDelulu.ViewModels;
 
@@ -17,9 +19,46 @@ public partial class MainView : UserControl
         InitializeComponent();
     }
 
+    TopLevel? _keyHost;
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _keyHost?.RemoveHandler(KeyDownEvent, OnShortcutKey);
+        _keyHost = null;
+    }
+
+    void OnShortcutKey(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm || e.KeyModifiers is not (KeyModifiers.None or KeyModifiers.Shift))
+            return;
+        if (e.Key == Key.F11 && TopLevel.GetTopLevel(this) is Window window)
+        {
+            window.WindowState = window.WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
+            e.Handled = true;
+            return;
+        }
+        // Typing in a text box or using an open list keeps its keys.
+        if (!vm.IsEmergency && (e.Source is TextBox || e.Source is ComboBox { IsDropDownOpen: true }))
+            return;
+        if (vm.HandleKey(e.Key))
+            e.Handled = true;
+    }
+
+    void OnEmergencyPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+            vm.IsEmergency = false;
+        e.Handled = true;
+    }
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        // On the window, tunnelling: shortcuts work with nothing focused and before a focused button takes Space/Enter.
+        _keyHost?.RemoveHandler(KeyDownEvent, OnShortcutKey);
+        _keyHost = TopLevel.GetTopLevel(this);
+        _keyHost?.AddHandler(KeyDownEvent, OnShortcutKey, RoutingStrategies.Tunnel);
         if (DataContext is not MainViewModel vm)
             return;
 
