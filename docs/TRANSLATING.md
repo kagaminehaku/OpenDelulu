@@ -54,3 +54,8 @@ Untranslated keys fall back to English, so a partial translation is fine to shar
 - Code: `Translator.Get("key")`, `Translator.Format("key", args)`; in view models `T("key")` and `F("key", args)`.
   Text built in code should be refreshed in `OnLanguageChanged()`; list entries use `LocalizedText`.
 - Add every new key to `en.json` (and, if you can, the other files), then run `lang-check` on them.
+
+## License
+
+By contributing a translation you agree that it is published under the project's license, GPLv3 or later
+([LICENSE.txt](../LICENSE.txt)).

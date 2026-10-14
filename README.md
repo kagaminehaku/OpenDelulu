@@ -97,3 +97,9 @@ dotnet run --project tools/OpenDelulu.ShaderCompiler -- OpenDelulu/Rendering/Vul
 5. **Video**: the `.mpg` files (MPEG-1) with a cross-platform decoder.
 
 File formats: [docs/formats.md](docs/formats.md) (written in Vietnamese; an English version is welcome).
+
+## License
+
+Open Delulu is free software under the GNU General Public License v3.0 or later ([LICENSE.txt](LICENSE.txt)).
+The license covers this project's code, documentation and translations only. No game data is included: you need your
+own copy of Sexy Beach 3, whose files (models, textures, voices, scripts) remain the property of their owners.
