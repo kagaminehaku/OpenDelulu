@@ -2,6 +2,7 @@
 using Android.Runtime;
 using Avalonia;
 using Avalonia.Android;
+using OpenDelulu.Engine.Audio;
 using OpenDelulu.Services;
 
 namespace OpenDelulu.Android
@@ -24,6 +25,7 @@ namespace OpenDelulu.Android
                 AppHost.StorageHint =
                     $"Chép thư mục \"Sexy Beach 3\" (chứa SexyBeach3, SexyBeach3Plus…) vào {external} rồi bấm Mở.";
             }
+            AudioSystem.OutputFactory = () => new AndroidAudioOutput();
             base.OnCreate();
         }
 

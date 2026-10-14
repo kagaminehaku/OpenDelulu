@@ -41,6 +41,9 @@ public sealed class CharacterAnimator
 
     public MorphPlayer? Face { get; set; }
 
+    /// <summary>The voice being spoken; drives <see cref="MorphPlayer.MouthOpen"/> until it ends.</summary>
+    public LipSync? Speech { get; set; }
+
     /// <summary>Eyes following <see cref="LookTarget"/>; null when the model has no eye frames.</summary>
     public EyeGaze? Gaze { get; }
 
@@ -67,7 +70,7 @@ public sealed class CharacterAnimator
     }
 
     /// <summary>True while something moves on its own (a playing clip or blinking).</summary>
-    public bool IsAnimating => Body is { IsPlaying: true, Current.IsStatic: false } || Face?.AutoBlink == true;
+    public bool IsAnimating => Body is { IsPlaying: true, Current.IsStatic: false } || Face?.AutoBlink == true || Speech is not null;
 
     /// <summary>Forces a re-skin on the next <see cref="Update"/> (pose, expression or visibility changed).</summary>
     public void Invalidate() => _dirty = true;
@@ -81,6 +84,15 @@ public sealed class CharacterAnimator
 
         Body?.Advance(seconds);
         Face?.Advance(seconds);
+        if (Speech is { } speech && Face is not null)
+        {
+            Face.MouthOpen = speech.Update(seconds);
+            if (!speech.IsActive)
+            {
+                Face.MouthOpen = 0;
+                Speech = null;
+            }
+        }
 
         if (Body is not null)
             Body.Evaluate(_local);

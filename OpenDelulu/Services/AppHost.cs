@@ -38,6 +38,12 @@ public static class AppHost
     /// <summary>Optional render backend override (desktop: <c>--backend auto|gl|vulkan</c>).</summary>
     public static string? StartupBackend { get; set; }
 
+    /// <summary>Speak a random line of this group once the character is shown (desktop: <c>--speak po|ph|pd|pe|all</c>).</summary>
+    public static string? StartupSpeak { get; set; }
+
+    /// <summary>Start with all sound muted (desktop: <c>--mute</c>), e.g. for automated screenshots.</summary>
+    public static bool StartupMute { get; set; }
+
     /// <summary>Optional initial camera zoom for the 3D viewer (desktop: <c>--zoom 0.3</c>).</summary>
     public static float? StartupZoom { get; set; }
 }

@@ -1,14 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using OpenDelulu.Engine;
 using OpenDelulu.Engine.Animation;
 using OpenDelulu.Engine.Assets;
+using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
 using OpenDelulu.Rendering;
+using OpenDelulu.Services;
 
 namespace OpenDelulu.ViewModels;
 
@@ -19,6 +23,7 @@ namespace OpenDelulu.ViewModels;
 public partial class CharacterViewModel : ViewModelBase
 {
     readonly CharacterAssembler _assembler;
+    readonly VoiceLibrary _voices;
     int _buildVersion;
     int _animationVersion;
     bool _suppressBuild;
@@ -26,9 +31,10 @@ public partial class CharacterViewModel : ViewModelBase
     Character? _character;
     ModelScene? _scene;
 
-    public CharacterViewModel(GameFileSystem fs, CharacterDatabase database)
+    public CharacterViewModel(GameFileSystem fs, CharacterDatabase database, VoiceLibrary voices)
     {
         _assembler = new CharacterAssembler(fs, database);
+        _voices = voices;
         Girls = database.Girls;
         Cuts = ["Theo đồ bơi", .. Enumerable.Range(1, Girls.Count == 0 ? 0 : Girls.Max(g => g.Bodies.Count)).Select(i => $"Kiểu thân {i}")];
         TableInfo = $"Bảng dữ liệu: {database.TableArchive}, {Girls.Count} nhân vật";
@@ -58,6 +64,12 @@ public partial class CharacterViewModel : ViewModelBase
     [ObservableProperty] public partial ModelPreviewViewModel? Preview { get; set; }
     [ObservableProperty] public partial string Status { get; set; } = "";
     [ObservableProperty] public partial bool IsBusy { get; set; }
+
+    /// <summary>Indexes match <see cref="VoiceGroupCodes"/>.</summary>
+    public string[] VoiceGroups { get; } = ["Giọng: tất cả", "Giọng: po", "Giọng: ph", "Giọng: pd", "Giọng: sự kiện (pe)"];
+    static readonly string?[] VoiceGroupCodes = [null, "po", "ph", "pd", "pe"];
+    [ObservableProperty] public partial int SelectedVoiceGroupIndex { get; set; }
+    [ObservableProperty] public partial string VoiceInfo { get; set; } = "";
 
     // ------------------------------------------------------------------ model (rebuild)
 
@@ -120,6 +132,14 @@ public partial class CharacterViewModel : ViewModelBase
                 $"{visible}/{model.Meshes.Count} mesh hiển thị, {model.Meshes.Sum(m => m.Vertices.Length / RenderModel.VertexStride):N0} đỉnh",
                 _scene!);
             Status = "";
+            if (AppHost.StartupSpeak is { } group)
+            {
+                // After the camera intro, so the line is seen (used for automated screenshots).
+                AppHost.StartupSpeak = null;
+                SelectedVoiceGroupIndex = Math.Max(0, Array.IndexOf(VoiceGroupCodes, group));
+                await Task.Delay(2000);
+                Speak();
+            }
         }
         catch (Exception ex)
         {
@@ -160,6 +180,39 @@ public partial class CharacterViewModel : ViewModelBase
         ApplyBody(character.Animator.Body);
         ApplyPlaybackSettings();
     }
+
+    // ------------------------------------------------------------------ voice + lip sync
+
+    [RelayCommand]
+    void Speak()
+    {
+        if (_character is not { } character)
+            return;
+        string? group = VoiceGroupCodes[Math.Clamp(SelectedVoiceGroupIndex, 0, VoiceGroupCodes.Length - 1)];
+        var lines = _voices.For(character.Girl.Id).Where(l => group is null || l.Group == group).ToList();
+        if (lines.Count == 0)
+        {
+            VoiceInfo = "Nhân vật này không có giọng trong nhóm đã chọn.";
+            return;
+        }
+        var line = lines[Random.Shared.Next(lines.Count)];
+        try
+        {
+            var speech = _voices.Speak(line, AudioSystem.Shared);
+            character.Animator.Speech = speech;
+            _scene?.NotifyChanged();
+            string text = speech.Script is { } vss ? $" · {vss.Text}" : "";
+            VoiceInfo = $"{line.File} ({speech.Voice.Duration?.TotalSeconds:0.0} s){text}"
+                + (AudioSystem.Shared.OutputError is { } error ? $" · Không mở được thiết bị âm thanh: {error}" : "");
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
+        {
+            VoiceInfo = $"Không phát được {line.File}: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    void StopVoice() => AudioSystem.Shared.Mixer.StopBus(AudioBus.Voice, 0.1);
 
     // ------------------------------------------------------------------ animation (live)
 

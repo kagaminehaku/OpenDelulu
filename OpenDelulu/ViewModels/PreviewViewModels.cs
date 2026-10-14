@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using OpenDelulu.Engine.Audio;
 using OpenDelulu.Rendering;
 
 namespace OpenDelulu.ViewModels;
@@ -20,6 +22,31 @@ public sealed class TextPreviewViewModel(string title, string details, string te
 public sealed class ImagePreviewViewModel(string title, string details, Bitmap bitmap) : PreviewViewModel(title, details)
 {
     public Bitmap Bitmap { get; } = bitmap;
+}
+
+/// <summary>A .wav/.ogg: plays on the effects bus (music-length files loop until stopped).</summary>
+public sealed partial class AudioPreviewViewModel(string title, string details, byte[] data, string? lipSyncText) : PreviewViewModel(title, details)
+{
+    SoundHandle? _handle;
+
+    public string? LipSyncText { get; } = lipSyncText;
+    public bool HasLipSync => LipSyncText is not null;
+
+    [RelayCommand]
+    void Play()
+    {
+        _handle?.Stop(0.05);
+        _handle = AudioSystem.Shared.Play(data, AudioBus.Effects, loop: Loop);
+    }
+
+    [RelayCommand]
+    void Stop() => _handle?.Stop(0.1);
+
+    [ObservableProperty]
+    public partial bool Loop { get; set; }
+
+    public string Device => AudioSystem.Shared.OutputError is { } error
+        ? $"Không mở được thiết bị âm thanh ({error})" : $"Thiết bị: {AudioSystem.Shared.OutputName}";
 }
 
 public sealed class ModelPreviewViewModel : PreviewViewModel

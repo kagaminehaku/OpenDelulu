@@ -17,6 +17,9 @@
 
         <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 
+        <!-- Ogg Vorbis decoding (music, ambience, effects, event voices); pure managed, MIT -->
+        <PackageVersion Include="NVorbis" Version="0.10.5" />
+
         <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
 
         <!-- Vulkan backend (Windows/Linux/Android) and shader compilation tool -->

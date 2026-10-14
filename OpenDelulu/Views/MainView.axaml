@@ -24,6 +24,17 @@
                 <SelectableTextBlock Text="{Binding Text}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
             </ScrollViewer>
         </DataTemplate>
+        <DataTemplate DataType="vm:AudioPreviewViewModel">
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="▶ Phát" Classes="accent" Command="{Binding PlayCommand}" />
+                    <Button Content="■ Dừng" Command="{Binding StopCommand}" />
+                    <CheckBox Content="Lặp lại" IsChecked="{Binding Loop}" />
+                </StackPanel>
+                <TextBlock Text="{Binding LipSyncText, StringFormat='Khẩu hình (.vss): {0}'}" IsVisible="{Binding HasLipSync}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Device}" Opacity="0.6" FontSize="12" />
+            </StackPanel>
+        </DataTemplate>
         <DataTemplate DataType="vm:ImagePreviewViewModel">
             <Border Background="#30808080" CornerRadius="4">
                 <Image Source="{Binding Bitmap}" Stretch="Uniform" StretchDirection="DownOnly" />
@@ -125,6 +136,14 @@
                                   MaxDropDownHeight="420" />
                         <CheckBox IsChecked="{Binding AutoBlink}" Content="Chớp mắt tự động" />
                         <CheckBox IsChecked="{Binding EyesFollowCamera}" Content="Mắt nhìn theo camera" />
+
+                        <TextBlock Text="Giọng nói" Opacity="0.7" />
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding VoiceGroups}" SelectedIndex="{Binding SelectedVoiceGroupIndex}" />
+                            <Button Grid.Column="1" Content="Nói thử" Command="{Binding SpeakCommand}" />
+                            <Button Grid.Column="2" Content="Dừng" Command="{Binding StopVoiceCommand}" />
+                        </Grid>
+                        <TextBlock Text="{Binding VoiceInfo}" TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
 
                         <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
                         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="OrangeRed" />

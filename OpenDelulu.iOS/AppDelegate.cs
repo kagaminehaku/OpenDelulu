@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.iOS;
 using Avalonia.Media;
+using OpenDelulu.Engine.Audio;
 using OpenDelulu.Services;
 
 namespace OpenDelulu.iOS;
@@ -23,6 +24,7 @@ public partial class AppDelegate : AvaloniaAppDelegate<App>
         // Documents is exposed in the Files app / Finder (UIFileSharingEnabled in Info.plist).
         var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         AppHost.SuggestedGameFolder = Path.Combine(documents, "Sexy Beach 3");
+        AudioSystem.OutputFactory = () => new IosAudioOutput();
         AppHost.StorageHint = "Dùng ứng dụng Tệp (Files) hoặc Finder để chép thư mục \"Sexy Beach 3\" vào Open Delulu, rồi bấm Mở.";
 
         return base.CustomizeAppBuilder(builder)
