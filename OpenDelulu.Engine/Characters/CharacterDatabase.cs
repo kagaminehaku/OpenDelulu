@@ -40,6 +40,12 @@ public sealed record GirlInfo(
     /// <summary>Hair physics (.kys) per entry of <see cref="Hairs"/>; ld01 rows 16..20 next to the hairs in rows 11..15.</summary>
     public IReadOnlyList<AssetRef?> HairPhysics { get; init; } = [];
 
+    /// <summary>
+    /// Texture of the intimate-area overlay meshes (ld00 rows 21..28, "zxNN_*.tga"; the base game ships 16x16
+    /// mosaic tiles, texture mods replace them), or null.
+    /// </summary>
+    public AssetRef? DetailTexture { get; init; }
+
     /// <summary>Breast (ld01 row 31) and buttocks (row 32) jiggle (.tty).</summary>
     public IReadOnlyList<AssetRef> BodyPhysics { get; init; } = [];
 
@@ -99,6 +105,14 @@ public sealed class CharacterDatabase
         var skins = Table("ld00_00_00_00_00.lst") ?? throw new InvalidDataException($"ld00 missing in {tableArchive}.");
         var girls = new List<GirlInfo>();
 
+        // ld00 rows 21..28: per girl, the overlay texture "zxNN_*.tga" (first of four variants).
+        var details = new Dictionary<int, AssetRef>();
+        foreach (var row in skins.Rows)
+            if (int.TryParse(row[0], out int n) && n is >= 21 and <= 30 && AssetRef.FromRow(row, 1) is { } zx
+                && zx.File.StartsWith("zx", StringComparison.OrdinalIgnoreCase) && zx.File.Length >= 4
+                && int.TryParse(zx.File.AsSpan(2, 2), out int zxGirl) && fs.ExistsReferenced(zx.Archive, zx.File))
+                details.TryAdd(zxGirl, zx);
+
         // ld00 rows 1..10: per-girl skin textures; the girl id is the number in "boNN_00_00_00_00.bmp".
         foreach (var row in skins.Rows)
         {
@@ -143,6 +157,7 @@ public sealed class CharacterDatabase
                 Xa(2), FindBodyAnimations(fs, idle))
             {
                 HairPhysics = hairRows.Select(n => Physics(n + 5, ".kys")).ToList(),
+                DetailTexture = details.TryGetValue(id, out var detail) ? detail : null,
                 BodyPhysics = new[] { Physics(31, ".tty"), Physics(32, ".tty") }.OfType<AssetRef>().ToList(),
             });
         }

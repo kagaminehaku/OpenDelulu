@@ -90,6 +90,9 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         var body = LoadModel(girl.Bodies[cut - 1]);
         var bodyTextures = new Dictionary<string, RgbaImage>(StringComparer.OrdinalIgnoreCase);
         AddTexture(bodyTextures, BodyPlaceholder, girl.SkinTexture);
+        // The overlay meshes of the intimate areas carry a "zxNN_MM" placeholder; the girl's texture comes from ld00.
+        foreach (var texture in body.Textures.Where(t => t.Name.StartsWith("zx", StringComparison.OrdinalIgnoreCase)))
+            AddTexture(bodyTextures, texture.Name, girl.DetailTexture);
         foreach (var texture in body.Textures.Where(t => t.Name.StartsWith(SwimsuitPlaceholderPrefix, StringComparison.OrdinalIgnoreCase)))
             AddTexture(bodyTextures, texture.Name, swimsuit?.Texture);
 
@@ -104,7 +107,9 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
             parts.Add(new RenderPart("hair", hair.Model, hair.Root));
 
         string name = $"{girl.DisplayName} · {swimsuit?.Name ?? "?"}";
-        return RenderModel.Build(name, parts, IsVisibleByDefault);
+        // Like the exe's lx01 groups: the intimate-area meshes are shown when the outfit has no bottom covering them.
+        bool covered = body.FindFrame("o01_P_Pantu01")?.Mesh is not null;
+        return RenderModel.Build(name, parts, mesh => IsVisibleByDefault(mesh) || (!covered && IsDetail(mesh.FrameName)));
     }
 
     (XxModel Model, XxFrame Root)? Attach(XxModel body, PartRef part)
@@ -143,6 +148,15 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
     /// (Bura02, Pantu02-04), the pareo, collision/glare helpers and detail meshes the game toggles
     /// during scenes; those start hidden and can be switched on in the viewer.
     /// </summary>
+    /// <summary>
+    /// Intimate-area meshes of the body models (deliberately scrambled names): "…0" use the skin texture,
+    /// "…1" lie on top with the zx texture. The game toggles both groups (lx01 rows 17..20) by outfit state.
+    /// </summary>
+    public static readonly string[] DetailFrames =
+        ["o01_P_qetwry0", "o01_P_adgsfh0", "o01_P_zcbxvn0", "o01_P_wryqet1", "o01_P_sfhadg1", "o01_P_xvnzcb1"];
+
+    static bool IsDetail(string frame) => Array.IndexOf(DetailFrames, frame) >= 0;
+
     static bool IsVisibleByDefault(RenderMesh mesh)
     {
         if (RenderModel.IsHelperMaterial(mesh.MaterialName))
