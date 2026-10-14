@@ -70,6 +70,9 @@ public static class AppHost
     /// <summary>How long the <see cref="StartupTouch"/> drag lasts before letting go.</summary>
     public static double StartupTouchSeconds { get; set; } = 4;
 
+    /// <summary>Play the game's movies (desktop: <c>--no-movies</c> turns them off, e.g. for automated tests).</summary>
+    public static bool PlayMovies { get; set; } = true;
+
     /// <summary>Start with all sound muted (desktop: <c>--mute</c>), e.g. for automated screenshots.</summary>
     public static bool StartupMute { get; set; }
 

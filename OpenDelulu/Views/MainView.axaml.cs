@@ -45,6 +45,13 @@ public partial class MainView : UserControl
             e.Handled = true;
     }
 
+    void OnMoviePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: PlayViewModel play })
+            play.SkipMovie();
+        e.Handled = true;
+    }
+
     void OnEmergencyPressed(object? sender, PointerPressedEventArgs e)
     {
         if (DataContext is MainViewModel vm)

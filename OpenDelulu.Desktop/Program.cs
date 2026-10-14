@@ -123,6 +123,8 @@ sealed class Program
                     i++;
                 }
             }
+            else if (args[i] == "--no-movies")
+                AppHost.PlayMovies = false;
             else if (args[i] == "--mute")
                 AppHost.StartupMute = true;
             else if (args[i] == "--open" && i + 2 < args.Length)

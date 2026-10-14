@@ -36,6 +36,7 @@ if (args.Length < 2)
           delulu verify  <gameFolder> [.ext]                  parse every supported file (or one type), report failures
           delulu sdt     <gameFolder> <archive.pp> <file.sdt> print an event/dialogue script
           delulu saves   <gameFolder> [pictureDir]            parse data/save/*.sav (optionally export character pictures)
+          delulu mpg     <gameFolder> [frame outDir]          decode every data/*.mpg movie (optionally save one frame each as PNG)
           delulu lang-check <xx.json> [en.json]               check a UI translation against English (see docs/TRANSLATING.md)
 
         <gameFolder> is the folder that contains SexyBeach3 (and optionally SexyBeach3Plus / SexyBeach3PlusG).
@@ -199,6 +200,9 @@ switch (args[0])
             PrintCommands(scene.Commands, "  ");
         }
         return 0;
+
+    case "mpg":
+        return Movies(fs, args.Length > 3 && int.TryParse(args[2], out int dumpFrame) ? (dumpFrame, args[3]) : null);
 
     case "saves":
         return Saves(fs, args.Length > 2 ? args[2] : null);
@@ -472,4 +476,42 @@ static int Verify(GameFileSystem fs, string? only = null)
         if (!ok)
             failures.Add($"{what}: {ex?.GetType().Name}: {ex?.Message}");
     }
+}
+
+static int Movies(GameFileSystem fs, (int Frame, string Dir)? dump)
+{
+    int failures = 0;
+    foreach (var edition in fs.Install.Editions)
+    {
+        string data = edition.DataFolder.TrimEnd('/', '\\');
+        foreach (string name in fs.Install.Storage.EnumerateFiles(data, "*.mpg").Select(Path.GetFileName).Order())
+        {
+            string path = data + "/" + name;
+            var watch = Stopwatch.StartNew();
+            try
+            {
+                var video = new OpenDelulu.Formats.Video.Mpeg1Video(
+                    OpenDelulu.Formats.Video.MpegProgramStream.Video(fs.Install.Storage.OpenRead(path)));
+                int frames = 0;
+                while (video.NextFrame() is { } frame)
+                {
+                    if (dump is { } d && frame.Number == d.Frame)
+                    {
+                        var image = new RgbaImage(video.Width, video.Height);
+                        frame.ToRgba(image.Pixels, video.Width * 4, video.Width, video.Height);
+                        Directory.CreateDirectory(d.Dir);
+                        File.WriteAllBytes(Path.Combine(d.Dir, $"{edition.Edition}_{Path.GetFileNameWithoutExtension(path)}.png"), PngWriter.Encode(image));
+                    }
+                    frames++;
+                }
+                Console.WriteLine($"{edition.Edition,-8} {Path.GetFileName(path),-14} {video.Width}x{video.Height} @{video.FrameRate:0.##}  {frames} frames ({frames / video.FrameRate:F1} s), decoded in {watch.Elapsed.TotalSeconds:F1} s");
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException or IndexOutOfRangeException)
+            {
+                failures++;
+                Console.WriteLine($"{edition.Edition,-8} {Path.GetFileName(path),-14} FAILED: {ex.Message}");
+            }
+        }
+    }
+    return failures == 0 ? 0 : 1;
 }

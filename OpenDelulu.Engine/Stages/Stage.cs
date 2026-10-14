@@ -27,6 +27,13 @@ public sealed class Stage
             .Select(p => (p.Key, p.Value))
             .ToList();
 
+    /// <summary>
+    /// Stage clips play ten times slower than character clips: their speeds (×3 fans, ×8 waves, ×80 the pool's turning
+    /// sculpture) only look right at one timeline frame per second per unit of speed. At the characters' rate the waves
+    /// looped every 0.3 s and the fans spun like propellers. The exe's own time base is not decoded yet.
+    /// </summary>
+    public const double AnimationSpeedScale = 0.1;
+
     public static Stage Load(GameFileSystem fs, StageVariant variant)
     {
         var main = XxReader.Read(fs.ReadReferenced(variant.Model.Archive, variant.Model.File));
@@ -58,7 +65,7 @@ public sealed class Stage
             {
                 if (XaReader.Read(fs.ReadReferenced(xa.Archive, xa.File)).Animation is { } animation)
                 {
-                    var player = new AnimationPlayer(render.Rig, animation, xa.File) { FollowNext = false };
+                    var player = new AnimationPlayer(render.Rig, animation, xa.File) { FollowNext = false, SpeedScale = AnimationSpeedScale };
                     if (player.BoundTracks > 0)
                         animator = new CharacterAnimator(render) { Body = player, SkinAnimatedOnly = true, EyesFollowTarget = false };
                 }

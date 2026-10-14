@@ -186,6 +186,10 @@
                     <Grid Grid.Column="1" Margin="8">
                         <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" TouchHandler="{Binding TouchHandler}" />
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
+                        <!-- The game's movies (stage introductions): click to skip. -->
+                        <Border Background="Black" IsVisible="{Binding IsMoviePlaying}" PointerPressed="OnMoviePressed">
+                            <Image Source="{Binding MovieFrame}" Stretch="Uniform" />
+                        </Border>
                     </Grid>
                 </Grid>
             </TabItem>

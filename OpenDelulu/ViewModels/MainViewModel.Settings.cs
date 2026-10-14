@@ -92,6 +92,11 @@ public partial class MainViewModel
                 return true;
         }
 
+        if (SelectedTab == 0 && Play is { IsMoviePlaying: true } play && key is Key.Space or Key.Enter)
+        {
+            play.SkipMovie();
+            return true;
+        }
         if (SelectedTab == 0 && Play?.HandleOilKey(key) == true)
             return true;
         var dialogue = SelectedTab switch

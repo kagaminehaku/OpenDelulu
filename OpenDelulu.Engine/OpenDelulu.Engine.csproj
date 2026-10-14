@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NVorbis" />
+    <PackageReference Include="NLayer" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\OpenDelulu.Formats\OpenDelulu.Formats.csproj" />

@@ -6,6 +6,9 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Avalonia;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using OpenDelulu.Engine;
@@ -17,6 +20,7 @@ using OpenDelulu.Engine.Game;
 using OpenDelulu.Engine.Oil;
 using OpenDelulu.Engine.Script;
 using OpenDelulu.Engine.Stages;
+using OpenDelulu.Engine.Video;
 using OpenDelulu.Localization;
 using OpenDelulu.Rendering;
 using OpenDelulu.Services;
@@ -97,6 +101,96 @@ public sealed partial class PlayViewModel : ViewModelBase
     [ObservableProperty] public partial bool InGame { get; set; }
     [ObservableProperty] public partial string Status { get; set; } = T("play.prompt");
 
+    // ------------------------------------------------------------------ movies
+
+    /// <summary>The movie on screen (frames alternate between two bitmaps so the image refreshes), or null.</summary>
+    [ObservableProperty] public partial Bitmap? MovieFrame { get; set; }
+    [ObservableProperty] public partial bool IsMoviePlaying { get; set; }
+
+    MoviePlayer? _movie;
+    readonly WriteableBitmap?[] _movieBitmaps = new WriteableBitmap?[2];
+    int _movieFlip;
+    TaskCompletionSource? _movieDone;
+    DispatcherTimer? _movieTimer;
+    readonly Stopwatch _movieClock = new();
+
+    /// <summary>
+    /// The stage introduction of the original's date scene (05_date): sb3_0011..0025.mpg, three per stage 1..5 for day,
+    /// evening and night (the exe's table lists morning/noon, evening, night/late night per stage). Null for other stages.
+    /// </summary>
+    static string? StageMovie(int stage, StageTime time)
+    {
+        if (stage is < 1 or > 5)
+            return null;
+        int part = time switch
+        {
+            StageTime.Evening => 1,
+            StageTime.Night or StageTime.LateNight => 2,
+            _ => 0,
+        };
+        return $"sb3_{11 + (stage - 1) * 3 + part:0000}.mpg";
+    }
+
+    /// <summary>Plays a movie over the 3D view until it ends or is skipped (click, Space, Enter).</summary>
+    Task PlayMovieAsync(string file)
+    {
+        if (!AppHost.PlayMovies || _movie is not null)
+            return Task.CompletedTask;
+        MoviePlayer? movie;
+        try
+        {
+            movie = MoviePlayer.Open(_fs.Install, file, AudioSystem.Shared);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException
+            or NotSupportedException or EndOfStreamException)
+        {
+            return Task.CompletedTask; // a damaged movie must not keep the player out of the game
+        }
+        if (movie is null)
+            return Task.CompletedTask;
+        _movie = movie;
+        for (int i = 0; i < 2; i++)
+            _movieBitmaps[i] = new WriteableBitmap(new PixelSize(movie.Width, movie.Height), new Avalonia.Vector(96, 96),
+                PixelFormat.Rgba8888, AlphaFormat.Opaque);
+        _movieDone = new TaskCompletionSource();
+        _movieTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(15), DispatcherPriority.Render, (_, _) => MovieTick());
+        _movieClock.Restart();
+        _movieTimer.Start();
+        IsMoviePlaying = true;
+        return _movieDone.Task;
+    }
+
+    void MovieTick()
+    {
+        if (_movie is not { } movie)
+            return;
+        if (movie.FrameAt(_movieClock.Elapsed.TotalSeconds) is { } rgba && _movieBitmaps[_movieFlip] is { } bitmap)
+        {
+            using (var locked = bitmap.Lock())
+            {
+                for (int y = 0; y < movie.Height; y++)
+                    System.Runtime.InteropServices.Marshal.Copy(rgba, y * movie.Width * 4, locked.Address + y * locked.RowBytes, movie.Width * 4);
+            }
+            MovieFrame = bitmap;
+            _movieFlip ^= 1;
+        }
+        if (movie.Finished)
+            SkipMovie();
+    }
+
+    /// <summary>Ends the movie on screen (also when it finishes).</summary>
+    public void SkipMovie()
+    {
+        if (_movie is not { } movie)
+            return;
+        _movieTimer?.Stop();
+        _movie = null;
+        movie.Dispose();
+        IsMoviePlaying = false;
+        MovieFrame = null;
+        _movieDone?.TrySetResult();
+    }
+
     /// <summary>Set while rubbing oil: presses on the viewer touch her instead of turning the camera.</summary>
     [ObservableProperty] public partial ISceneTouchHandler? TouchHandler { get; set; }
 
@@ -136,7 +230,11 @@ public sealed partial class PlayViewModel : ViewModelBase
         try
         {
             int? swimsuit = _progress.For(choice.Id).SwimsuitRow;
-            var (stage, girl) = await Task.Run(() => (Stage.Load(_fs, variant), _assembler.Build(new CharacterSpec(choice.Id, SwimsuitRow: swimsuit))));
+            // The stage loads while its introduction movie plays (as the original's date scene does).
+            var loading = Task.Run(() => (Stage.Load(_fs, variant), _assembler.Build(new CharacterSpec(choice.Id, SwimsuitRow: swimsuit))));
+            if (StageMovie(stageInfo.Id, Time) is { } movie)
+                await PlayMovieAsync(movie);
+            var (stage, girl) = await loading;
             _stage = stage;
             _girl = girl;
             _point = 0;
