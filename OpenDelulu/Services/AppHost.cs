@@ -32,6 +32,9 @@ public static class AppHost
     /// <summary>Optional body variant override (desktop: <c>--cut &lt;n&gt;</c>).</summary>
     public static int? StartupCut { get; set; }
 
+    /// <summary>The head can start the compositor on Vulkan (desktop Windows/Linux).</summary>
+    public static bool SupportsVulkanCompositor { get; set; }
+
     /// <summary>Optional render backend override (desktop: <c>--backend auto|gl|vulkan</c>).</summary>
     public static string? StartupBackend { get; set; }
 }

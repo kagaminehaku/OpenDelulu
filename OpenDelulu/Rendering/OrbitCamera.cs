@@ -111,4 +111,18 @@ public static class RenderBackendSettings
     }
 
     public static event Action? Changed;
+
+    /// <summary>
+    /// True when the platform layer was started with a Vulkan compositor ("pure Vulkan": frames are shared
+    /// as Vulkan images instead of D3D11 textures). Decided at startup; changing it needs a restart.
+    /// </summary>
+    public static bool VulkanCompositor { get; set; }
+
+    /// <summary>Parses "auto", "gl"/"opengl", "vulkan"/"vk" (case-insensitive).</summary>
+    public static RenderBackendKind Parse(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "gl" or "opengl" => RenderBackendKind.OpenGl,
+        "vulkan" or "vk" => RenderBackendKind.Vulkan,
+        _ => RenderBackendKind.Auto,
+    };
 }

@@ -26,7 +26,16 @@ Trình xem 3D có hai backend, chọn ở góc trên bên phải ("Đồ họa: 
 | **Vulkan** | Windows, Linux (Android: thử, tự lùi về OpenGL nếu compositor không nhận ảnh Vulkan) | Render bằng device Vulkan riêng, trao ảnh cho compositor của Avalonia qua `ICompositionGpuInterop` (Windows: texture D3D11 chia sẻ + keyed mutex; Linux: file descriptor + semaphore), không chép qua CPU |
 | **OpenGL ES** | Mọi nền tảng (Windows chạy qua ANGLE → Direct3D 11) | `OpenGlControlBase` |
 
-"Tự động" thử Vulkan trước, lỗi thì lùi về OpenGL; góc trái khung xem ghi backend và GPU đang dùng.
+- **Tự động**: giao diện chạy ANGLE (Direct3D 11) như mặc định của Avalonia; khung 3D thử Vulkan trước
+  (trao ảnh qua texture D3D11 chia sẻ), lỗi thì lùi về OpenGL ES.
+- **Vulkan** ("Vulkan thuần"): từ lần mở app sau, cả giao diện Avalonia cũng chạy trên Vulkan
+  (`Win32RenderingMode.Vulkan` / `X11RenderingMode.Vulkan`), khung 3D trao ảnh Vulkan trực tiếp, không qua D3D11.
+  OpenGL không dùng được trong chế độ này.
+- **OpenGL ES**: chỉ dùng `OpenGlControlBase`.
+
+Backend nào không khởi tạo được trong 3 giây thì khung xem tự chuyển sang backend còn lại và ghi lý do.
+Góc trái khung xem ghi backend, GPU và cách trao ảnh đang dùng (`D3D11 shared texture` hoặc `Vulkan NT handle`).
+Thử nghiệm: `--backend auto|gl|vulkan`, `--compositor vulkan|default` (không lưu vào cài đặt).
 Skinning hiện chạy trên CPU (dùng chung cho cả hai backend).
 Sửa shader Vulkan trong `OpenDelulu/Rendering/Vulkan/Shaders/*.vert|frag` rồi chạy:
 

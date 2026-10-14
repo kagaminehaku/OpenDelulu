@@ -41,14 +41,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public MainViewModel()
     {
-        var backend = (AppHost.StartupBackend ?? _settings.RenderBackend)?.ToLowerInvariant() switch
-        {
-            "gl" or "opengl" => RenderBackendKind.OpenGl,
-            "vulkan" or "vk" => RenderBackendKind.Vulkan,
-            _ => RenderBackendKind.Auto,
-        };
+        var backend = RenderBackendSettings.Parse(AppHost.StartupBackend ?? _settings.RenderBackend);
         RenderBackendSettings.Preferred = backend;
+        _initializing = true; // a --backend override must not be saved as the user's choice
         SelectedBackendIndex = (int)backend;
+        _initializing = false;
         GameFolder = AppHost.StartupGameFolder ?? _settings.LastGameFolder ?? AppHost.SuggestedGameFolder ?? "";
         StorageHint = AppHost.StorageHint ?? "Chọn thư mục chứa SexyBeach3 (và SexyBeach3Plus / SexyBeach3PlusG nếu có).";
     }
@@ -59,11 +56,21 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     public partial int SelectedBackendIndex { get; set; }
 
+    bool _initializing;
+
     partial void OnSelectedBackendIndexChanged(int value)
     {
+        if (_initializing)
+            return;
         RenderBackendSettings.Preferred = (RenderBackendKind)Math.Clamp(value, 0, 2);
         _settings.RenderBackend = RenderBackendSettings.Preferred.ToString();
         _settings.Save();
+        // The compositor (what draws the whole window) is chosen at startup; only Vulkan uses a Vulkan one.
+        bool wantsVulkanCompositor = RenderBackendSettings.Preferred == RenderBackendKind.Vulkan;
+        if (AppHost.SupportsVulkanCompositor && wantsVulkanCompositor != RenderBackendSettings.VulkanCompositor)
+            Status = wantsVulkanCompositor
+                ? "Mở lại app để cả giao diện cũng chạy bằng Vulkan (Vulkan thuần, không qua D3D11)."
+                : "Mở lại app để giao diện quay về ANGLE/D3D11.";
     }
 
     /// <summary>Set by the view: shows the platform folder picker, returns a local path or null.</summary>

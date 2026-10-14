@@ -68,7 +68,7 @@ public sealed class ModelViewer : Border
     {
         base.OnAttachedToVisualTree(e);
         RenderBackendSettings.Changed += OnPreferenceChanged;
-        CreateBackend(RenderBackendSettings.Preferred == RenderBackendKind.OpenGl ? RenderBackendKind.OpenGl : RenderBackendKind.Vulkan);
+        StartPreferred();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -78,11 +78,23 @@ public sealed class ModelViewer : Border
         RemoveBackend();
     }
 
-    void OnPreferenceChanged()
+    void OnPreferenceChanged() => StartPreferred();
+
+    void StartPreferred()
     {
         _fallbackReason = null;
+        _failedKinds.Clear();
         CreateBackend(RenderBackendSettings.Preferred == RenderBackendKind.OpenGl ? RenderBackendKind.OpenGl : RenderBackendKind.Vulkan);
     }
+
+    /// <summary>
+    /// A backend that neither reports Ready nor Failed in this time is treated as failed: OpenGlControlBase
+    /// stays silent when the compositor has no OpenGL (e.g. Avalonia running on Vulkan).
+    /// </summary>
+    static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(3);
+
+    readonly System.Collections.Generic.HashSet<RenderBackendKind> _failedKinds = [];
+    Avalonia.Threading.DispatcherTimer? _startupTimer;
 
     void CreateBackend(RenderBackendKind kind)
     {
@@ -90,15 +102,32 @@ public sealed class ModelViewer : Border
         IModelViewBackend backend = kind == RenderBackendKind.Vulkan ? new VulkanModelView() : new GlModelView();
         backend.Camera = _camera;
         backend.Scene = Scene;
-        backend.Ready += () => UpdateBadge();
+        backend.Ready += () => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (ReferenceEquals(backend, _backend))
+            {
+                _startupTimer?.Stop();
+                UpdateBadge();
+            }
+        });
         backend.Failed += reason => Avalonia.Threading.Dispatcher.UIThread.Post(() => OnBackendFailed(backend, kind, reason));
         _backend = backend;
         _layers.Children.Insert(0, (Control)backend);
         UpdateBadge();
+
+        _startupTimer?.Stop();
+        _startupTimer = new Avalonia.Threading.DispatcherTimer { Interval = StartupTimeout };
+        _startupTimer.Tick += (_, _) =>
+        {
+            _startupTimer?.Stop();
+            OnBackendFailed(backend, kind, "không khởi tạo được với compositor hiện tại");
+        };
+        _startupTimer.Start();
     }
 
     void RemoveBackend()
     {
+        _startupTimer?.Stop();
         if (_backend is Control control)
             _layers.Children.Remove(control);
         _backend = null;
@@ -108,17 +137,23 @@ public sealed class ModelViewer : Border
     {
         if (!ReferenceEquals(backend, _backend))
             return;
-        if (kind == RenderBackendKind.Vulkan)
+        _failedKinds.Add(kind);
+        var other = kind == RenderBackendKind.Vulkan ? RenderBackendKind.OpenGl : RenderBackendKind.Vulkan;
+        if (_failedKinds.Contains(other))
         {
-            // Auto and Vulkan both fall back so the viewer never stays blank.
-            _fallbackReason = $"Vulkan không dùng được ({reason}), dùng OpenGL";
-            CreateBackend(RenderBackendKind.OpenGl);
+            RemoveBackend();
+            _badge.Text = $"Lỗi đồ họa: {BackendName(kind)} {reason}. {_fallbackReason}";
+            return;
         }
-        else
-        {
-            _badge.Text = "Lỗi đồ họa: " + reason;
-        }
+        // Never leave the viewer blank: try the other backend once.
+        _fallbackReason = $"{BackendName(kind)} không dùng được ({reason}), dùng {BackendName(other)}"
+            + (RenderBackendSettings.VulkanCompositor && kind == RenderBackendKind.OpenGl
+                ? ". Giao diện đang chạy Vulkan; chọn OpenGL rồi mở lại app để dùng OpenGL."
+                : "");
+        CreateBackend(other);
     }
+
+    static string BackendName(RenderBackendKind kind) => kind == RenderBackendKind.Vulkan ? "Vulkan" : "OpenGL";
 
     void UpdateBadge()
     {
