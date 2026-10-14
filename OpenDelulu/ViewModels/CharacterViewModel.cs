@@ -105,7 +105,8 @@ public partial class CharacterViewModel : ViewModelBase
                 return;
 
             // Keep the chosen animation/clip when only the outfit changed.
-            if (keepAnimation is not null && character.Girl.BodyAnimations.FirstOrDefault(a => a.File == keepAnimation) is { } same
+            // The previous animation may not exist for this girl's body type (dt01_* vs dt02_*).
+            if (FindAnimation(character.Girl.BodyAnimations, keepAnimation) is { } same
                 && same != character.Girl.BodyAnimations.FirstOrDefault())
                 character.Animator.Body = await Task.Run(() => _assembler.LoadBodyAnimation(character.Model, same));
             if (keepClip is int clip && character.Animator.Body?.Clips.Any(c => c.Index == clip) == true)
@@ -142,7 +143,7 @@ public partial class CharacterViewModel : ViewModelBase
         Animations.Clear();
         foreach (var animation in character.Girl.BodyAnimations)
             Animations.Add(animation);
-        SelectedAnimation = Animations.FirstOrDefault(a => a.File == character.Animator.Body?.Name);
+        SelectedAnimation = FindAnimation(Animations, character.Animator.Body?.Name);
 
         Expressions.Clear();
         foreach (var expression in character.Animator.Face?.Expressions ?? [])
@@ -167,12 +168,28 @@ public partial class CharacterViewModel : ViewModelBase
             _ = SwitchAnimationAsync(asset);
     }
 
+    /// <summary>
+    /// <see cref="AssetRef"/> is a struct: a plain FirstOrDefault returns an empty ref instead of null
+    /// when nothing matches, which then fails deep inside the file system.
+    /// </summary>
+    static AssetRef? FindAnimation(IEnumerable<AssetRef> animations, string? file) =>
+        file is null ? null : animations.Where(a => a.File == file).Select(a => (AssetRef?)a).FirstOrDefault();
+
     async Task SwitchAnimationAsync(AssetRef asset)
     {
         if (_character is not { } character || character.Animator.Body?.Name == asset.File)
             return;
         int version = ++_animationVersion;
-        var player = await Task.Run(() => _assembler.LoadBodyAnimation(character.Model, asset));
+        AnimationPlayer? player;
+        try
+        {
+            player = await Task.Run(() => _assembler.LoadBodyAnimation(character.Model, asset));
+        }
+        catch (Exception ex)
+        {
+            Status = $"Không tải được {asset.File}: {ex.Message}";
+            return;
+        }
         if (version != _animationVersion || !ReferenceEquals(character, _character))
             return;
         if (character.Animator.Body is { } old)

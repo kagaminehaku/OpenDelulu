@@ -87,6 +87,8 @@ public sealed class GameFileSystem : IDisposable
     /// </summary>
     public byte[] ReadReferenced(string archiveName, string fileName)
     {
+        ArgumentException.ThrowIfNullOrEmpty(archiveName);
+        ArgumentException.ThrowIfNullOrEmpty(fileName);
         if (HasArchive(archiveName) && GetArchive(archiveName).Find(fileName) is { } entry)
             return GetArchive(archiveName).ReadAllBytes(entry);
         if (FindAnywhere(fileName) is var (info, found))
