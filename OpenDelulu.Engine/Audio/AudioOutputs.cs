@@ -161,3 +161,78 @@ public sealed unsafe class WinMmAudioOutput : IAudioOutput
         _event.Dispose();
     }
 }
+
+/// <summary>
+/// Linux: PulseAudio "simple" API (libpulse-simple), which PipeWire also provides. Float32 stereo, ~70 ms buffer.
+/// </summary>
+[SupportedOSPlatform("linux")]
+public sealed unsafe class PulseAudioOutput : IAudioOutput
+{
+    const string Library = "libpulse-simple.so.0";
+    const int PlaybackDirection = 1, Float32LittleEndian = 5, BlockFrames = 1024;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct SampleSpec
+    {
+        public int Format;
+        public uint Rate;
+        public byte Channels;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct BufferAttributes
+    {
+        public uint MaxLength, TargetLength, PreBuffer, MinRequest, FragmentSize;
+    }
+
+    [DllImport(Library)] static extern nint pa_simple_new(nint server, byte* name, int direction, nint device, byte* streamName,
+        SampleSpec* spec, nint channelMap, BufferAttributes* attributes, int* error);
+    [DllImport(Library)] static extern int pa_simple_write(nint stream, void* data, nuint bytes, int* error);
+    [DllImport(Library)] static extern int pa_simple_drain(nint stream, int* error);
+    [DllImport(Library)] static extern void pa_simple_free(nint stream);
+
+    nint _stream;
+    Thread? _thread;
+    volatile bool _running;
+
+    public string Name => "PulseAudio / PipeWire";
+
+    public void Start(AudioMixer mixer)
+    {
+        var spec = new SampleSpec { Format = Float32LittleEndian, Rate = AudioMixer.OutputRate, Channels = AudioMixer.OutputChannels };
+        uint target = (uint)(AudioMixer.OutputRate * 0.07) * AudioMixer.OutputChannels * sizeof(float);
+        var attributes = new BufferAttributes { MaxLength = uint.MaxValue, TargetLength = target, PreBuffer = uint.MaxValue, MinRequest = uint.MaxValue, FragmentSize = uint.MaxValue };
+        int error = 0;
+        fixed (byte* name = "Open Delulu\0"u8)
+        fixed (byte* stream = "Game\0"u8)
+            _stream = pa_simple_new(0, name, PlaybackDirection, 0, stream, &spec, 0, &attributes, &error);
+        if (_stream == 0)
+            throw new InvalidOperationException($"pa_simple_new failed ({error}).");
+
+        _running = true;
+        _thread = new Thread(() =>
+        {
+            var block = new float[BlockFrames * AudioMixer.OutputChannels];
+            int writeError = 0;
+            while (_running)
+            {
+                mixer.Render(block, BlockFrames);
+                fixed (float* data = block)
+                    if (pa_simple_write(_stream, data, (nuint)(block.Length * sizeof(float)), &writeError) < 0)
+                        break;
+            }
+        }) { IsBackground = true, Name = "Audio (PulseAudio)" };
+        _thread.Start();
+    }
+
+    public void Dispose()
+    {
+        _running = false;
+        _thread?.Join(500);
+        if (_stream != 0)
+        {
+            pa_simple_free(_stream);
+            _stream = 0;
+        }
+    }
+}

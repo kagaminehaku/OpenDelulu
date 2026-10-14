@@ -2,7 +2,8 @@ namespace OpenDelulu.Engine.Audio;
 
 /// <summary>
 /// The app-wide mixer plus the platform output. Platform heads set <see cref="OutputFactory"/> before first use
-/// (Android: AudioTrack, iOS: AudioQueue); Windows uses waveOut; elsewhere sound is silent but still timed.
+/// (Android: AudioTrack, iOS: AudioQueue); Windows uses waveOut, Linux PulseAudio/PipeWire; elsewhere (or when the
+/// device cannot be opened) sound is silent but still timed.
 /// </summary>
 public sealed class AudioSystem : IDisposable
 {
@@ -46,6 +47,8 @@ public sealed class AudioSystem : IDisposable
             return factory();
         if (OperatingSystem.IsWindows())
             return new WinMmAudioOutput();
+        if (OperatingSystem.IsLinux() && !OperatingSystem.IsAndroid())
+            return new PulseAudioOutput();
         return new NullAudioOutput();
     }
 
