@@ -45,6 +45,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     Stage? _stage;
     int _point;
     (RenderModel Model, CharacterAnimator? Animator)? _prop;
+    DateActivity? _activity;
 
     public PlayViewModel(GameFileSystem fs, CharacterDatabase characters, StageDatabase stages, ScriptLibrary library)
     {
@@ -117,11 +118,13 @@ public sealed partial class PlayViewModel : ViewModelBase
         Dialogue.Hide();
         try
         {
-            var (stage, girl) = await Task.Run(() => (Stage.Load(_fs, variant), _assembler.Build(new CharacterSpec(choice.Id))));
+            int? swimsuit = _progress.For(choice.Id).SwimsuitRow;
+            var (stage, girl) = await Task.Run(() => (Stage.Load(_fs, variant), _assembler.Build(new CharacterSpec(choice.Id, SwimsuitRow: swimsuit))));
             _stage = stage;
             _girl = girl;
             _point = 0;
             _prop = null;
+            _activity = null;
             PlaceGirl();
             BuildScene();
             InGame = true;
@@ -153,6 +156,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         _girl = null;
         _stage = null;
         _prop = null;
+        _activity = null;
         InGame = false;
         RefreshGirls(Girls.Select(g => g.Id).ToList());
         Status = T("play.prompt");
@@ -203,6 +207,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         var points = _stage.PointGroup("Date");
         int index = points.ToList().FindIndex(p => p.Name == $"o01_N_Point_Date{DatePoint(activity.Number):00}");
         _point = index >= 0 ? index : activity.Number - 1;
+        _activity = activity;
         _girl.Animator.Physics?.Reset();
         PlaceGirl();
         BuildScene();
@@ -224,6 +229,49 @@ public sealed partial class PlayViewModel : ViewModelBase
         10 => 18,
         _ => activity,
     };
+
+    void ShowSwimsuits()
+    {
+        if (_girl is null)
+            return;
+        var options = _girl.Girl.Swimsuits
+            .Select(s => (s.Name, (Action)(() => _ = ChangeSwimsuitAsync(s.Row))))
+            .ToList();
+        options.Add((T("date.back"), ShowMenu));
+        Dialogue.ShowMenu(F("swimsuit.choose", CharacterDatabase.NameOf(_girl.Girl.Id)), options);
+    }
+
+    /// <summary>Rebuilds the girl in another swimsuit, keeping where she is and what she does.</summary>
+    async Task ChangeSwimsuitAsync(int row)
+    {
+        if (_girl is not { } current || IsBusy)
+            return;
+        IsBusy = true;
+        Dialogue.ShowMenu(T("swimsuit.changing"), []);
+        try
+        {
+            var girl = await Task.Run(() => _assembler.Build(new CharacterSpec(current.Girl.Id, SwimsuitRow: row)));
+            _girl = girl;
+            Progress.SwimsuitRow = row;
+            _progress.Save(ProgressPath);
+            if (_activity is { } activity)
+                StartActivity(activity);
+            else
+            {
+                PlaceGirl();
+                BuildScene();
+            }
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
+        {
+            Status = F("swimsuit.error", ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+        ShowMenu();
+    }
 
     static string ActivityName(int number) =>
         Translator.Instance[$"date.activity{number}"] is var name && name != $"date.activity{number}" ? name : Translator.Format("date.activityN", number);
@@ -322,6 +370,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             (T("play.talk"), () => RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu)),
             (T("play.date"), ShowActivities),
+            (T("play.changeSwimsuit"), ShowSwimsuits),
             (T("play.move"), () => { _point++; PlaceGirl(); ShowMenu(); }),
         };
         int maxLevel = GameEvents.Levels(_library, girl).DefaultIfEmpty(1).Max();

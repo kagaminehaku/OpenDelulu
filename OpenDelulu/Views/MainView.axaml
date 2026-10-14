@@ -40,7 +40,8 @@
                     <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" Foreground="#FFB0D8FF"
                                IsVisible="{Binding Speaker, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="16" Foreground="White" />
-                    <ItemsControl ItemsSource="{Binding Choices}" IsVisible="{Binding HasChoices}">
+                    <ScrollViewer MaxHeight="240" IsVisible="{Binding HasChoices}" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding Choices}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <WrapPanel />
@@ -54,6 +55,7 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    </ScrollViewer>
                     <Button Content="{l:Tr dialogue.next}" HorizontalAlignment="Right" Command="{Binding NextCommand}"
                             IsVisible="{Binding CanAdvance}" />
                 </StackPanel>

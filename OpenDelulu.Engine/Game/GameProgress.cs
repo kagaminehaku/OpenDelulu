@@ -12,6 +12,9 @@ public sealed class GirlProgress
 
     /// <summary>The first-meeting script of the current level was seen.</summary>
     public bool MetAtLevel { get; set; }
+
+    /// <summary>Row of the swimsuit she wears (lbNN table), or null for her first one.</summary>
+    public int? SwimsuitRow { get; set; }
 }
 
 /// <summary>
