@@ -37,6 +37,12 @@ public sealed record GirlInfo(
     AssetRef? FaceAnimation,
     IReadOnlyList<AssetRef> BodyAnimations)
 {
+    /// <summary>Hair physics (.kys) per entry of <see cref="Hairs"/>; ld01 rows 16..20 next to the hairs in rows 11..15.</summary>
+    public IReadOnlyList<AssetRef?> HairPhysics { get; init; } = [];
+
+    /// <summary>Breast (ld01 row 31) and buttocks (row 32) jiggle (.tty).</summary>
+    public IReadOnlyList<AssetRef> BodyPhysics { get; init; } = [];
+
     public string DisplayName => $"{CharacterDatabase.NameOf(Id)} ({Id:00})";
 }
 
@@ -116,7 +122,10 @@ public sealed class CharacterDatabase
             if (face is null)
                 continue;
 
-            var hairs = Enumerable.Range(11, 10).Select(Part).OfType<PartRef>().ToList();
+            var hairRows = Enumerable.Range(11, 5).Where(n => Part(n) is not null).ToList();
+            var hairs = hairRows.Select(n => Part(n)!).ToList();
+            AssetRef? Physics(int n, string extension) => rows.TryGetValue(n, out var r) && AssetRef.FromRow(r, 1) is { } a
+                && a.File.EndsWith(extension, StringComparison.OrdinalIgnoreCase) && fs.ExistsReferenced(a.Archive, a.File) ? a : null;
             // Tables of the Bonus Disc list a 7th variant that only exists for some body types.
             var bodies = Enumerable.Range(21, 10).Select(Part).OfType<PartRef>().Select(p => p.Model)
                 .TakeWhile(b => fs.ExistsReferenced(b.Archive, b.File)).ToList();
@@ -131,7 +140,11 @@ public sealed class CharacterDatabase
 
             girls.Add(new GirlInfo(id, skin, AssetRef.FromRow(row, 3), face, hairs, bodies,
                 ReadSwimsuits(Table($"lb{id:00}_00_00_00_00.lst"), bodies.Count),
-                Xa(2), FindBodyAnimations(fs, idle)));
+                Xa(2), FindBodyAnimations(fs, idle))
+            {
+                HairPhysics = hairRows.Select(n => Physics(n + 5, ".kys")).ToList(),
+                BodyPhysics = new[] { Physics(31, ".tty"), Physics(32, ".tty") }.OfType<AssetRef>().ToList(),
+            });
         }
 
         return new CharacterDatabase(tableArchive, girls.OrderBy(g => g.Id).ToList());

@@ -44,6 +44,9 @@ public sealed class AnimationPlayer
 
     public string Name { get; }
     public IReadOnlyList<AnimationClipInfo> Clips { get; }
+    /// <summary>Rig frames driven by a track (-1 entries for tracks whose frame is missing).</summary>
+    public IReadOnlyList<int> TrackFrames => _trackFrame;
+
     /// <summary>Tracks whose bone exists in the rig (diagnostics).</summary>
     public int BoundTracks { get; }
     public AnimationClipInfo? Current { get; private set; }

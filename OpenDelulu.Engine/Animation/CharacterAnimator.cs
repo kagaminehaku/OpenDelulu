@@ -44,10 +44,48 @@ public sealed class CharacterAnimator
     public AnimationPlayer? Body
     {
         get => _body;
-        set { _body = value; _dirty = true; }
+        set { _body = value; _dirty = true; _animatedMeshes = null; }
+    }
+
+    bool _animatedOnly;
+    bool[]? _animatedMeshes;
+
+    /// <summary>
+    /// Re-skin only meshes under frames the body animation moves (stages: a few animated waves among hundreds of
+    /// static meshes). Characters leave it off: the gaze, morphs and physics touch frames the clips do not.
+    /// </summary>
+    public bool SkinAnimatedOnly
+    {
+        get => _animatedOnly;
+        set { _animatedOnly = value; _animatedMeshes = null; _dirty = true; }
+    }
+
+    /// <summary>True when the mesh's vertices may change from frame to frame (renderers re-upload only these).</summary>
+    public bool IsMeshAnimated(int mesh)
+    {
+        if (!_animatedOnly || !_placement.IsIdentity)
+            return true;
+        _animatedMeshes ??= FindAnimatedMeshes();
+        return _animatedMeshes[mesh];
+    }
+
+    bool[] FindAnimatedMeshes()
+    {
+        var rig = Model.Rig;
+        var moved = new bool[rig.Count];
+        foreach (int frame in _body?.TrackFrames ?? [])
+            if (frame >= 0)
+                moved[frame] = true;
+        for (int i = 0; i < rig.Count; i++)
+            if (rig.Parents[i] >= 0 && moved[rig.Parents[i]])
+                moved[i] = true;
+        return Model.Meshes.Select(m => moved[m.FrameIndex] || (m.BoneFrames?.Any(b => b >= 0 && moved[b]) ?? false)).ToArray();
     }
 
     public MorphPlayer? Face { get; set; }
+
+    /// <summary>Hair and breast/buttock secondary motion; null to disable.</summary>
+    public SpringBones? Physics { get; set; }
 
     /// <summary>The voice being spoken; drives <see cref="MorphPlayer.MouthOpen"/> until it ends.</summary>
     public LipSync? Speech { get; set; }
@@ -78,7 +116,8 @@ public sealed class CharacterAnimator
     }
 
     /// <summary>True while something moves on its own (a playing clip or blinking).</summary>
-    public bool IsAnimating => Body is { IsPlaying: true, Current.IsStatic: false } || Face?.AutoBlink == true || Speech is not null;
+    public bool IsAnimating => Body is { IsPlaying: true, Current.IsStatic: false } || Face?.AutoBlink == true || Speech is not null
+        || Physics?.IsMoving == true;
 
     /// <summary>Forces a re-skin on the next <see cref="Update"/> (pose, expression or visibility changed).</summary>
     public void Invalidate() => _dirty = true;
@@ -120,13 +159,14 @@ public sealed class CharacterAnimator
             Gaze.Apply(_local, _world, target);
             ComputeWorld();
         }
+        Physics?.Apply(_local, _world, seconds);
         if (_focusFrames.Length > 0)
             Focus = _focusFrames.Aggregate(Vector3.Zero, (sum, i) => sum + _world[i].Translation) / _focusFrames.Length;
 
         var meshes = Model.Meshes;
         Parallel.For(0, meshes.Count, i =>
         {
-            if (!isVisible(i))
+            if (!isVisible(i) || !IsMeshAnimated(i))
                 return;
             var mesh = meshes[i];
             RenderModel.Skin(mesh, _world, Face?.Apply(mesh));

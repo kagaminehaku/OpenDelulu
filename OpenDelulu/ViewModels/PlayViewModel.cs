@@ -119,7 +119,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             _girl = girl;
             _point = 0;
             PlaceGirl();
-            Scene = new ModelScene([(stage.Model, null), (girl.Model, girl.Animator)], subject: 1);
+            Scene = new ModelScene([(stage.Model, stage.Animator), (girl.Model, girl.Animator)], subject: 1);
             Scene.SetLight(1, CharacterLight(stage, Time));
             InGame = true;
             Status = F("play.where", choice.Name, StageNames[SelectedStageIndex], Times[SelectedTimeIndex]);

@@ -2,6 +2,7 @@ using System.Numerics;
 using OpenDelulu.Engine.Animation;
 using OpenDelulu.Engine.Assets;
 using OpenDelulu.Formats.Imaging;
+using OpenDelulu.Formats.Character;
 using OpenDelulu.Formats.Xa;
 using OpenDelulu.Formats.Xx;
 
@@ -41,7 +42,27 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
             animator.Face = new MorphPlayer(model, morphs, "face");
         if (girl.BodyAnimations.FirstOrDefault() is { } bodyXa)
             animator.Body = LoadBodyAnimation(model, bodyXa);
+        animator.Physics = LoadPhysics(girl, model, spec);
         return new Character(girl, model, animator);
+    }
+
+    /// <summary>Hair (.kys of the chosen hairstyle) and breast/buttock (.tty) springs; null when none apply.</summary>
+    SpringBones? LoadPhysics(GirlInfo girl, RenderModel model, CharacterSpec spec)
+    {
+        var physics = new SpringBones(model.Rig);
+        int hair = Math.Clamp(spec.HairIndex, 0, Math.Max(0, girl.HairPhysics.Count - 1));
+        try
+        {
+            if (girl.HairPhysics.Count > 0 && girl.HairPhysics[hair] is { } kys)
+                physics.AddHair(KysFile.Read(fs.ReadReferenced(kys.Archive, kys.File)));
+            // Set 1 is the swimsuit locator set of the breast files ("水着用ロケーター") and the buttock set ("お尻").
+            foreach (var tty in girl.BodyPhysics)
+                physics.AddJiggle(TtyFile.Read(fs.ReadReferenced(tty.Archive, tty.File)), set: 1);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or EndOfStreamException)
+        {
+        }
+        return physics.BoneCount > 0 ? physics : null;
     }
 
     /// <summary>Loads a body .xa for <paramref name="model"/>; null if it has no skeletal animation.</summary>

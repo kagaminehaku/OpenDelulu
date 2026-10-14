@@ -1,6 +1,8 @@
 using System.Numerics;
+using OpenDelulu.Engine.Animation;
 using OpenDelulu.Engine.Assets;
 using OpenDelulu.Formats.Scene;
+using OpenDelulu.Formats.Xa;
 using OpenDelulu.Formats.Xx;
 
 namespace OpenDelulu.Engine.Stages;
@@ -11,6 +13,9 @@ public sealed class Stage
     public required StageVariant Variant { get; init; }
     public required RenderModel Model { get; init; }
     public XlFile? Lights { get; init; }
+
+    /// <summary>The stage's looping background animation (waves, water, flags), or null.</summary>
+    public CharacterAnimator? Animator { get; init; }
 
     /// <summary>World matrices of the points in moNN.xx (o01_N_Point_Date01…, o01_N_Point_Oil…, o01_N_Point_H…).</summary>
     public IReadOnlyDictionary<string, Matrix4x4> Points { get; init; } = new Dictionary<string, Matrix4x4>();
@@ -46,7 +51,23 @@ public sealed class Stage
             try { lights = XlFile.Read(fs.ReadReferenced(xl.Archive, xl.File)); }
             catch (InvalidDataException) { }
         }
-        return new Stage { Variant = variant, Model = render, Lights = lights, Points = points };
+        CharacterAnimator? animator = null;
+        if (variant.Animation is { } xa)
+        {
+            try
+            {
+                if (XaReader.Read(fs.ReadReferenced(xa.Archive, xa.File)).Animation is { } animation)
+                {
+                    var player = new AnimationPlayer(render.Rig, animation, xa.File) { FollowNext = false };
+                    if (player.BoundTracks > 0)
+                        animator = new CharacterAnimator(render) { Body = player, SkinAnimatedOnly = true, EyesFollowTarget = false };
+                }
+            }
+            catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
+            {
+            }
+        }
+        return new Stage { Variant = variant, Model = render, Lights = lights, Points = points, Animator = animator };
     }
 
     static void Collect(XxFrame frame, Matrix4x4 parent, Dictionary<string, Matrix4x4> points)

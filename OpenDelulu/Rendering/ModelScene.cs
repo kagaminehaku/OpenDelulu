@@ -78,7 +78,8 @@ public sealed class ModelScene
     public Vector3 Light(int mesh) => _objects[_owner[mesh]].Light;
 
     /// <summary>True when the mesh's vertices change while animating (re-upload after <see cref="Update"/>).</summary>
-    public bool IsDynamic(int mesh) => _objects[_owner[mesh]].Animator is not null;
+    public bool IsDynamic(int mesh) =>
+        _objects[_owner[mesh]] is { Animator: { } animator } o && animator.IsMeshAnimated(mesh - o.MeshOffset);
 
     /// <summary>Raised when visibility or animation settings change; the viewer redraws.</summary>
     public event Action? Changed;
