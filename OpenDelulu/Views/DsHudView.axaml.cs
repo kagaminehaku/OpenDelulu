@@ -5,19 +5,17 @@ using OpenDelulu.ViewModels;
 
 namespace OpenDelulu.Views;
 
-/// <summary>The original oil menu; clicks go to <see cref="PlayViewModel.PressOilHud"/>, the handle drags the menu.</summary>
-public partial class OilHudView : UserControl
+/// <summary>An original in-game menu; clicks go to <see cref="DsHud.Press"/>, the handle drags the menu.</summary>
+public partial class DsHudView : UserControl
 {
     Point? _dragFrom;
 
-    public OilHudView()
+    public DsHudView()
     {
         InitializeComponent();
     }
 
-    PlayViewModel? Play => DataContext as PlayViewModel;
-
-    static bool IsHandle(HudQuad quad) => quad.Frame.EndsWith("Ido", System.StringComparison.Ordinal);
+    DsHud? Hud => DataContext as DsHud;
 
     void OnQuadEntered(object? sender, PointerEventArgs e)
     {
@@ -38,13 +36,13 @@ public partial class OilHudView : UserControl
         e.Handled = true;
         if (!e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
             return;
-        if (IsHandle(quad))
+        if (quad.IsHandle)
         {
             _dragFrom = e.GetPosition(Quads);
             e.Pointer.Capture(control);
             return;
         }
-        Play?.PressOilHud(quad);
+        Hud?.Press(quad);
     }
 
     void OnQuadMoved(object? sender, PointerEventArgs e)
@@ -52,7 +50,7 @@ public partial class OilHudView : UserControl
         if (_dragFrom is not { } from)
             return;
         var now = e.GetPosition(Quads);
-        Play?.MoveOilHud(now.X - from.X, now.Y - from.Y);
+        Hud?.Move(now.X - from.X, now.Y - from.Y);
         _dragFrom = now;
     }
 

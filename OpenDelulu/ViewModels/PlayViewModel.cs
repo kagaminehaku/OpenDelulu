@@ -17,6 +17,7 @@ using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
 using OpenDelulu.Engine.Game;
+using OpenDelulu.Engine.Hud;
 using OpenDelulu.Engine.Oil;
 using OpenDelulu.Engine.Script;
 using OpenDelulu.Engine.Stages;
@@ -275,6 +276,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     void Leave()
     {
         StopOil(restore: false);
+        HideDateHud();
         Dialogue.Hide();
         AudioSystem.Shared.StopMusic();
         Scene = null;
@@ -340,6 +342,8 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (_girl is not { } girl || _stage is null || IsBusy)
             return;
         IsBusy = true;
+        HideDateHud();
+        DsMenu? hudMenu = null;
         Dialogue.ShowMenu(T("oil.loading"), []);
         StopOil(restore: false);
         try
@@ -348,11 +352,12 @@ public sealed partial class PlayViewModel : ViewModelBase
             var session = await Task.Run(() =>
             {
                 _voices ??= new VoiceLibrary(_fs);
-                PrepareOilHud();
+                hudMenu = LoadOilHudMenu();
                 return OilSession.Start(_fs, _assembler, girl, pose, level, _voices, AudioSystem.Shared);
             });
             if (!ReferenceEquals(girl, _girl))
                 return;
+            CreateOilHud(hudMenu);
             session.Attach();
             session.Refused += _ => ShowStatus(F("oil.refused", CharacterDatabase.NameOf(girl.Girl.Id)), seconds: 3);
             session.ActionsOffered += OfferActions;
@@ -441,7 +446,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             ShowMenu();
             return;
         }
-        if (_oilHud is not null)
+        if (OilHud is not null)
         {
             // The original menu (ds01_04) replaces the text menu.
             Dialogue.Hide();
@@ -492,9 +497,14 @@ public sealed partial class PlayViewModel : ViewModelBase
     /// <summary>The original's oil keys: Z pour, X hand, A / S previous / next oil. True when used.</summary>
     public bool HandleOilKey(Avalonia.Input.Key key)
     {
+        if (key == Avalonia.Input.Key.Tab && InGame)
+        {
+            ToggleHud();
+            return true;
+        }
         if (_oil is null)
             return false;
-        if (_oilHud is not null)
+        if (OilHud is not null)
         {
             // The original's keys as printed on the menu: A / S oil, Z / X tool; Tab brings a closed menu back.
             switch (key)
@@ -504,9 +514,6 @@ public sealed partial class PlayViewModel : ViewModelBase
                     return true;
                 case Avalonia.Input.Key.Z or Avalonia.Input.Key.X:
                     ChooseHudTool(_oilHudTool + (key == Avalonia.Input.Key.Z ? -1 : 1));
-                    return true;
-                case Avalonia.Input.Key.Tab:
-                    if (IsOilHudVisible) { IsOilHudClosed = true; IsOilHudVisible = false; } else ReopenOilHud();
                     return true;
                 default:
                     return false;
@@ -628,6 +635,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     {
         if (_girl is null)
             return;
+        HideDateHud();
         if (HasOriginalWardrobe)
         {
             OpenWardrobe();
@@ -682,6 +690,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     {
         if (_girl is null)
             return;
+        HideDateHud();
         var options = _girl.Girl.DateActivities
             .Select(a => (ActivityName(a.Number), (Action)(() => { StartActivity(a); ShowMenu(); })))
             .ToList();
@@ -752,6 +761,7 @@ public sealed partial class PlayViewModel : ViewModelBase
 
     void RunEvent(EventKind kind, Action then)
     {
+        HideDateHud();
         var girl = _girl!.Girl.Id;
         if (GameEvents.Find(_library, girl, Progress.Intimacy, kind) is { } script)
         {
@@ -778,21 +788,49 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             (T("play.talk"), () => RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu)),
             (T("play.date"), ShowActivities),
-            (T("play.oil"), ShowOilPoses),
-            (T("play.changeSwimsuit"), ShowSwimsuits),
-            (T("play.move"), () => { _point++; PlaceGirl(); ShowMenu(); }),
         };
-        int maxLevel = GameEvents.Levels(_library, girl).DefaultIfEmpty(1).Max();
-        if (progress.Intimacy < maxLevel && GameEvents.Find(_library, girl, progress.Intimacy, EventKind.LeadIn) is not null)
-            options.Add((F("play.nextLevel", progress.Intimacy + 1), () => RunEvent(EventKind.LeadIn, () =>
-            {
-                // The H scene that follows the lead-in is not implemented yet; the level still goes up.
-                progress.LevelUp();
-                _progress.Save(ProgressPath);
-                Meet();
-            })));
-        options.Add((T("play.goodbye"), () => Confirm(QuestionEndDate, "confirm.endDate",
-            () => RunEvent(EventKind.Parting, Leave), ShowMenu)));
+        // The original date menu (ds01_03) has clothes, oil, H and goodbye; the text menu keeps the rest.
+        var hud = EnsureDateHud();
+        if (hud is null)
+        {
+            options.Add((T("play.oil"), ShowOilPoses));
+            options.Add((T("play.changeSwimsuit"), ShowSwimsuits));
+        }
+        options.Add((T("play.move"), () => { _point++; PlaceGirl(); ShowMenu(); }));
+        if (hud is null)
+        {
+            if (CanLeadIn)
+                options.Add((F("play.nextLevel", progress.Intimacy + 1), LeadIn));
+            options.Add((T("play.goodbye"), Goodbye));
+        }
         Dialogue.ShowMenu(F("play.menu", CharacterDatabase.NameOf(girl), progress.Intimacy), options);
+        hud?.Show();
     }
+
+    /// <summary>Her level has a lead-in to the next one (an H scene from level 2 on).</summary>
+    bool CanLeadIn
+    {
+        get
+        {
+            if (_girl is null)
+                return false;
+            int girl = _girl.Girl.Id;
+            int maxLevel = GameEvents.Levels(_library, girl).DefaultIfEmpty(1).Max();
+            return Progress.Intimacy < maxLevel && GameEvents.Find(_library, girl, Progress.Intimacy, EventKind.LeadIn) is not null;
+        }
+    }
+
+    void LeadIn()
+    {
+        var progress = Progress;
+        RunEvent(EventKind.LeadIn, () =>
+        {
+            // The H scene that follows the lead-in is not implemented yet; the level still goes up.
+            progress.LevelUp();
+            _progress.Save(ProgressPath);
+            Meet();
+        });
+    }
+
+    void Goodbye() => Confirm(QuestionEndDate, "confirm.endDate", () => RunEvent(EventKind.Parting, Leave), ShowMenu);
 }
