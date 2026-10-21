@@ -202,7 +202,8 @@ public sealed partial class PlayViewModel : ViewModelBase
         int? keep = SelectedGirl?.Id;
         Girls = ids.Select(id => new GirlChoice(id, CharacterDatabase.NameOf(id), CurrentLevel(id))).ToList();
         OnPropertyChanged(nameof(Girls));
-        SelectedGirl = Girls.FirstOrDefault(g => g.Id == keep) ?? Girls.FirstOrDefault();
+        RefreshMapGirls();
+        SelectedGirl =Girls.FirstOrDefault(g => g.Id == keep) ?? Girls.FirstOrDefault();
     }
 
     /// <summary>The girl's saved level, raised to her first level with scripts (Fei starts at 5).</summary>

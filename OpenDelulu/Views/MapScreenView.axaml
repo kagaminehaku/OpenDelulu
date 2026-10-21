@@ -1,0 +1,93 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             x:Class="OpenDelulu.Views.MapScreenView"
+             x:DataType="vm:PlayViewModel">
+    <!-- The original island map (03_chrsel / 04_mapsel), drawn on its 1024x768 canvas and scaled to the view. -->
+    <Viewbox Stretch="Uniform">
+        <Canvas Width="1024" Height="768" ClipToBounds="True">
+            <Image Source="{Binding MapBackground}" Width="1024" Height="768" />
+
+            <!-- Step 1: the girls where they are. -->
+            <ItemsControl ItemsSource="{Binding MapGirls}" Width="1024" Height="768" IsVisible="{Binding !IsChoosingStage}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:MapGirl">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MapGirl">
+                        <Panel Width="80" Height="80" Background="Transparent" Cursor="Hand"
+                               PointerEntered="OnGirlEntered" PointerExited="OnGirlExited" PointerPressed="OnGirlPressed">
+                            <Image Source="{Binding $parent[UserControl].((vm:PlayViewModel)DataContext).MapRing}"
+                                   Width="96" Height="96" Margin="-8" IsVisible="{Binding IsHovered}" />
+                            <Image Source="{Binding Icon}" Width="80" Height="80" />
+                            <Image Source="{Binding Heart}" Width="32" Height="28" Margin="0,0,-10,-8"
+                                   HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Image Source="{Binding HoveredGirl.Profile}" Canvas.Left="16" Canvas.Top="560" Width="400" Height="184"
+                   IsVisible="{Binding !IsChoosingStage}" IsHitTestVisible="False" />
+
+            <!-- Step 2: the places; the outlined picture appears under the pointer. -->
+            <ItemsControl ItemsSource="{Binding MapStages}" Width="1024" Height="768" IsVisible="{Binding IsChoosingStage}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:MapStage">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MapStage">
+                        <Panel Background="Transparent" Cursor="Hand"
+                               PointerEntered="OnStageEntered" PointerExited="OnStageExited" PointerPressed="OnStagePressed">
+                            <Image Source="{Binding Highlight}" Stretch="None" IsVisible="{Binding IsHovered}" />
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Image Source="{Binding HoveredStage.Thumbnail}" Canvas.Left="728" Canvas.Top="544" Width="280" Height="208"
+                   IsVisible="{Binding IsChoosingStage}" IsHitTestVisible="False" />
+            <Image Source="{Binding MapCancel}" Canvas.Left="16" Canvas.Top="704" Width="112" Height="48" Cursor="Hand"
+                   IsVisible="{Binding IsChoosingStage}" PointerPressed="OnCancelPressed" />
+
+            <!-- Time of day. -->
+            <ItemsControl ItemsSource="{Binding MapTimes}" Width="460" Height="100">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:MapTime">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="12" />
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MapTime">
+                        <Border Width="80" Height="80" CornerRadius="8" Cursor="Hand" PointerPressed="OnTimePressed"
+                                Background="Transparent" BorderBrush="#FFFFD040"
+                                BorderThickness="{Binding IsSelected, Converter={x:Static vm:MapConverters.SelectedBorder}}">
+                            <Image Source="{Binding Icon}" Width="80" Height="80"
+                                   Opacity="{Binding IsSelected, Converter={x:Static vm:MapConverters.SelectedOpacity}}" />
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Canvas>
+    </Viewbox>
+</UserControl>
