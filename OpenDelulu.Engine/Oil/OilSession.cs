@@ -66,6 +66,7 @@ public sealed class OilSession
     OilTouchArea? _area;
     (int Start, int Loop, int Small, int Big, int Back)? _state;
     OilAction? _action;
+    bool _actionRunning;
     Prop? _actionHand;
     int _actionLocator = -1;
     OilTouchArea? _pending;
@@ -102,6 +103,12 @@ public sealed class OilSession
 
     /// <summary>Raised when she refuses a touch or oil there (for a message).</summary>
     public event Action<OilTouchArea>? Refused;
+
+    /// <summary>
+    /// Raised when an unlocked special area is pressed: the actions possible there (the original shows their buttons,
+    /// st00_01_*); start one with <see cref="StartAction"/>.
+    /// </summary>
+    public event Action<OilTouchArea, IReadOnlyList<OilAction>>? ActionsOffered;
 
     OilSession(Character girl, OilPose pose, AnimationPlayer body, OilTables tables, int level, VoiceLibrary? voices, AudioSystem? audio,
         Prop? rightHand, Prop? leftHand, IEnumerable<Prop> drips)
@@ -209,6 +216,12 @@ public sealed class OilSession
     /// <param name="up">The screen's up direction in world space (the hand's fingers point that way).</param>
     public bool Begin(in Ray ray, Vector3 up)
     {
+        // A press while an action runs stops it.
+        if (_actionRunning)
+        {
+            End();
+            return true;
+        }
         if (PickArea(ray) is not { } picked)
             return false;
         _touching = true;
@@ -260,7 +273,35 @@ public sealed class OilSession
         _area = null;
         _action = null;
         _actionHand = null;
+        _actionRunning = false;
         _pending = null;
+    }
+
+    /// <summary>Starts an lf01 action chosen from <see cref="ActionsOffered"/>; it runs until the next press.</summary>
+    public void StartAction(OilAction action)
+    {
+        End();
+        _touching = true;
+        _actionRunning = true;
+        _refused = false;
+        int start = action.GirlClip;
+        _state = (start, start + 1, start + 2, start + 3, start + 4);
+        Body.Play(start);
+        _nextReaction = 2.5 + _random.NextDouble() * 2.5;
+        StartHand(null, action);
+        _lastPoint = _point;
+    }
+
+    /// <summary>The actions of an lf01 group that fit her body type and what she wears, one per button.</summary>
+    public IReadOnlyList<OilAction> ActionsFor(int group)
+    {
+        var rows = _tables.Actions.Where(a => a.Group == group && a.HandClip > 0 && a.GirlClip > 0).ToList();
+        string type = $"{BodyType}体型";
+        if (rows.Any(a => a.Name.Contains("体型")))
+            rows = rows.Where(a => a.Name.Contains(type)).ToList();
+        // She still wears her swimsuit: no "without the top" or "nude" variants.
+        rows = rows.Where(a => !a.Name.Contains("ブラなし") && !a.Name.Contains("全裸")).ToList();
+        return rows.GroupBy(a => a.Button).Select(g => g.First()).ToList();
     }
 
     void HideHands()
@@ -304,6 +345,15 @@ public sealed class OilSession
             return;
         }
 
+        // Pressing an unlocked special area offers its actions instead of rubbing.
+        if (immediate && area.Unlocked && area.Special >= 0 && ActionsFor(area.Special) is { Count: > 0 } offered)
+        {
+            _touching = false;
+            HideHands();
+            ActionsOffered?.Invoke(area, offered);
+            return;
+        }
+
         var (state, action) = StateFor(area);
         if (_state != state)
         {
@@ -318,7 +368,7 @@ public sealed class OilSession
     }
 
     /// <summary>The hand for a touch: the right hand rubbing under the pointer, or the lf01 action's hand on its locator.</summary>
-    void StartHand(OilTouchArea area, OilAction? action)
+    void StartHand(OilTouchArea? area, OilAction? action)
     {
         HideHands();
         _action = action;
@@ -339,7 +389,7 @@ public sealed class OilSession
             }
             _action = null;
         }
-        _rightHand?.Animator.Body?.Play(area.HandClip > 0 ? area.HandClip : HandRubBody);
+        _rightHand?.Animator.Body?.Play(area is { HandClip: > 0 } ? area.HandClip : HandRubBody);
     }
 
     /// <summary>Plays a hand clip and holds the loop it leads to ("…(ル)"), as long as the touch lasts.</summary>
@@ -359,32 +409,11 @@ public sealed class OilSession
         player.Play(current?.Index ?? clip);
     }
 
-    /// <summary>
-    /// What she does while touched there: start, loop, small and big reaction, back to idle; for an unlocked special
-    /// area, the lf01 action matching her body type and outfit.
-    /// </summary>
-    ((int Start, int Loop, int Small, int Big, int Back) State, OilAction? Action) StateFor(OilTouchArea area)
+    /// <summary>What she does while rubbed there: start, loop, small and big reaction, back to idle.</summary>
+    static ((int Start, int Loop, int Small, int Big, int Back) State, OilAction? Action) StateFor(OilTouchArea area)
     {
-        if (area.Unlocked && area.Special >= 0 && FindAction(area.Special) is { GirlClip: > 0 } action)
-        {
-            int start = action.GirlClip;
-            return ((start, start + 1, start + 2, start + 3, start + 4), action);
-        }
         int wait = area.GirlClip > 0 ? area.GirlClip : 60;
         return ((wait, wait + 1, wait + 2, wait + 3, wait + 4), null);
-    }
-
-    OilAction? FindAction(int group)
-    {
-        var rows = _tables.Actions.Where(a => a.Group == group && a.HandClip > 0).ToList();
-        if (rows.Count == 0)
-            return null;
-        // She still wears her swimsuit: prefer this body type's "with the top" / "swimsuit" variant.
-        string type = $"{BodyType}体型";
-        return rows.FirstOrDefault(a => a.Name.Contains(type) && (a.Name.Contains("ブラあり") || a.Name.Contains("水着")))
-            ?? rows.FirstOrDefault(a => a.Name.Contains(type))
-            ?? rows.FirstOrDefault(a => a.Name.Contains("ブラあり") || a.Name.Contains("水着"))
-            ?? rows[0];
     }
 
     void Refuse(OilTouchArea area)

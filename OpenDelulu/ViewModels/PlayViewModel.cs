@@ -354,6 +354,7 @@ public sealed partial class PlayViewModel : ViewModelBase
                 return;
             session.Attach();
             session.Refused += _ => ShowStatus(F("oil.refused", CharacterDatabase.NameOf(girl.Girl.Id)), seconds: 3);
+            session.ActionsOffered += OfferActions;
             _oil = session;
             _activity = null;
             _prop = null;
@@ -384,6 +385,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (_oil is not { } oil)
             return;
         _oilTimer.Stop();
+        CancelOilActions();
         TouchHandler = null;
         oil.End();
         _oil = null;

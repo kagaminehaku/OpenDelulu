@@ -188,6 +188,7 @@
                         <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" TouchHandler="{Binding TouchHandler}" />
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                         <v:MapScreenView IsVisible="{Binding ShowMap}" />
+                        <v:OilActionsView IsVisible="{Binding IsChoosingAction}" />
                         <v:ConfirmView IsVisible="{Binding IsConfirming}" />
                         <!-- The game's movies (stage introductions): click to skip. -->
                         <Border Background="Black" IsVisible="{Binding IsMoviePlaying}" PointerPressed="OnMoviePressed">

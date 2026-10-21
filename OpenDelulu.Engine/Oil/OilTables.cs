@@ -112,7 +112,7 @@ public sealed class OilTables
             if (row.Length < 28 || !int.TryParse(row[0], out int n) || row[1] == "0" || !row[2].StartsWith("o01_", StringComparison.Ordinal))
                 continue;
             int Int(int column) => int.TryParse(row[column], NumberStyles.Integer, CultureInfo.InvariantCulture, out int v) ? v : 0;
-            actions.Add(new OilAction(n, row[1], row[2], row[3], Int(21), Int(22), Int(25)));
+            actions.Add(new OilAction(n, row[1], row[2], row[3], Int(21), Int(22), Int(25), Int(26)));
         }
 
         // Voices exist from level 2 on (the oil scene's first level); level 1 uses level 2's lines.
@@ -142,9 +142,11 @@ public sealed class OilTables
 /// types A/B/C, 26 pulling the top…), the girl's clip (109 kneading, 114 pulling the top, 119 pulling a nipple…; the
 /// loop, small and big reactions and the way back follow it) and the hand used (1 = te01, 2 = te02). Rows N*10+1..N*10+9
 /// belong to la01's special index N; their variants differ by body type (A/B/C体型) and what she wears
-/// (ブラあり with the top, ブラなし without, 全裸 nude). Columns 4..20 and 23..24 are not understood yet.
+/// (ブラあり with the top, ブラなし without, 全裸 nude). Column 26 is the action's button, st00_01_(N+1)
+/// (0 Stroke Gently, 1 Tug Bra, 2 Finger Nipple, 3 Under Suit, 5 Expose Tits, 9 Massage Ass, 10 Pull Outward…).
+/// Columns 4..20 and 23..24 are not understood yet.
 /// </summary>
-public sealed record OilAction(int Row, string Name, string Locator, string LeftLocator, int HandClip, int GirlClip, int Hand)
+public sealed record OilAction(int Row, string Name, string Locator, string LeftLocator, int HandClip, int GirlClip, int Hand, int Button = -1)
 {
     public int Group => (Row - 1) / 10;
 }
