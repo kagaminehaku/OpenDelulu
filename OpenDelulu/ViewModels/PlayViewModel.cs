@@ -348,6 +348,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             var session = await Task.Run(() =>
             {
                 _voices ??= new VoiceLibrary(_fs);
+                PrepareOilHud();
                 return OilSession.Start(_fs, _assembler, girl, pose, level, _voices, AudioSystem.Shared);
             });
             if (!ReferenceEquals(girl, _girl))
@@ -386,6 +387,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             return;
         _oilTimer.Stop();
         CancelOilActions();
+        HideOilHud();
         TouchHandler = null;
         oil.End();
         _oil = null;
@@ -439,6 +441,13 @@ public sealed partial class PlayViewModel : ViewModelBase
             ShowMenu();
             return;
         }
+        if (_oilHud is not null)
+        {
+            // The original menu (ds01_04) replaces the text menu.
+            Dialogue.Hide();
+            ShowOilHud();
+            return;
+        }
         var oil = _oil;
         bool pour = oil.Mode == OilMode.Pour;
         var options = new List<(string, Action)>
@@ -485,6 +494,24 @@ public sealed partial class PlayViewModel : ViewModelBase
     {
         if (_oil is null)
             return false;
+        if (_oilHud is not null)
+        {
+            // The original's keys as printed on the menu: A / S oil, Z / X tool; Tab brings a closed menu back.
+            switch (key)
+            {
+                case Avalonia.Input.Key.A or Avalonia.Input.Key.S:
+                    ChooseHudOil(_oilHudOil + (key == Avalonia.Input.Key.A ? -1 : 1));
+                    return true;
+                case Avalonia.Input.Key.Z or Avalonia.Input.Key.X:
+                    ChooseHudTool(_oilHudTool + (key == Avalonia.Input.Key.Z ? -1 : 1));
+                    return true;
+                case Avalonia.Input.Key.Tab:
+                    if (IsOilHudVisible) { IsOilHudClosed = true; IsOilHudVisible = false; } else ReopenOilHud();
+                    return true;
+                default:
+                    return false;
+            }
+        }
         switch (key)
         {
             case Avalonia.Input.Key.Z:
@@ -511,6 +538,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         double seconds = Math.Min(0.1, _oilClock.Elapsed.TotalSeconds);
         _oilClock.Restart();
         oil.Update(seconds);
+        TickOilHud(seconds);
         SyncHand();
         if (Environment.TickCount64 >= _statusHoldUntil)
             Status = F("oil.status", (int)MathF.Round(oil.Coating.Coverage * 100));

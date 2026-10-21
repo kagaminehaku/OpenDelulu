@@ -183,6 +183,8 @@
                         </StackPanel>
                         <Button Content="{l:Tr play.leave}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Command="{Binding RequestLeaveCommand}" IsVisible="{Binding InGame}" />
+                        <Button Content="{l:Tr oil.showMenu}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Command="{Binding ReopenOilHudCommand}" IsVisible="{Binding IsOilHudClosed}" />
                         <Button Content="{l:Tr play.album}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Command="{Binding OpenAlbumCommand}" IsVisible="{Binding !InGame}"
                                 IsEnabled="{Binding HasOriginalAlbum}" />
@@ -195,6 +197,7 @@
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                         <v:MapScreenView IsVisible="{Binding ShowMap}" />
                         <v:AlbumView IsVisible="{Binding IsAlbumOpen}" />
+                        <v:OilHudView IsVisible="{Binding IsOilHudVisible}" />
                         <v:OilActionsView IsVisible="{Binding IsChoosingAction}" />
                         <v:WardrobeView IsVisible="{Binding IsWardrobeOpen}" />
                         <v:ConfirmView IsVisible="{Binding IsConfirming}" />

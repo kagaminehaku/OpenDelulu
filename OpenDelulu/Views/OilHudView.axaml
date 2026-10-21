@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             x:Class="OpenDelulu.Views.OilHudView"
+             x:DataType="vm:PlayViewModel">
+    <!-- The original oil menu (ds01_04) over the 3D view, in 1024x768 like the other overlays. Only the quads take the
+         pointer, so rubbing and turning the camera work everywhere else. -->
+    <Viewbox Stretch="Uniform">
+        <ItemsControl x:Name="Quads" ItemsSource="{Binding OilHudQuads}" Width="1024" Height="768" ClipToBounds="False">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Canvas />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.Styles>
+                <Style Selector="ContentPresenter" x:DataType="vm:HudQuad">
+                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:HudQuad">
+                    <Panel Width="{Binding W}" Height="{Binding H}" IsVisible="{Binding IsVisible}"
+                           Background="Transparent" IsHitTestVisible="{Binding IsHitTestable}" Cursor="Hand"
+                           PointerEntered="OnQuadEntered" PointerExited="OnQuadExited" PointerPressed="OnQuadPressed"
+                           PointerMoved="OnQuadMoved" PointerReleased="OnQuadReleased">
+                        <Image Source="{Binding Image}" Stretch="Fill" />
+                        <Image Source="{Binding HoverImage}" Stretch="Fill" Opacity="{Binding HoverOpacity}" />
+                    </Panel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Viewbox>
+</UserControl>
