@@ -20,13 +20,18 @@ public sealed class UiTextures(GameFileSystem fs)
 
     readonly Dictionary<string, Bitmap?> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public Bitmap? Get(string file)
+    public Bitmap? Get(string file) => Get(file, Archives);
+
+    /// <summary>A texture a table points at (archive and file), e.g. swimsuit cards added by the Bonus Disc or mods.</summary>
+    public Bitmap? Get(string archive, string file) => Get(file, [archive, .. Archives]);
+
+    Bitmap? Get(string file, IEnumerable<string> archives)
     {
         if (_cache.TryGetValue(file, out var cached))
             return cached;
         Bitmap? bitmap = null;
         string ema = Path.ChangeExtension(file, ".ema");
-        foreach (string archive in Archives)
+        foreach (string archive in archives)
         {
             if (!fs.HasArchive(archive))
                 continue;

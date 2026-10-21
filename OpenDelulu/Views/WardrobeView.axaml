@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             x:Class="OpenDelulu.Views.WardrobeView"
+             x:DataType="vm:PlayViewModel">
+    <!-- The original swimsuit screen (06_kigae) on the right of 1024x768: Suits panel, category tabs, ten cards, pages. -->
+    <Viewbox Stretch="Uniform">
+        <Canvas Width="1024" Height="768">
+            <Image Source="{Binding WardrobePanel}" Canvas.Left="496" Canvas.Top="40" Width="512" Height="688" />
+            <Image Source="{Binding SelectedCategoryTab}" Canvas.Left="482" Canvas.Top="{Binding SelectedCategoryTop}"
+                   Width="64" Height="136" IsHitTestVisible="False" />
+            <!-- Category tabs and page arrows: hit areas over the panel picture. -->
+            <Panel Canvas.Left="490" Canvas.Top="100" Width="44" Height="480" Background="Transparent" Cursor="Hand"
+                   PointerPressed="OnCategoryPressed" />
+            <Panel Canvas.Left="976" Canvas.Top="216" Width="32" Height="80" Background="Transparent" Cursor="Hand"
+                   PointerPressed="OnPageUpPressed" />
+            <Panel Canvas.Left="976" Canvas.Top="448" Width="32" Height="80" Background="Transparent" Cursor="Hand"
+                   PointerPressed="OnPageDownPressed" />
+            <TextBlock Text="{Binding WardrobePageText}" Canvas.Left="962" Canvas.Top="404" Width="60" FontSize="14"
+                       FontWeight="Bold" Foreground="#FF2060C0" TextAlignment="Center" IsHitTestVisible="False" />
+
+            <ItemsControl ItemsSource="{Binding SwimsuitCards}" Width="1024" Height="768">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:SwimsuitCard">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SwimsuitCard">
+                        <Panel Width="216" Height="112" Background="Transparent" Cursor="Hand" PointerPressed="OnCardPressed"
+                               ToolTip.Tip="{Binding Swimsuit.Name}">
+                            <Image Source="{Binding Image}" Stretch="Fill" />
+                            <Border BorderBrush="#FFFF3080" BorderThickness="4" CornerRadius="6" IsVisible="{Binding IsWorn}" />
+                            <TextBlock Text="{Binding Swimsuit.Name}" FontSize="14" Foreground="#FF603000" TextWrapping="Wrap"
+                                       Margin="8" VerticalAlignment="Center"
+                                       IsVisible="{Binding Image, Converter={x:Static ObjectConverters.IsNull}}" />
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Image Source="{Binding WardrobeOk}" Canvas.Left="372" Canvas.Top="660" Width="112" Height="48" Cursor="Hand"
+                   PointerPressed="OnOkPressed" />
+            <Image Source="{Binding WardrobeCancel}" Canvas.Left="372" Canvas.Top="712" Width="112" Height="48" Cursor="Hand"
+                   PointerPressed="OnCancelPressed" />
+        </Canvas>
+    </Viewbox>
+</UserControl>

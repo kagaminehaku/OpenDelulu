@@ -23,7 +23,13 @@ public sealed record PartRef(AssetRef Model, string ParentFrame, string AttachFr
 
 /// <summary>A swimsuit from the per-girl table lbNN.</summary>
 /// <param name="Cut">1-based body variant (boXX_NN.xx) whose meshes match this swimsuit's UV layout.</param>
-public sealed record SwimsuitInfo(int Row, string Name, AssetRef Texture, AssetRef? TanTexture, int Cut, AssetRef? Icon);
+/// <param name="Category">
+/// Tab of the original swimsuit screen, from the card's group (st02_48 one-piece, 49 separates, 50 bikini, 52 special):
+/// 1..4, 0 without a card.
+/// </param>
+/// <param name="Hearts">Hearts on the card (lbNN column 59, 1..5).</param>
+public sealed record SwimsuitInfo(int Row, string Name, AssetRef Texture, AssetRef? TanTexture, int Cut, AssetRef? Icon,
+    int Category = 0, int Hearts = 0);
 
 /// <summary>
 /// A date activity (ld01 rows 151..171): the girl's animation (dtBB_NN.xa for her body type) and an optional prop
@@ -86,6 +92,7 @@ public sealed class CharacterDatabase
     const int SwimsuitTanColumn = 4;
     const int SwimsuitGroupColumn = 8;
     const int SwimsuitIconColumn = 61;
+    const int SwimsuitHeartsColumn = 59;
 
     public string TableArchive { get; }
     public IReadOnlyList<GirlInfo> Girls { get; }
@@ -210,6 +217,12 @@ public sealed class CharacterDatabase
         return list;
     }
 
+    /// <summary>"st02_GG_…": cards 48 one-piece, 49 separates, 50 bikini, 52 special (51 is not used).</summary>
+    static int CardCategory(AssetRef? icon) =>
+        icon is { } i && i.File.Length > 7 && int.TryParse(i.File.AsSpan(5, 2), out int group)
+            ? group switch { 48 => 1, 49 => 2, 50 => 3, >= 51 and <= 52 => 4, _ => 0 }
+            : 0;
+
     static List<SwimsuitInfo> ReadSwimsuits(LstTable? table, int bodyCount)
     {
         var list = new List<SwimsuitInfo>();
@@ -223,7 +236,9 @@ public sealed class CharacterDatabase
                 continue;
             int cut = Math.Clamp(InferCut(Cell(row, SwimsuitGroupColumn)), 1, bodyCount);
             list.Add(new SwimsuitInfo(number, Cell(row, SwimsuitNameColumn), texture,
-                AssetRef.FromRow(row, SwimsuitTanColumn), cut, AssetRef.FromRow(row, SwimsuitIconColumn)));
+                AssetRef.FromRow(row, SwimsuitTanColumn), cut, AssetRef.FromRow(row, SwimsuitIconColumn),
+                CardCategory(AssetRef.FromRow(row, SwimsuitIconColumn)),
+                int.TryParse(Cell(row, SwimsuitHeartsColumn), out int hearts) ? hearts : 0));
         }
         return list;
     }

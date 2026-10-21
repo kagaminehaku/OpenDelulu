@@ -600,6 +600,11 @@ public sealed partial class PlayViewModel : ViewModelBase
     {
         if (_girl is null)
             return;
+        if (HasOriginalWardrobe)
+        {
+            OpenWardrobe();
+            return;
+        }
         var options = _girl.Girl.Swimsuits
             .Select(s => (s.Name, (Action)(() => _ = ChangeSwimsuitAsync(s.Row))))
             .ToList();
@@ -608,12 +613,14 @@ public sealed partial class PlayViewModel : ViewModelBase
     }
 
     /// <summary>Rebuilds the girl in another swimsuit, keeping where she is and what she does.</summary>
-    async Task ChangeSwimsuitAsync(int row)
+    /// <param name="showMenu">False while trying swimsuits on in the original screen (it stays open).</param>
+    async Task ChangeSwimsuitAsync(int row, bool showMenu = true)
     {
         if (_girl is not { } current || IsBusy)
             return;
         IsBusy = true;
-        Dialogue.ShowMenu(T("swimsuit.changing"), []);
+        if (showMenu)
+            Dialogue.ShowMenu(T("swimsuit.changing"), []);
         try
         {
             var girl = await Task.Run(() => _assembler.Build(new CharacterSpec(current.Girl.Id, SwimsuitRow: row)));
@@ -636,7 +643,8 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             IsBusy = false;
         }
-        ShowMenu();
+        if (showMenu)
+            ShowMenu();
     }
 
     static string ActivityName(int number) =>

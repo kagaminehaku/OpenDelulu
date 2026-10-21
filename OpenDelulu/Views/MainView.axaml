@@ -189,6 +189,7 @@
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                         <v:MapScreenView IsVisible="{Binding ShowMap}" />
                         <v:OilActionsView IsVisible="{Binding IsChoosingAction}" />
+                        <v:WardrobeView IsVisible="{Binding IsWardrobeOpen}" />
                         <v:ConfirmView IsVisible="{Binding IsConfirming}" />
                         <!-- The game's movies (stage introductions): click to skip. -->
                         <Border Background="Black" IsVisible="{Binding IsMoviePlaying}" PointerPressed="OnMoviePressed">
