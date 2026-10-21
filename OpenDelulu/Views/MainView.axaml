@@ -200,6 +200,9 @@
                         <Panel IsVisible="{Binding DateHud.IsVisible, FallbackValue=False}">
                             <v:DsHudView DataContext="{Binding DateHud}" />
                         </Panel>
+                        <Panel IsVisible="{Binding CameraHud.IsVisible, FallbackValue=False}">
+                            <v:DsHudView DataContext="{Binding CameraHud}" />
+                        </Panel>
                         <Panel IsVisible="{Binding OilHud.IsVisible, FallbackValue=False}">
                             <v:DsHudView DataContext="{Binding OilHud}" />
                         </Panel>

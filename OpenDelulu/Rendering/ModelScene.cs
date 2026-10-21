@@ -12,8 +12,18 @@ namespace OpenDelulu.Rendering;
 /// <param name="FacingYaw">Where the subject faces (radians about Y, 0 = +Z); the default view is from the front.</param>
 public readonly record struct CameraSubject(Vector3 Center, float Radius, Vector3 Aim, float SceneRadius, float FacingYaw = 0);
 
-/// <summary>A camera position relative to the subject: pitch (radians), zoom (1 = whole model), yaw offset from her front.</summary>
-public readonly record struct CameraView(float Pitch, float Zoom, float Yaw = 0);
+/// <summary>
+/// A camera position relative to the subject: pitch (radians), zoom (1 = whole model), yaw offset from her front, and
+/// optionally the joints to aim at (their average; e.g. the breasts or the crotch) instead of her face.
+/// </summary>
+public readonly record struct CameraView(float Pitch, float Zoom, float Yaw = 0, string[]? Aim = null)
+{
+    /// <summary>The original's camera points (ds01_02 menu, keys W/E/R and the back view): face, chest, crotch, behind.</summary>
+    public static readonly CameraView Face = new(0.05f, 0.25f);
+    public static readonly CameraView Chest = new(0.05f, 0.3f, 0, ["o01_J_Mune01_L", "o01_J_Mune01_R"]);
+    public static readonly CameraView Crotch = new(-0.2f, 0.3f, 0, ["o01_J_Kokan01"]);
+    public static readonly CameraView Behind = new(0.1f, 0.4f, MathF.PI, ["o01_J_Siri01_L", "o01_J_Siri01_R"]);
+}
 
 /// <summary>
 /// What the <see cref="ModelViewer"/> draws: one or more models (e.g. a stage and a character standing on it),
@@ -134,7 +144,15 @@ public sealed class ModelScene
     /// <summary>Asks the viewer to move its camera to a view (null = back to the scene's default view).</summary>
     public event Action<CameraView?>? CameraRequested;
 
-    public void RequestCamera(CameraView? view) => CameraRequested?.Invoke(view);
+    public void RequestCamera(CameraView? view)
+    {
+        _aimFrames = view?.Aim is { } joints && _objects[_subject].Animator is { } animator
+            ? joints.Select(animator.Model.Rig.Find).Where(i => i >= 0).ToArray()
+            : null;
+        CameraRequested?.Invoke(view);
+    }
+
+    int[]? _aimFrames;
 
     /// <summary>Added to the subject's heading for the default view (e.g. pi/2 = from her side).</summary>
     public float CameraYawOffset { get; set; }
@@ -200,7 +218,9 @@ public sealed class ModelScene
             var placement = o.Animator?.Placement ?? Matrix4x4.Identity;
             var model = o.Model;
             var center = (FrameLivePose ? _liveCenter : null) ?? Vector3.Transform(model.Center, placement);
-            var aim = FrameLivePose ? center : o.Animator?.Focus
+            var aim = _aimFrames is { Length: > 0 } frames && o.Animator is { } animator
+                ? frames.Aggregate(Vector3.Zero, (sum, i) => sum + animator.WorldOf(i).Translation) / frames.Length
+                : FrameLivePose ? center : o.Animator?.Focus
                 ?? Vector3.Transform(model.FocusPoint ?? model.Center + new Vector3(0, (model.BoundsMax.Y - model.Center.Y) * 0.85f, 0), placement);
             float sceneRadius = _objects.Max(x => Vector3.Distance(center, Vector3.Transform(x.Model.Center, x.Animator?.Placement ?? Matrix4x4.Identity)) + x.Model.Radius);
             var forward = Vector3.TransformNormal(Vector3.UnitZ, placement);

@@ -766,11 +766,13 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (GameEvents.Find(_library, girl, Progress.Intimacy, kind) is { } script)
         {
             // Talking: face to face, close enough to see her expressions; back to the scene's view afterwards.
-            Scene?.RequestCamera(new CameraView(Pitch: 0.05f, Zoom: 0.42f));
+            if (AutoCamera)
+                Scene?.RequestCamera(new CameraView(Pitch: 0.05f, Zoom: 0.42f));
             Dialogue.Intimacy = Progress.Intimacy;
             Dialogue.Run(script, () =>
             {
-                Scene?.RequestCamera(null);
+                if (AutoCamera)
+                    Scene?.RequestCamera(null);
                 then();
             });
         }
@@ -805,6 +807,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         }
         Dialogue.ShowMenu(F("play.menu", CharacterDatabase.NameOf(girl), progress.Intimacy), options);
         hud?.Show();
+        ShowCameraHud();
     }
 
     /// <summary>Her level has a lead-in to the next one (an H scene from level 2 on).</summary>

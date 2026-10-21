@@ -149,7 +149,7 @@
   "settings.button": "Sound & keys",
   "settings.config": "Game CONFIG…",
   "settings.effects": "Effects",
-  "settings.keyList": "Space / Enter: next line\n1 – 9: pick a choice\nY / N: answer a question\nM: mute / unmute\nEsc or Pause: emergency screen (any key returns)\nF11: full screen\n\nCamera: Q default view · W face · T from behind · Home / End zoom · arrows and Page Up / Down turn and tilt\nSun oil: Z / X previous / next tool (bottle pours; hand, brush, sponge rub) · A / S previous / next oil · Tab hide / show the date or oil menu",
+  "settings.keyList": "Space / Enter: next line\n1 – 9: pick a choice\nY / N: answer a question\nM: mute / unmute\nEsc or Pause: emergency screen (any key returns)\nF11: full screen\n\nCamera: Q default view · W face · E bust · R waist · T rear · Home / End zoom · arrows and Page Up / Down turn and tilt\nSun oil: Z / X previous / next tool (bottle pours; hand, brush, sponge rub) · A / S previous / next oil · Tab hide / show the date or oil menu",
   "settings.keys": "Keyboard",
   "settings.master": "Master volume",
   "settings.music": "Music",

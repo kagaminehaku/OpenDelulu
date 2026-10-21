@@ -79,6 +79,9 @@ public sealed partial class DsHud : ObservableObject
     /// <summary>The unfolded state as a clip name without suffix ("シーン表示" when nothing is open).</summary>
     public Func<string> State { get; set; } = () => "シーン表示";
 
+    /// <summary>The clip of the folded menu (シーン最小化; カメラ最小化 for the camera menu).</summary>
+    public string MinimizedState { get; set; } = "シーン最小化";
+
     /// <summary>Picture for a quad key (null = the embedded texture).</summary>
     public Func<string, Bitmap?>? ImageFor { get; set; }
 
@@ -123,7 +126,7 @@ public sealed partial class DsHud : ObservableObject
     /// <summary>Plays the clip of the current state (A..D variant when the menu has them).</summary>
     public void Play(bool instant)
     {
-        string state = IsMinimized ? "シーン最小化" : State();
+        string state = IsMinimized ? MinimizedState : State();
         if (!_menu.Play(state + _variant, instant))
             _menu.Play(state, instant);
         Refresh();

@@ -100,6 +100,7 @@ public sealed partial class PlayViewModel
             _oil.OilKind = Math.Min(OilHudDrip[_oilHudOil], _oil.OilKinds - 1);
         _oilHudGroup = 0;
         hud.Show();
+        ShowCameraHud();
     }
 
     void HideOilHud() => OilHud?.Hide();
@@ -158,14 +159,24 @@ public sealed partial class PlayViewModel
     }
 
     /// <summary>A menu closed with its × (the side panel offers it again).</summary>
-    public bool IsHudClosed => OilHud is { IsClosed: true } || DateHud is { IsClosed: true };
+    public bool IsHudClosed => OilHud is { IsClosed: true } || DateHud is { IsClosed: true } || CameraHud is { IsClosed: true };
 
-    /// <summary>Tab, or the side panel button: hides the current original menu or brings it back.</summary>
+    /// <summary>Tab, or the side panel button: brings closed menus back, or else hides the current ones.</summary>
     [RelayCommand]
     public void ToggleHud()
     {
-        var hud = _oil is not null ? OilHud : InGame ? DateHud : null;
-        hud?.ToggleClosed();
+        var main = _oil is not null ? OilHud : InGame ? DateHud : null;
+        if (IsHudClosed)
+        {
+            foreach (var hud in new[] { main, CameraHud })
+                if (hud is { IsClosed: true })
+                    hud.Reopen();
+        }
+        else
+        {
+            main?.ToggleClosed();
+            CameraHud?.ToggleClosed();
+        }
         OnPropertyChanged(nameof(IsHudClosed));
     }
 }

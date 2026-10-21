@@ -39,7 +39,12 @@ public sealed partial class PlayViewModel
         return DateHud;
     }
 
-    void HideDateHud() => DateHud?.Hide();
+    /// <summary>Hides the date menu and the camera menu (conversations, other screens, leaving).</summary>
+    void HideDateHud()
+    {
+        DateHud?.Hide();
+        CameraHud?.Hide();
+    }
 
     void PressDateHud(string key)
     {

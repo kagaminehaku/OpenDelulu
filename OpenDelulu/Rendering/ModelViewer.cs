@@ -252,7 +252,7 @@ public sealed class ModelViewer : Border
     }
 
     /// <summary>
-    /// Camera keys of the original (its keyboard chart): Q default view, W close-up on the face, T from behind,
+    /// Camera keys of the original (its keyboard chart): Q default view, W face, E bust, R waist, T rear,
     /// Home/End zoom, arrows turn around and tilt, Page Up/Down tilt.
     /// </summary>
     void OnCameraKey(object? sender, KeyEventArgs e)
@@ -263,19 +263,19 @@ public sealed class ModelViewer : Border
         switch (e.Key)
         {
             case Key.Q:
-                _camera.Reset();
-                if (Scene.CameraPitch is { } pitch)
-                    _camera.Pitch = pitch;
-                if (Scene.CameraZoom is { } zoom)
-                    _camera.Zoom = zoom;
+                Scene.RequestCamera(null);
                 break;
             case Key.W:
-                _camera.Yaw = OrbitCamera.DefaultYaw;
-                _camera.Pitch = 0.05f;
-                _camera.Zoom = 0.25f;
+                Scene.RequestCamera(CameraView.Face);
+                break;
+            case Key.E:
+                Scene.RequestCamera(CameraView.Chest);
+                break;
+            case Key.R:
+                Scene.RequestCamera(CameraView.Crotch);
                 break;
             case Key.T:
-                _camera.Yaw += MathF.PI;
+                Scene.RequestCamera(CameraView.Behind);
                 break;
             case Key.Home:
                 _camera.ZoomBy(0.88f);
