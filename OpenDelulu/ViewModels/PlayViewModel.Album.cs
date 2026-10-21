@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using OpenDelulu.Engine.Game;
 
 namespace OpenDelulu.ViewModels;
 
@@ -13,13 +15,13 @@ public sealed record AlbumSlot(int Index, double X, double Y, bool IsLocked, Bit
 /// The original CG album (54_eventcg, st03): eight tabs (seven girls and "Ecchi"), a 992×648 page per tab with the
 /// thumbnails painted in, a 3×3 grid of 192×144 slots and Cancel. Clicking an unlocked slot shows the picture full
 /// screen (55_eventcgdraw); a click goes back. Layout and tab order are the exe's (sprite tables at 0x4C91D2,
-/// hit areas at 0x4CA966, flags read at 0x4CBD90).
+/// hit areas at 0x4CA966, flags read at 0x4CBD90). Pictures unlocked in the original game's saves count too.
 /// </summary>
 public sealed partial class PlayViewModel
 {
     /// <summary>Girl of each tab; the eighth tab (Ecchi) holds one H picture per girl in <see cref="AlbumHGirls"/>.</summary>
     static readonly int[] AlbumGirls = [1, 3, 4, 5, 6, 2, 11];
-    static readonly int[] AlbumHGirls = [1, 3, 4, 5, 6, 2, 11, 12];
+    static readonly int[] AlbumHGirls = OriginalSaves.HPictureGirls;
     const int AlbumTabs = 8, PicturesPerGirl = 4;
     const double AlbumTabLeft = 16, AlbumTabTop = 48, AlbumTabWidth = 96, AlbumTabHeight = 48;
 
@@ -44,6 +46,9 @@ public sealed partial class PlayViewModel
 
     public ObservableCollection<AlbumSlot> AlbumSlots { get; } = [];
 
+    /// <summary>Pictures unlocked in the original saves, read when the album opens.</summary>
+    Dictionary<int, HashSet<int>> _originalAlbum = [];
+
     public Bitmap? AlbumPage => Ui.Get($"st03_02_{AlbumTab + 1:00}_02_00.tga");
     public Bitmap? AlbumHoverTabImage => AlbumHoverTab < 0 ? null : Ui.Get($"st03_02_{AlbumHoverTab + 1:00}_00_00.tga");
     public double AlbumHoverTabLeft => AlbumTabLeft + Math.Max(0, AlbumHoverTab) * AlbumTabWidth;
@@ -55,6 +60,7 @@ public sealed partial class PlayViewModel
             return;
         AlbumTab = 0;
         AlbumPicture = null;
+        _originalAlbum = OriginalSaves.AlbumPictures(_fs.Install);
         FillAlbum();
         IsAlbumOpen = true;
     }
@@ -100,7 +106,8 @@ public sealed partial class PlayViewModel
     bool IsAlbumPictureUnlocked(int tab, int slot)
     {
         var (girl, picture) = tab < AlbumGirls.Length ? (AlbumGirls[tab], slot + 1) : (AlbumHGirls[slot], 5);
-        return _progress.Girls.TryGetValue(girl, out var progress) && progress.AlbumPictures.Contains(picture);
+        return _progress.Girls.TryGetValue(girl, out var progress) && progress.AlbumPictures.Contains(picture)
+            || _originalAlbum.TryGetValue(girl, out var original) && original.Contains(picture);
     }
 
     void FillAlbum()

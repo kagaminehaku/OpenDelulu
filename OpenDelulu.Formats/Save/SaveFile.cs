@@ -63,6 +63,18 @@ public sealed class SaveFile
 
     public SaveField? this[string name] => Fields.FirstOrDefault(f => f.Name == name);
 
+    /// <summary>
+    /// Item list only: byte <paramref name="index"/> of a girl's 20-byte record at member +0x18 + 20 × (girl − 1), inside
+    /// the 400-byte block at +0x004. Bytes 1..4 are her album pictures; girl 12's bytes 1..8 are the "Ecchi" tab's.
+    /// </summary>
+    public bool GirlFlag(int girl, int index)
+    {
+        if (Kind != SaveKind.ItemList || this["+0x004"]?.Data is not { } block || girl < 1 || index is < 0 or >= 20)
+            return false;
+        int at = 0x18 + 20 * (girl - 1) + index - 0x004;
+        return at < block.Length && block[at] != 0;
+    }
+
     public static SaveKind DetectKind(string fileName)
     {
         var m = Regex.Match(Path.GetFileName(fileName), @"^save(\d)(\d\d)(\d)\.sav$", RegexOptions.IgnoreCase);
