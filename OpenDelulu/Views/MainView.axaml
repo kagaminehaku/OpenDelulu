@@ -179,7 +179,7 @@
                                     Command="{Binding EnterCommand}" />
                         </StackPanel>
                         <Button Content="{l:Tr play.leave}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                Command="{Binding LeaveCommand}" IsVisible="{Binding InGame}" />
+                                Command="{Binding RequestLeaveCommand}" IsVisible="{Binding InGame}" />
                         <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
                         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.8" />
                         <TextBlock Text="{Binding Dialogue.Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
@@ -188,6 +188,7 @@
                         <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" TouchHandler="{Binding TouchHandler}" />
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                         <v:MapScreenView IsVisible="{Binding ShowMap}" />
+                        <v:ConfirmView IsVisible="{Binding IsConfirming}" />
                         <!-- The game's movies (stage introductions): click to skip. -->
                         <Border Background="Black" IsVisible="{Binding IsMoviePlaying}" PointerPressed="OnMoviePressed">
                             <Image Source="{Binding MovieFrame}" Stretch="Uniform" />

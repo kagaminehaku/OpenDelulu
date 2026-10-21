@@ -453,11 +453,11 @@ public sealed partial class PlayViewModel : ViewModelBase
                 TouchHandler = TouchHandler is null ? _oilTouch : null;
                 ShowOilMenu();
             }),
-            (T("oil.finish"), () =>
+            (T("oil.finish"), () => Confirm(QuestionEndOil, "confirm.endOil", () =>
             {
                 StopOil(restore: true);
                 ShowMenu();
-            }),
+            }, ShowOilMenu)),
         });
         Dialogue.ShowMenu(F(pour ? "oil.menuPour" : "oil.menu", CharacterDatabase.NameOf(_girl.Girl.Id)), options);
     }
@@ -754,7 +754,8 @@ public sealed partial class PlayViewModel : ViewModelBase
                 _progress.Save(ProgressPath);
                 Meet();
             })));
-        options.Add((T("play.goodbye"), () => RunEvent(EventKind.Parting, Leave)));
+        options.Add((T("play.goodbye"), () => Confirm(QuestionEndDate, "confirm.endDate",
+            () => RunEvent(EventKind.Parting, Leave), ShowMenu)));
         Dialogue.ShowMenu(F("play.menu", CharacterDatabase.NameOf(girl), progress.Intimacy), options);
     }
 }

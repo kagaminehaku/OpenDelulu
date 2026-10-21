@@ -92,6 +92,11 @@ public partial class MainViewModel
                 return true;
         }
 
+        if (SelectedTab == 0 && Play is { IsConfirming: true } asking && key is Key.Y or Key.Enter or Key.N)
+        {
+            asking.AnswerConfirm(key != Key.N);
+            return true;
+        }
         if (SelectedTab == 0 && Play is { IsMoviePlaying: true } play && key is Key.Space or Key.Enter)
         {
             play.SkipMovie();

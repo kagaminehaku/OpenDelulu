@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             xmlns:l="using:OpenDelulu.Localization"
+             x:Class="OpenDelulu.Views.ConfirmView"
+             x:DataType="vm:PlayViewModel">
+    <!-- The original confirmation box (53_check) on its 1024x768 canvas: question picture, YES / NO. -->
+    <Panel Background="#90000000">
+        <Viewbox Stretch="Uniform">
+            <Canvas Width="1024" Height="768">
+                <Border Canvas.Left="200" Canvas.Top="284" Width="624" Height="204" CornerRadius="16"
+                        Background="#C0102030" BorderBrush="#80FFFFFF" BorderThickness="2" />
+                <Image Source="{Binding ConfirmQuestion}" Canvas.Left="220" Canvas.Top="300" Width="584" Height="72"
+                       IsVisible="{Binding ConfirmQuestion, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <TextBlock Text="{Binding ConfirmText}" Canvas.Left="220" Canvas.Top="312" Width="584" FontSize="32"
+                           FontWeight="Bold" Foreground="White" TextAlignment="Center"
+                           IsVisible="{Binding ConfirmQuestion, Converter={x:Static ObjectConverters.IsNull}}" />
+                <Panel Canvas.Left="296" Canvas.Top="388" Width="192" Height="88" Background="Transparent" Cursor="Hand"
+                       PointerEntered="OnYesEntered" PointerExited="OnYesExited" PointerPressed="OnYesPressed">
+                    <Image Source="{Binding YesImage}" />
+                    <TextBlock Text="{l:Tr confirm.yes}" FontSize="36" FontWeight="Bold" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding YesImage, Converter={x:Static ObjectConverters.IsNull}}" />
+                </Panel>
+                <Panel Canvas.Left="536" Canvas.Top="388" Width="192" Height="88" Background="Transparent" Cursor="Hand"
+                       PointerEntered="OnNoEntered" PointerExited="OnNoExited" PointerPressed="OnNoPressed">
+                    <Image Source="{Binding NoImage}" />
+                    <TextBlock Text="{l:Tr confirm.no}" FontSize="36" FontWeight="Bold" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding NoImage, Converter={x:Static ObjectConverters.IsNull}}" />
+                </Panel>
+            </Canvas>
+        </Viewbox>
+    </Panel>
+</UserControl>
