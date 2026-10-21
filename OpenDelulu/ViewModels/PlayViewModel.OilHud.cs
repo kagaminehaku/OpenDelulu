@@ -143,7 +143,24 @@ public sealed partial class PlayViewModel
         }
     }
 
-    Bitmap? HudTexture(string name) => _oilHud?.Texture(name) is { } image ? UiTextures.ToBitmap(image) : null;
+    readonly Dictionary<string, Bitmap?> _hudBitmaps = [];
+
+    Bitmap? HudTexture(string name)
+    {
+        if (_hudBitmaps.TryGetValue(name, out var cached))
+            return cached;
+        Bitmap? bitmap = null;
+        try
+        {
+            if (_oilHud?.Texture(name) is { } image)
+                bitmap = UiTextures.ToBitmap(image);
+        }
+        catch (InvalidOperationException)
+        {
+            // No bitmap support (headless view-model tests): the menu still works, without pictures.
+        }
+        return _hudBitmaps[name] = bitmap;
+    }
 
     Bitmap? HudItemTexture(int group, int slot, int kind) => Ui.Get("sb3_0300.pp", $"ds01_04_{group:00}_{slot + 1:00}_{kind:00}.bmp");
 
