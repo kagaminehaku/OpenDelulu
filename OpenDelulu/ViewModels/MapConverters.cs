@@ -11,4 +11,8 @@ public static class MapConverters
 
     public static readonly IValueConverter SelectedOpacity =
         new FuncValueConverter<bool, double>(selected => selected ? 1.0 : 0.6);
+
+    /// <summary>A CONFIG percentage (0..100) as an opacity.</summary>
+    public static readonly IValueConverter Percent =
+        new FuncValueConverter<int, double>(percent => System.Math.Clamp(percent, 0, 100) / 100.0);
 }

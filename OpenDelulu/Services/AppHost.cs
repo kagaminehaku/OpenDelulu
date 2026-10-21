@@ -97,7 +97,13 @@ public sealed class AppSettings
     public int? EffectsVolume { get; set; }
     public int? VoiceVolume { get; set; }
 
-    static string FilePath => Path.Combine(
+    /// <summary>The other options of the original CONFIG screen.</summary>
+    public GameConfig Config { get; set; } = new();
+
+    /// <summary>Another settings file (headless tests must not touch the user's).</summary>
+    public static string? PathOverride { get; set; }
+
+    static string FilePath => PathOverride ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenDelulu", "settings.json");
 
     public static AppSettings Load()

@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Services;
 
@@ -27,6 +28,10 @@ public partial class MainViewModel
 
     void LoadSoundSettings()
     {
+        // One GameConfig object for the whole run (views bind to it); the saved values are copied in.
+        GameConfig.Current.CopyFrom(_settings.Config);
+        _settings.Config = GameConfig.Current;
+        GameConfig.Current.PropertyChanged += (_, _) => ApplyVolumes();
         _initializing = true;
         MasterVolume = Percent(_settings.MasterVolume, 100);
         MusicVolume = Percent(_settings.MusicVolume, 80);
@@ -47,6 +52,14 @@ public partial class MainViewModel
     partial void OnIsMutedChanged(bool value) => ApplyVolumes();
     partial void OnIsEmergencyChanged(bool value) => ApplyVolumes();
 
+    /// <summary>The original CONFIG screen (once a game is loaded).</summary>
+    [ObservableProperty] public partial ConfigViewModel? Config { get; set; }
+
+    public void SaveSettings() => _settings.Save();
+
+    [RelayCommand]
+    void OpenConfig() => Config?.Open();
+
     void VolumeChanged()
     {
         if (_initializing)
@@ -65,10 +78,11 @@ public partial class MainViewModel
         var mixer = AudioSystem.Shared.Mixer;
         // --mute (automated screenshots) wins over everything and is never saved.
         mixer.MasterVolume = AppHost.StartupMute || IsMuted || IsEmergency ? 0 : MasterVolume / 100f;
-        mixer.SetBusVolume(AudioBus.Music, MusicVolume / 100f);
-        mixer.SetBusVolume(AudioBus.Ambient, AmbientVolume / 100f);
-        mixer.SetBusVolume(AudioBus.Effects, EffectsVolume / 100f);
-        mixer.SetBusVolume(AudioBus.Voice, VoiceVolume / 100f);
+        var config = GameConfig.Current;
+        mixer.SetBusVolume(AudioBus.Music, config.MuteMusic ? 0 : MusicVolume / 100f);
+        mixer.SetBusVolume(AudioBus.Ambient, config.MuteAmbient ? 0 : AmbientVolume / 100f);
+        mixer.SetBusVolume(AudioBus.Effects, config.MuteEffects ? 0 : EffectsVolume / 100f);
+        mixer.SetBusVolume(AudioBus.Voice, config.MuteVoice ? 0 : VoiceVolume / 100f);
     }
 
     /// <summary>

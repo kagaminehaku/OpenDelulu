@@ -59,7 +59,7 @@
                 <Viewbox Stretch="Uniform" MaxHeight="240">
                     <Grid Width="1024" Height="232">
                         <Image Source="{Binding Portrait}" Width="192" Height="232" HorizontalAlignment="Left" />
-                        <Border Margin="{Binding FrameMargin}" Background="{Binding Frame}" />
+                        <Border Margin="{Binding FrameMargin}" Background="{Binding Frame}" Opacity="{Binding Config.MenuOpacity, Converter={x:Static vm:MapConverters.Percent}}" />
                         <TextBlock Text="{Binding Speaker}" FontWeight="Bold" FontSize="20" Foreground="#FF4A3000"
                                    Margin="200,58,0,0" Width="143" TextAlignment="Center" HorizontalAlignment="Left"
                                    VerticalAlignment="Top" TextTrimming="CharacterEllipsis"
@@ -132,6 +132,9 @@
                         <Button.Flyout>
                             <Flyout Placement="BottomEdgeAlignedRight">
                                 <StackPanel Width="300" Spacing="4">
+                                    <Button Content="{l:Tr settings.config}" HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Center" Command="{Binding OpenConfigCommand}"
+                                            IsEnabled="{Binding Config.HasOriginal, FallbackValue=False}" />
                                     <TextBlock Text="{l:Tr settings.sound}" FontWeight="SemiBold" />
                                     <TextBlock Text="{l:Tr settings.master}" Opacity="0.7" />
                                     <Slider Minimum="0" Maximum="100" Value="{Binding MasterVolume}" />
@@ -358,6 +361,11 @@
                 </Grid>
             </TabItem>
         </TabControl>
+
+        <!-- The original CONFIG screen over everything. -->
+        <Panel Grid.RowSpan="2" IsVisible="{Binding Config.IsOpen, FallbackValue=False}">
+            <v:ConfigView DataContext="{Binding Config}" />
+        </Panel>
 
         <!-- Emergency screen (B / Pause): covers everything until a key or click. -->
         <Border Grid.RowSpan="2" Background="Black" IsVisible="{Binding IsEmergency}" PointerPressed="OnEmergencyPressed">

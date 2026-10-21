@@ -25,6 +25,9 @@ public sealed record ChoiceOption(int Index, string Text);
 /// </summary>
 public sealed partial class DialogueViewModel(GameFileSystem fs, ScriptLibrary library) : ViewModelBase
 {
+    /// <summary>The CONFIG options; "Menu Transparency" fades the dialogue window.</summary>
+    public GameConfig Config => GameConfig.Current;
+
     ScriptRunner? _runner;
     ScriptInfo? _script;
     IReadOnlyList<Action>? _menuActions;

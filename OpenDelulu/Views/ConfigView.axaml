@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             x:Class="OpenDelulu.Views.ConfigView"
+             x:DataType="vm:ConfigViewModel">
+    <!-- The original CONFIG screen (52_config): an 800x600 page at (112,80) of 1024x768 with sliders and on/off pictures. -->
+    <Panel Background="#A0000000">
+        <Viewbox Stretch="Uniform">
+            <Canvas Width="1024" Height="768">
+                <Image Source="{Binding PageImage}" Canvas.Left="112" Canvas.Top="80" Width="800" Height="600" />
+
+                <ItemsControl ItemsSource="{Binding Sliders}" Width="1024" Height="768">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ConfigSlider">
+                            <Canvas Width="1024" Height="768">
+                                <!-- Track hit area: press or drag to set the value. -->
+                                <Panel Canvas.Left="{Binding TrackX}" Canvas.Top="{Binding TrackY}" Width="{Binding TrackWidth}"
+                                       Height="16" Background="Transparent" Cursor="Hand"
+                                       PointerPressed="OnTrackPressed" PointerMoved="OnTrackMoved" PointerReleased="OnTrackReleased" />
+                                <Image Source="{Binding Knob}" Canvas.Left="{Binding KnobLeft}" Canvas.Top="{Binding KnobTop}"
+                                       Width="24" Height="24" IsHitTestVisible="False" />
+                                <Image Source="{Binding Digit0}" Canvas.Left="752" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
+                                <Image Source="{Binding Digit1}" Canvas.Left="764" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
+                                <Image Source="{Binding Digit2}" Canvas.Left="776" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
+                                <Border Canvas.Left="824" Canvas.Top="{Binding SampleY}" Width="32" Height="32"
+                                        Background="{Binding Sample}" IsVisible="{Binding HasSample}" />
+                            </Canvas>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl ItemsSource="{Binding Buttons}" Width="1024" Height="768">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                        <Style Selector="ContentPresenter" x:DataType="vm:ConfigButton">
+                            <Setter Property="Canvas.Left" Value="{Binding X}" />
+                            <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                        </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ConfigButton">
+                            <Canvas Width="{Binding W}" Height="{Binding H}">
+                                <Image Source="{Binding Image}" Width="{Binding W}" Height="{Binding H}" IsHitTestVisible="False" />
+                                <Panel Canvas.Left="{Binding HitX}" Canvas.Top="{Binding HitY}" Width="{Binding HitW}" Height="{Binding HitH}"
+                                       Background="Transparent" Cursor="Hand" PointerEntered="OnButtonEntered"
+                                       PointerExited="OnButtonExited" PointerPressed="OnButtonPressed" />
+                            </Canvas>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Canvas>
+        </Viewbox>
+    </Panel>
+</UserControl>
