@@ -15,6 +15,21 @@ public sealed class GirlProgress
 
     /// <summary>Row of the swimsuit she wears (lbNN table), or null for her first one.</summary>
     public int? SwimsuitRow { get; set; }
+
+    /// <summary>
+    /// Album pictures she unlocked (st03_03_GG_NN): 1..4 when her level rises from that number to the next, 5 for her
+    /// H picture. The exe keeps the same flags in the item list save, 20 bytes per girl from offset 0x18.
+    /// </summary>
+    public List<int> AlbumPictures { get; set; } = [];
+
+    /// <summary>Raises her level by one and unlocks the album picture of the level she leaves, like the exe does.</summary>
+    public void LevelUp()
+    {
+        if (Intimacy is >= 1 and <= 4 && !AlbumPictures.Contains(Intimacy))
+            AlbumPictures.Add(Intimacy);
+        Intimacy++;
+        MetAtLevel = false;
+    }
 }
 
 /// <summary>

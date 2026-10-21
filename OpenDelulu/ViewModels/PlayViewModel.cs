@@ -759,8 +759,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             options.Add((F("play.nextLevel", progress.Intimacy + 1), () => RunEvent(EventKind.LeadIn, () =>
             {
                 // The H scene that follows the lead-in is not implemented yet; the level still goes up.
-                progress.Intimacy++;
-                progress.MetAtLevel = false;
+                progress.LevelUp();
                 _progress.Save(ProgressPath);
                 Meet();
             })));

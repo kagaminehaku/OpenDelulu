@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             x:Class="OpenDelulu.Views.AlbumView"
+             x:DataType="vm:PlayViewModel">
+    <!-- The original CG album (54_eventcg) in 1024x768: background, the tab's page, locked covers, hovered tab, Cancel. -->
+    <Viewbox Stretch="Uniform">
+        <Canvas Width="1024" Height="768" Background="Black">
+            <Image Source="{Binding AlbumBackground}" Width="1024" Height="768" />
+            <Image Source="{Binding AlbumPage}" Canvas.Left="12" Canvas.Top="44" Width="992" Height="648" />
+            <Image Source="{Binding AlbumHoverTabImage}" Canvas.Left="{Binding AlbumHoverTabLeft}" Canvas.Top="48"
+                   Width="128" Height="48" IsHitTestVisible="False" />
+            <!-- Tab strip: hit area over the tabs painted on the page. -->
+            <Panel Canvas.Left="16" Canvas.Top="48" Width="768" Height="48" Background="Transparent" Cursor="Hand"
+                   PointerMoved="OnTabsMoved" PointerExited="OnTabsExited" PointerPressed="OnTabsPressed" />
+
+            <ItemsControl ItemsSource="{Binding AlbumSlots}" Width="1024" Height="768">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:AlbumSlot">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:AlbumSlot">
+                        <Panel Width="192" Height="144" Background="Transparent" Cursor="Hand" PointerPressed="OnSlotPressed">
+                            <Image Source="{Binding Cover}" Stretch="Fill" />
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Image Source="{Binding AlbumCancel}" Canvas.Left="864" Canvas.Top="696" Width="112" Height="48" Cursor="Hand"
+                   PointerPressed="OnCancelPressed" />
+
+            <!-- 55_eventcgdraw: the chosen picture full screen; a click goes back to the page. -->
+            <Image Source="{Binding AlbumPicture}" Width="1024" Height="768" Stretch="Fill" Cursor="Hand"
+                   IsVisible="{Binding AlbumPicture, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   PointerPressed="OnPicturePressed" />
+        </Canvas>
+    </Viewbox>
+</UserControl>

@@ -180,6 +180,9 @@
                         </StackPanel>
                         <Button Content="{l:Tr play.leave}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Command="{Binding RequestLeaveCommand}" IsVisible="{Binding InGame}" />
+                        <Button Content="{l:Tr play.album}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Command="{Binding OpenAlbumCommand}" IsVisible="{Binding !InGame}"
+                                IsEnabled="{Binding HasOriginalAlbum}" />
                         <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
                         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.8" />
                         <TextBlock Text="{Binding Dialogue.Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
@@ -188,6 +191,7 @@
                         <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" TouchHandler="{Binding TouchHandler}" />
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                         <v:MapScreenView IsVisible="{Binding ShowMap}" />
+                        <v:AlbumView IsVisible="{Binding IsAlbumOpen}" />
                         <v:OilActionsView IsVisible="{Binding IsChoosingAction}" />
                         <v:WardrobeView IsVisible="{Binding IsWardrobeOpen}" />
                         <v:ConfirmView IsVisible="{Binding IsConfirming}" />
