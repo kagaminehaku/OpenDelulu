@@ -157,8 +157,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
 
         var (mvp, light, eye) = Camera.Compute(scene.Subject, width / (float)height, flipY: false);
         scene.SetLookTarget(eye);
-        bool moved = AnimateScene(gl, scene);
-        scene.UpdateLighting(Camera.CameraToWorld(scene.Subject), moved);
+        AnimateScene(gl, scene, Camera.CameraToWorld(scene.Subject));
         UploadColors(gl, scene);
 
 
@@ -209,10 +208,12 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
     }
 
     /// <summary>Advances the animators, re-uploads the re-skinned vertices and keeps frames coming while they move.</summary>
-    unsafe bool AnimateScene(GlInterface gl, ModelScene scene)
+    unsafe void AnimateScene(GlInterface gl, ModelScene scene, System.Numerics.Matrix4x4 cameraToWorld)
     {
         bool moved = scene.Update(_clock.Tick());
-        if (moved)
+        // Lighting first: the .ptcl sprites rewrite their vertices there.
+        bool effects = scene.UpdateLighting(cameraToWorld, moved);
+        if (moved || effects)
         {
             var meshes = scene.Meshes;
             for (int i = 0; i < _meshes.Count; i++)
@@ -231,7 +232,6 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             RequestNextFrameRendering();
         else
             _clock.Pause();
-        return moved;
     }
 
     const int GL_DYNAMIC_DRAW = 0x88E8;

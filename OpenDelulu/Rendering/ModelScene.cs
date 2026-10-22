@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using OpenDelulu.Engine.Animation;
 using OpenDelulu.Engine.Assets;
+using OpenDelulu.Engine.Stages;
 using OpenDelulu.Formats.Imaging;
 
 namespace OpenDelulu.Rendering;
@@ -72,6 +73,8 @@ public sealed class ModelScene
     // ------------------------------------------------------------------ Direct3D 9 fixed-function lighting
 
     readonly LightSet?[] _objectLights;
+    readonly Dictionary<int, (StageParticles Particles, Func<string, Matrix4x4?> Attach)> _particles = [];
+    double _effectTime;
     readonly float[]?[] _colors;
     readonly int[] _colorVersion;
     readonly bool[] _colorDirty;
@@ -95,6 +98,19 @@ public sealed class ModelScene
             _colorDirty[m] = true;
     }
 
+    /// <summary>
+    /// Makes an object the stage's keyframed sprites (.ptcl): its meshes are rewritten every frame (camera-facing quads on
+    /// the stage frames <paramref name="attach"/> resolves) and coloured by the sprites' own colour and opacity.
+    /// </summary>
+    public void SetObjectParticles(int objectIndex, StageParticles particles, Func<string, Matrix4x4?> attach)
+    {
+        _particles[objectIndex] = (particles, attach);
+        var o = _objects[objectIndex];
+        for (int m = o.MeshOffset; m < o.MeshOffset + o.Model.Meshes.Count; m++)
+            _colors[m] = new float[_meshes[m].Vertices.Length / RenderModel.VertexStride * 4];
+        Changed?.Invoke();
+    }
+
     /// <summary>Lit vertex colours (RGBA per vertex) of a mesh, or null when it uses the simple lighting.</summary>
     public float[]? Colors(int mesh) => _colors[mesh];
 
@@ -105,12 +121,25 @@ public sealed class ModelScene
     /// Recomputes the vertex colours that are out of date: after the mesh moved (<paramref name="verticesChanged"/> for
     /// animated meshes), when the camera moved for camera-relative lights, or after the lights or tints changed.
     /// </summary>
-    public void UpdateLighting(Matrix4x4 cameraToWorld, bool verticesChanged)
+    /// <returns>True when effect meshes (.ptcl sprites) were rewritten: upload the dynamic meshes' vertices.</returns>
+    public bool UpdateLighting(Matrix4x4 cameraToWorld, bool verticesChanged)
     {
         bool cameraMoved = _lightCamera != cameraToWorld;
         _lightCamera = cameraToWorld;
+        foreach (var (index, (particles, attach)) in _particles)
+        {
+            var o = _objects[index];
+            var colors = new float[o.Model.Meshes.Count][];
+            for (int i = 0; i < colors.Length; i++)
+                colors[i] = _colors[o.MeshOffset + i]!;
+            particles.Evaluate(_effectTime, cameraToWorld, attach, colors);
+            for (int m = o.MeshOffset; m < o.MeshOffset + o.Model.Meshes.Count; m++)
+                _colorVersion[m]++;
+        }
         for (int m = 0; m < _meshes.Count; m++)
         {
+            if (_particles.ContainsKey(_owner[m]))
+                continue;
             var lights = _objectLights[_owner[m]];
             if (lights is null)
             {
@@ -133,6 +162,7 @@ public sealed class ModelScene
             _colorDirty[m] = false;
             _colorVersion[m]++;
         }
+        return _particles.Count > 0;
     }
 
     /// <summary>The framed object's model (the only one for single-model scenes; mesh toggles use its indices).</summary>
@@ -185,7 +215,8 @@ public sealed class ModelScene
 
     /// <summary>True when the mesh's vertices change while animating (re-upload after <see cref="Update"/>).</summary>
     public bool IsDynamic(int mesh) =>
-        _objects[_owner[mesh]] is { Animator: { } animator } o && animator.IsMeshAnimated(mesh - o.MeshOffset);
+        _particles.ContainsKey(_owner[mesh])
+        || _objects[_owner[mesh]] is { Animator: { } animator } o && animator.IsMeshAnimated(mesh - o.MeshOffset);
 
     /// <summary>Raised when visibility or animation settings change; the viewer redraws.</summary>
     public event Action? Changed;
@@ -226,7 +257,7 @@ public sealed class ModelScene
         Changed?.Invoke();
     }
 
-    public bool IsAnimating => _objects.Any(o => o.Animator?.IsAnimating == true);
+    public bool IsAnimating => _particles.Count > 0 || _objects.Any(o => o.Animator?.IsAnimating == true);
 
     /// <summary>Camera pitch to start from (radians, positive = from above); null = the viewer's default.</summary>
     public float? CameraPitch { get; set; }
@@ -290,6 +321,7 @@ public sealed class ModelScene
     /// <summary>Advances every animator; true when some vertices changed (re-upload the dynamic meshes).</summary>
     public bool Update(double seconds)
     {
+        _effectTime += seconds;
         bool changed = false;
         foreach (var o in _objects)
         {

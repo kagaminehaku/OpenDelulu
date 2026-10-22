@@ -314,6 +314,13 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (_prop is { } prop)
             objects.Add(prop);
         _propObject = -1;
+        // The stage's keyframed sprites (.ptcl): sun glow, splashes, steam, lamp glows.
+        int particleObject = -1;
+        if (StageParticlesFor(_stage) is { } particles)
+        {
+            particleObject = objects.Count;
+            objects.Add((particles.Model, null));
+        }
         if (_oil is { } oilProps)
         {
             // Hands and oil drips, shown only while used.
@@ -322,6 +329,19 @@ public sealed partial class PlayViewModel : ViewModelBase
                 objects.Add((model, animator));
         }
         var scene = new ModelScene(objects, subject: 1);
+        if (particleObject >= 0 && StageParticlesFor(_stage) is { } sprites)
+        {
+            var stage = _stage;
+            var bind = new Matrix4x4[stage.Model.Rig.Count];
+            stage.Model.Rig.ComputeWorld(stage.Model.Rig.BindLocal, bind);
+            scene.SetObjectParticles(particleObject, sprites, name =>
+            {
+                int frame = stage.Model.Rig.Find(name);
+                if (frame < 0)
+                    return null;
+                return stage.Animator is { } animator ? animator.WorldOf(frame) : bind[frame];
+            });
+        }
         if (_oil is { } oil)
         {
             // The whole body: from the side and above when she lies down (poses 3 and 4), three-quarter otherwise.
@@ -724,6 +744,22 @@ public sealed partial class PlayViewModel : ViewModelBase
     /// e.g. dark blue at night, orange in the evening. The stage itself has its lighting baked in.
     /// </summary>
     readonly Dictionary<string, LightSet?> _lightFiles = [];
+    readonly Dictionary<string, StageParticles?> _particleFiles = [];
+
+    /// <summary>The stage variant's .ptcl sprites (cached), or null when it has none.</summary>
+    StageParticles? StageParticlesFor(Stage stage)
+    {
+        if (stage.Variant.Particles is not { } asset)
+            return null;
+        string key = asset.Archive + "/" + asset.File;
+        if (!_particleFiles.TryGetValue(key, out var particles))
+        {
+            try { particles = StageParticles.Load(OpenDelulu.Formats.Scene.PtclFile.Read(_fs.ReadReferenced(asset.Archive, asset.File)), asset.File); }
+            catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException) { particles = null; }
+            _particleFiles[key] = particles;
+        }
+        return particles;
+    }
 
     /// <summary>The girl's lights for a time of day (ld01 rows 41..45), or null when the table has none.</summary>
     LightSet? CharacterLights(GirlInfo girl, StageTime time)

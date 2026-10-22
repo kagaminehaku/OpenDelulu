@@ -164,11 +164,11 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         {
             scene.SetLookTarget(camera3.Eye);
             bool moved = scene.Update(deltaSeconds);
-            if (moved)
+            bool effects = scene.UpdateLighting(camera.CameraToWorld(scene.Subject), moved);
+            if (moved || effects)
                 for (int i = 0; i < _meshes.Count; i++)
                     if (scene.IsVisible(i) && scene.IsDynamic(i))
                         _meshes[i].Vertices.Write<float>(scene.Meshes[i].Vertices);
-            scene.UpdateLighting(camera.CameraToWorld(scene.Subject), moved);
             UploadColors(scene);
             animating = scene.IsAnimating;
         }
