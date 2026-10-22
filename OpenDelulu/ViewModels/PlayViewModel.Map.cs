@@ -65,7 +65,7 @@ public sealed partial class PlayViewModel
     public bool HasOriginalMap => Ui.Get("st05_01_01_00_00.bmp") is not null;
 
     /// <summary>The map covers the 3D view while not in the game (and the textures are there).</summary>
-    public bool ShowMap => HasOriginalMap && !InGame && !IsBusy;
+    public bool ShowMap => HasOriginalMap && !InGame && !IsBusy && !IsLobbyVisible && !IsTitleVisible;
 
     partial void OnInGameChanged(bool value) => OnPropertyChanged(nameof(ShowMap));
     partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(ShowMap));

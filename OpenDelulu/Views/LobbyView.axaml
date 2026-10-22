@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             x:Class="OpenDelulu.Views.LobbyView"
+             x:DataType="vm:PlayViewModel">
+    <!-- The hotel lobby (61_lobby) in 1024x768: front desk picture and six buttons on the right. -->
+    <Panel Background="Black">
+        <Viewbox Stretch="Uniform">
+            <Canvas Width="1024" Height="768">
+                <Image Source="{Binding LobbyBackground}" Width="1024" Height="768" />
+                <ItemsControl ItemsSource="{Binding LobbyButtons}" Width="1024" Height="768"
+                              IsEnabled="{Binding !IsLobbyTalking}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                        <Style Selector="ContentPresenter" x:DataType="vm:LobbyButton">
+                            <Setter Property="Canvas.Left" Value="728" />
+                            <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                        </Style>
+                        <Style Selector="Image.lobby">
+                            <Setter Property="Opacity" Value="0.9" />
+                        </Style>
+                        <Style Selector="Image.lobby:pointerover">
+                            <Setter Property="Opacity" Value="1" />
+                            <Setter Property="RenderTransform" Value="scale(1.04)" />
+                        </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LobbyButton">
+                            <Image Classes="lobby" Source="{Binding Image}" Width="248" Height="72" Cursor="Hand"
+                                   PointerPressed="OnButtonPressed" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Canvas>
+        </Viewbox>
+    </Panel>
+</UserControl>

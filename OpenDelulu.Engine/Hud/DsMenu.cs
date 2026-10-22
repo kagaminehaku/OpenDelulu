@@ -19,7 +19,7 @@ public readonly record struct DsQuadLayout(DsQuad Quad, double X, double Y, doub
 
 /// <summary>
 /// The in-game menus of the original (dsNN_MM .xx/.xa: ds01_01 system, 02 camera, 03 date, 04 oil, 05 H, 06/07 F,
-/// ds02 lobby) are flat quads in an orthographic scene: one unit is 1000 pixels around the screen centre
+/// ds02 title) are flat quads in an orthographic scene: one unit is 1000 pixels around the screen centre
 /// (x = 512 + 1000·X, y = 384 − 1000·Y). Their clips fold and unfold the parts (a scale to zero hides a quad) and move
 /// the whole menu between four corners (clip names end in A..D). Embedded textures of the item quads are 8×8
 /// placeholders the exe replaces with dsNN_MM_GG_II_01 (labels) / _02 (icons) from sb3_0300.pp.

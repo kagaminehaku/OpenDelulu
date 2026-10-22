@@ -46,7 +46,9 @@ public sealed partial class PlayViewModel
     public ObservableCollection<HudQuad> TitleQuads { get; } = [];
 
     /// <summary>The title screen covers the play area (before choosing a girl).</summary>
-    [ObservableProperty] public partial bool IsTitleVisible { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMap))]
+    public partial bool IsTitleVisible { get; set; }
 
     /// <summary>Opens memories (the Scripts tab, 56_memories in part).</summary>
     public event Action? MemoriesRequested;
@@ -77,6 +79,9 @@ public sealed partial class PlayViewModel
                 return;
             _titleTimer.Tick += (_, _) => TickTitle();
         }
+        IsLobbyVisible = false;
+        IsLobbyTalking = false;
+        Dialogue.Hide();
         _titleMenu = TitleMain;
         _titleCursor = TitleMain[0];
         PlayTitle(TitleIntro, () => PlayTitle(TitleMain[0].Loop, loop: true));
@@ -178,7 +183,12 @@ public sealed partial class PlayViewModel
         switch (entry.Key)
         {
             case "Sima":
-                PlayTitle(entry.Choose, HideTitle);
+                // Play Game: the hotel lobby (61_lobby), then the island.
+                PlayTitle(entry.Choose, () =>
+                {
+                    HideTitle();
+                    ShowLobby();
+                });
                 break;
             case "Omoi":
                 PlayTitle(entry.Choose, () => EnterTitleMenu(TitleExtra));

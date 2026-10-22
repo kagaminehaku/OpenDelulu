@@ -40,6 +40,9 @@ public sealed class GameProgress
 {
     public Dictionary<int, GirlProgress> Girls { get; set; } = [];
 
+    /// <summary>The front desk's welcome (c99_00_00) was seen on the first visit to the lobby.</summary>
+    public bool LobbyVisited { get; set; }
+
     public GirlProgress For(int girlId)
     {
         if (!Girls.TryGetValue(girlId, out var progress))

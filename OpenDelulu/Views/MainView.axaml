@@ -185,6 +185,8 @@
                                 Command="{Binding RequestLeaveCommand}" IsVisible="{Binding InGame}" />
                         <Button Content="{l:Tr play.showMenu}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Command="{Binding ToggleHudCommand}" IsVisible="{Binding IsHudClosed}" />
+                        <Button Content="{l:Tr play.toLobby}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Command="{Binding BackToLobbyCommand}" IsVisible="{Binding ShowMap}" />
                         <Button Content="{l:Tr play.album}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Command="{Binding OpenAlbumCommand}" IsVisible="{Binding !InGame}"
                                 IsEnabled="{Binding HasOriginalAlbum}" />
@@ -194,6 +196,7 @@
                     </StackPanel>
                     <Grid Grid.Column="1" Margin="8">
                         <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" TouchHandler="{Binding TouchHandler}" />
+                        <v:LobbyView IsVisible="{Binding IsLobbyVisible}" />
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                         <v:MapScreenView IsVisible="{Binding ShowMap}" />
                         <v:TitleView IsVisible="{Binding IsTitleVisible}" />

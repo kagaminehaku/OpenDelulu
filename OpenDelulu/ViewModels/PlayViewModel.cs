@@ -290,6 +290,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         InGame = false;
         RefreshGirls(Girls.Select(g => g.Id).ToList());
         Status = T("play.prompt");
+        ShowLobby(backFromIsland: true);
     }
 
     void PlaceGirl()

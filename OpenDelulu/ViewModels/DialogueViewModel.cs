@@ -96,14 +96,20 @@ public sealed partial class DialogueViewModel(GameFileSystem fs, ScriptLibrary l
     /// <summary>Value for Switch commands (the girl's intimacy level).</summary>
     public int Intimacy { get; set; } = 1;
 
-    /// <summary>Plays a script; <paramref name="finished"/> runs when it ends.</summary>
-    public void Run(ScriptInfo script, Action? finished = null)
+    /// <summary>Script variables of the last script that ended (SetVar; 20 / 30 in the lobby's intimacy menu).</summary>
+    public IReadOnlyDictionary<int, int> LastVariables { get; private set; } = new Dictionary<int, int>();
+
+    /// <summary>
+    /// Plays a script; <paramref name="finished"/> runs when it ends. <paramref name="query"/> answers Switch(object)
+    /// (default: <see cref="Intimacy"/> whatever the object; the lobby asks each girl's level by her id).
+    /// </summary>
+    public void Run(ScriptInfo script, Action? finished = null, Func<int, int>? query = null)
     {
         AudioSystem.Shared.Mixer.StopBus(AudioBus.Voice, 0.1);
         _script = script;
         _finished = finished;
         _menuActions = null;
-        _runner = new ScriptRunner(library.Load) { QuerySubject = _ => Intimacy };
+        _runner = new ScriptRunner(library.Load) { QuerySubject = query ?? (_ => Intimacy) };
         try
         {
             _runner.Start(script.Name);
@@ -204,6 +210,8 @@ public sealed partial class DialogueViewModel(GameFileSystem fs, ScriptLibrary l
 
     void End()
     {
+        if (_runner is not null)
+            LastVariables = new Dictionary<int, int>(_runner.Variables);
         _runner = null;
         CanAdvance = false;
         Speaker = "";
