@@ -60,6 +60,12 @@ public sealed record GirlInfo(
     public IReadOnlyList<AssetRef?> HairPhysics { get; init; } = [];
 
     /// <summary>
+    /// ld01 rows 71..77: onBB_CC.xm per body variant (cut 1..7): breast, top and bottom deformations that follow the
+    /// player's hand (te01) during the oil scene's special actions.
+    /// </summary>
+    public IReadOnlyList<AssetRef?> Deformations { get; init; } = [];
+
+    /// <summary>
     /// Texture of the intimate-area overlay meshes (ld00 rows 21..28, "zxNN_*.tga"; the base game ships 16x16
     /// mosaic tiles, texture mods replace them), or null.
     /// </summary>
@@ -192,6 +198,10 @@ public sealed class CharacterDatabase
                             : null)
                     .OfType<DateActivity>().ToList(),
                 BodyPhysics = new[] { Physics(31, ".tty"), Physics(32, ".tty") }.OfType<AssetRef>().ToList(),
+                Deformations = Enumerable.Range(71, 7)
+                    .Select<int, AssetRef?>(n => rows.TryGetValue(n, out var r) && AssetRef.FromRow(r, 1) is { } xm
+                        && xm.File.EndsWith(".xm", StringComparison.OrdinalIgnoreCase) && fs.ExistsReferenced(xm.Archive, xm.File) ? xm : null)
+                    .ToList(),
                 OilPoses = Enumerable.Range(81, 4)
                     .Select(n => Existing(Xa(n)) is { } anim ? new OilPose(n - 80, anim) : null)
                     .OfType<OilPose>().ToList(),

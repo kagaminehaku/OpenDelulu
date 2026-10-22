@@ -15,7 +15,11 @@ namespace OpenDelulu.Engine.Characters;
 public sealed record CharacterSpec(int GirlId, int HairIndex = 0, int? SwimsuitRow = null, int? CutOverride = null);
 
 /// <summary>An assembled, animatable character.</summary>
-public sealed record Character(GirlInfo Girl, RenderModel Model, CharacterAnimator Animator);
+public sealed record Character(GirlInfo Girl, RenderModel Model, CharacterAnimator Animator)
+{
+    /// <summary>1-based body variant the model was built from (follows the swimsuit).</summary>
+    public int Cut { get; init; } = 1;
+}
 
 /// <summary>
 /// Assembles a character the way the game does: body variant + face + hair attached to the head joint,
@@ -43,7 +47,7 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         if (girl.BodyAnimations.FirstOrDefault() is { } bodyXa)
             animator.Body = LoadBodyAnimation(model, bodyXa);
         animator.Physics = LoadPhysics(girl, model, spec);
-        return new Character(girl, model, animator);
+        return new Character(girl, model, animator) { Cut = CutFor(girl, spec) };
     }
 
     /// <summary>
@@ -109,11 +113,17 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         }
     }
 
+    static int CutFor(GirlInfo girl, CharacterSpec spec)
+    {
+        var swimsuit = girl.Swimsuits.FirstOrDefault(s => s.Row == spec.SwimsuitRow) ?? girl.Swimsuits.FirstOrDefault();
+        return Math.Clamp(spec.CutOverride ?? swimsuit?.Cut ?? 1, 1, Math.Max(1, girl.Bodies.Count));
+    }
+
     public RenderModel BuildModel(CharacterSpec spec)
     {
         var girl = Database.FindGirl(spec.GirlId) ?? throw new ArgumentException($"Unknown girl {spec.GirlId}.");
         var swimsuit = girl.Swimsuits.FirstOrDefault(s => s.Row == spec.SwimsuitRow) ?? girl.Swimsuits.FirstOrDefault();
-        int cut = Math.Clamp(spec.CutOverride ?? swimsuit?.Cut ?? 1, 1, girl.Bodies.Count);
+        int cut = CutFor(girl, spec);
 
         var body = LoadModel(girl.Bodies[cut - 1]);
         var bodyTextures = new Dictionary<string, RgbaImage>(StringComparer.OrdinalIgnoreCase);

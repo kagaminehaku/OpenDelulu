@@ -400,6 +400,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         HideOilHud();
         TouchHandler = null;
         oil.End();
+        oil.Detach();
         _oil = null;
         _statusHoldUntil = 0;
         oil.Girl.Animator.Face?.SetExpression(0, 0);

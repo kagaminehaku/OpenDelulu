@@ -169,16 +169,76 @@ public sealed class OilSession
         var right = Load(tables.Hand, tables.HandAnimation);
         var left = Load(tables.LeftHand, tables.LeftHandAnimation);
         var drips = tables.Drips.Select(d => Load(d.Model, d.Animation)).OfType<Prop>().ToList();
-        return new OilSession(girl, pose, body, tables, level, voices, audio, right, left, drips);
+        // Breast / top / bottom deformations of her body variant that follow the hand during special actions.
+        TimelineMorph? deform = null;
+        if (girl.Girl.Deformations.ElementAtOrDefault(girl.Cut - 1) is { } xmRef)
+        {
+            try
+            {
+                var xm = XmFile.Read(fs.ReadReferenced(xmRef.Archive, xmRef.File));
+                deform = new TimelineMorph(girl.Model, xm.Morphs, checkRest: true);
+                if (deform.ChannelCount == 0)
+                    deform = null;
+            }
+            catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
+            {
+            }
+        }
+        return new OilSession(girl, pose, body, tables, level, voices, audio, right, left, drips) { _deform = deform };
+    }
+
+    TimelineMorph? _deform;
+
+    /// <summary>The .xm deformation follows the acting hand's timeline; without an action it rests.</summary>
+    double DeformTime() => _action is not null && _actionHand?.Animator.Body is { } hand ? hand.Time : 0;
+
+    /// <summary>
+    /// The side an action works on, from its name: 両 both (A), 左 left (L), 右 right (R), 前 / 下 the front of the bottom
+    /// (F), 後ろ its back (B). A side without keys in the current hand clip falls back to the "both" set (乳寄せ, the
+    /// bottom's 左/右 actions).
+    /// </summary>
+    bool IsDeformActive(string set)
+    {
+        if (_action is not { } action || _actionHand?.Animator.Body is not { Current: { } clip } || _deform is not { } deform)
+            return false;
+        string name = action.Name;
+        string wanted = name.Contains('両') ? "A" : name.StartsWith("前", StringComparison.Ordinal) || name.StartsWith("下", StringComparison.Ordinal) ? "F"
+            : name.StartsWith("後ろ", StringComparison.Ordinal) ? "B" : name.Contains('左') ? "L" : name.Contains('右') ? "R" : "A";
+        int cut = set.LastIndexOf('_');
+        if (cut < 0)
+            return false;
+        string family = set[..cut], side = set[(cut + 1)..];
+        double from = clip.Start - 1, to = clip.End + 1;
+        if (!deform.HasDeformation(set, from, to))
+            return false;
+        if (side == wanted)
+            return true;
+        return side == "A" && !deform.HasDeformation($"{family}_{wanted}", from, to);
     }
 
     /// <summary>Gives her the pose's animation (on the thread that renders).</summary>
     public void Attach()
     {
         Girl.Animator.Body = Body;
+        if (_deform is { } deform)
+        {
+            deform.ActiveSet = IsDeformActive;
+            Girl.Animator.Morph = deform;
+            Girl.Animator.MorphClock = DeformTime;
+        }
         Girl.Animator.Physics?.Reset();
         if (Body.Current is { } clip)
             OnClipChanged(clip);
+    }
+
+    /// <summary>Takes the scene's deformation off her body (the session ends).</summary>
+    public void Detach()
+    {
+        if (ReferenceEquals(Girl.Animator.Morph, _deform))
+        {
+            Girl.Animator.Morph = null;
+            Girl.Animator.MorphClock = null;
+        }
     }
 
     /// <summary>The touch area under the ray (nearest), or null.</summary>
@@ -399,14 +459,17 @@ public sealed class OilSession
             return;
         var clips = player.Clips;
         var current = clips.FirstOrDefault(c => c.Index == clip);
+        // Loops are "…(ル)" / "…ループ"; the hand-inside actions (ブラ入れ, パンツ入れ) hold "…中心" (centre) instead.
         static bool IsLoop(AnimationClipInfo c) => !c.Name.Contains('→')
-            && (c.Name.EndsWith("(ル)", StringComparison.Ordinal) || c.Name.EndsWith("ループ", StringComparison.Ordinal));
+            && (c.Name.EndsWith("(ル)", StringComparison.Ordinal) || c.Name.EndsWith("ループ", StringComparison.Ordinal)
+                || c.Name.EndsWith("中心", StringComparison.Ordinal));
         for (int guard = 0; current is not null && guard < 6 && !IsLoop(current); guard++)
         {
             int next = current.Next;
             current = clips.FirstOrDefault(c => c.Index == next);
         }
-        player.Play(current?.Index ?? clip);
+        // No loop on the way: keep the action's own clip rather than ending on the default pose.
+        player.Play(current is not null && IsLoop(current) ? current.Index : clip);
     }
 
     /// <summary>What she does while rubbed there: start, loop, small and big reaction, back to idle.</summary>

@@ -87,6 +87,10 @@ public sealed class CharacterAnimator
     /// <summary>Morphs that follow the body animation's timeline (the player's hand); null for none.</summary>
     public TimelineMorph? Morph { get; set; }
 
+    /// <summary>Timeline position for <see cref="Morph"/> when it follows another animation (the player's hand for the
+    /// oil scene's .xm deformations); null = this body's own animation.</summary>
+    public Func<double>? MorphClock { get; set; }
+
     /// <summary>Hair and breast/buttock secondary motion; null to disable.</summary>
     public SpringBones? Physics { get; set; }
 
@@ -167,7 +171,7 @@ public sealed class CharacterAnimator
         }
         Physics?.Apply(_local, _world, seconds);
         if (Morph is not null)
-            Morph.Time = Body?.Time ?? 0;
+            Morph.Time = MorphClock?.Invoke() ?? Body?.Time ?? 0;
         if (_focusFrames.Length > 0)
             Focus = _focusFrames.Aggregate(Vector3.Zero, (sum, i) => sum + _world[i].Translation) / _focusFrames.Length;
 
