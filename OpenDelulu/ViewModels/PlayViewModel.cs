@@ -774,9 +774,14 @@ public sealed partial class PlayViewModel : ViewModelBase
             // Talking: face to face, close enough to see her expressions; back to the scene's view afterwards.
             if (AutoCamera)
                 Scene?.RequestCamera(new CameraView(Pitch: 0.05f, Zoom: 0.42f));
+            // 首と目で見る: while talking she turns her head to the player too.
+            if (_girl?.Animator.Neck is { } neck)
+                neck.Active = true;
             Dialogue.Intimacy = Progress.Intimacy;
             Dialogue.Run(script, () =>
             {
+                if (_girl?.Animator.Neck is { } n)
+                    n.Active = false;
                 if (AutoCamera)
                     Scene?.RequestCamera(null);
                 then();

@@ -100,6 +100,9 @@ public sealed class CharacterAnimator
     /// <summary>Eyes following <see cref="LookTarget"/>; null when the model has no eye frames.</summary>
     public EyeGaze? Gaze { get; }
 
+    /// <summary>The head turning to <see cref="LookTarget"/> while <see cref="NeckGaze.Active"/> (conversations).</summary>
+    public NeckGaze? Neck { get; set; }
+
     bool _eyesFollow = true;
     public bool EyesFollowTarget
     {
@@ -124,7 +127,7 @@ public sealed class CharacterAnimator
 
     /// <summary>True while something moves on its own (a playing clip or blinking).</summary>
     public bool IsAnimating => Body is { IsPlaying: true, Current.IsStatic: false } || Face?.AutoBlink == true || Speech is not null
-        || Physics?.IsMoving == true;
+        || Physics?.IsMoving == true || Neck?.IsMoving == true;
 
     /// <summary>World matrix of a rig frame in the last evaluated pose, placement included.</summary>
     public Matrix4x4 WorldOf(int frame) => _world[frame];
@@ -164,6 +167,11 @@ public sealed class CharacterAnimator
         else
             Model.Rig.BindLocal.CopyTo(_local, 0);
         ComputeWorld();
+        if (Neck is { IsMoving: true } neck)
+        {
+            neck.Apply(_local, _world, _lookTarget, seconds);
+            ComputeWorld();
+        }
         if (Gaze is not null && _eyesFollow && _lookTarget is { } target)
         {
             Gaze.Apply(_local, _world, target);

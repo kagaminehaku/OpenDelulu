@@ -47,6 +47,7 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         if (girl.BodyAnimations.FirstOrDefault() is { } bodyXa)
             animator.Body = LoadBodyAnimation(model, bodyXa);
         animator.Physics = LoadPhysics(girl, model, spec);
+        animator.Neck = NeckGaze.TryCreate(model, LoadNeck());
         return new Character(girl, model, animator) { Cut = CutFor(girl, spec) };
     }
 
@@ -111,6 +112,26 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         {
             return null;
         }
+    }
+
+    LookFile? _neck;
+    bool _neckLoaded;
+
+    /// <summary>bo00_00_00_00_00.neck (shared by every body): how the head turns to look at someone.</summary>
+    LookFile? LoadNeck()
+    {
+        if (_neckLoaded)
+            return _neck;
+        _neckLoaded = true;
+        try
+        {
+            if (fs.FindAnywhere("bo00_00_00_00_00.neck") is { } found)
+                _neck = LookFile.Read(fs.ReadFile(found.Archive.Name, found.Entry.Name));
+        }
+        catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
+        {
+        }
+        return _neck;
     }
 
     static int CutFor(GirlInfo girl, CharacterSpec spec)
