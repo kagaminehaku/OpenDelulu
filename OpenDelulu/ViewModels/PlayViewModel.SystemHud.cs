@@ -119,11 +119,16 @@ public sealed partial class PlayViewModel
                 ShowStatus(T("play.notYet"), seconds: 3);
                 return;
             case "Title" or "Ticket":
-                // No title screen or ticket counter yet: both go back to choosing a girl.
+                // No ticket counter yet: it goes back to choosing a girl.
                 CloseSystemDrop();
                 if (!IsConfirming)
                     Confirm(key == "Title" ? QuestionTitle : QuestionTicket, key == "Title" ? "confirm.title" : "confirm.ticket",
-                        Leave, ReturnToScene);
+                        () =>
+                        {
+                            Leave();
+                            if (key == "Title")
+                                ShowTitle();
+                        }, ReturnToScene);
                 return;
             case "End":
                 CloseSystemDrop();

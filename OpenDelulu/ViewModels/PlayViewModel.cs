@@ -87,6 +87,8 @@ public sealed partial class PlayViewModel : ViewModelBase
             SelectedTimeIndex = Math.Clamp(time - 1, 0, Times.Length - 1);
             _ = EnterAsync();
         }
+        else
+            ShowTitle();
     }
 
     public DialogueViewModel Dialogue { get; }

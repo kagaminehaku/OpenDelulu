@@ -67,6 +67,7 @@ public sealed partial class PlayViewModel
 
     public void CloseAlbum()
     {
+        ReturnToTitleAfterAlbum();
         IsAlbumOpen = false;
         AlbumPicture = null;
         AlbumHoverTab = -1;

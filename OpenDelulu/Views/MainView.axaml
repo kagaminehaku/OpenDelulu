@@ -196,6 +196,7 @@
                         <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" TouchHandler="{Binding TouchHandler}" />
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                         <v:MapScreenView IsVisible="{Binding ShowMap}" />
+                        <v:TitleView IsVisible="{Binding IsTitleVisible}" />
                         <v:AlbumView IsVisible="{Binding IsAlbumOpen}" />
                         <Panel IsVisible="{Binding DateHud.IsVisible, FallbackValue=False}">
                             <v:DsHudView DataContext="{Binding DateHud}" />

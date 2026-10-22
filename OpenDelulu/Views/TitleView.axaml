@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             x:Class="OpenDelulu.Views.TitleView"
+             x:DataType="vm:PlayViewModel">
+    <!-- The original title screen (ds02) in 1024x768: pointing at an entry selects it, clicking chooses it. -->
+    <Panel Background="Black">
+        <Viewbox Stretch="Uniform">
+            <ItemsControl ItemsSource="{Binding TitleQuads}" Width="1024" Height="768" ClipToBounds="True">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:HudQuad">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:HudQuad">
+                        <Panel Width="{Binding W}" Height="{Binding H}" IsVisible="{Binding IsVisible}"
+                               Background="Transparent" IsHitTestVisible="{Binding IsHitTestable}" Cursor="Hand"
+                               PointerEntered="OnEntryEntered" PointerPressed="OnEntryPressed">
+                            <Image Source="{Binding Image}" Stretch="Fill" />
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Viewbox>
+    </Panel>
+</UserControl>

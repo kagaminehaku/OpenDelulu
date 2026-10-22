@@ -64,19 +64,32 @@ public sealed class DsMenu
     public IReadOnlyList<AnimationClipInfo> Clips => _player.Clips;
 
     /// <summary>True while a clip is still moving (call <see cref="Advance"/> and lay out again).</summary>
-    public bool IsAnimating => _player.Current is { IsStatic: false } clip && _player.Time < clip.End;
+    public bool IsAnimating => _player.Current is { IsStatic: false } clip && (IsLooping || _player.Time < clip.End - 1e-3);
+
+    /// <summary>The current clip repeats (selection pulses of the title menu).</summary>
+    public bool IsLooping { get; private set; }
+
+    /// <summary>Index of the clip last played.</summary>
+    public int CurrentClip => _player.Current?.Index ?? -1;
 
     /// <summary>An embedded texture by name (hover fills, buttons, the check mark).</summary>
     public RgbaImage? Texture(string name) => _textures.GetValueOrDefault(name);
 
-    /// <summary>Loads dsNN_MM_00_00_00 from the newest archive that has it.</summary>
+    /// <summary>
+    /// Archives holding ds menus, newest first: the Bonus Disc's, then the base game's. The Gravure add-ons (sb3f/sb3g)
+    /// carry their own title (ds02) for their separate executables, so they are not searched.
+    /// </summary>
+    public static readonly string[] Archives = ["sb3x_1100.pp", "sb3_0100.pp"];
+
+    /// <summary>Loads dsNN_MM_00_00_00 from the newest of <see cref="Archives"/> that has it.</summary>
     public static DsMenu Load(GameFileSystem fs, string name)
     {
-        var xxRef = fs.FindAnywhere(name + ".xx") ?? throw new FileNotFoundException($"{name}.xx is not installed.");
-        var xaRef = fs.FindAnywhere(name + ".xa") ?? throw new FileNotFoundException($"{name}.xa is not installed.");
-        var model = XxReader.Read(fs.ReadFile(xxRef.Archive.Name, xxRef.Entry.Name));
+        string? Find(string file) => Archives.FirstOrDefault(a => fs.HasArchive(a) && fs.GetArchive(a).Find(file) is not null);
+        string xxArchive = Find(name + ".xx") ?? throw new FileNotFoundException($"{name}.xx is not installed.");
+        string xaArchive = Find(name + ".xa") ?? throw new FileNotFoundException($"{name}.xa is not installed.");
+        var model = XxReader.Read(fs.ReadFile(xxArchive, name + ".xx"));
         var render = RenderModel.Build(name, [new RenderPart(name, model, model.Root)]);
-        var animation = XaReader.Read(fs.ReadFile(xaRef.Archive.Name, xaRef.Entry.Name)).Animation
+        var animation = XaReader.Read(fs.ReadFile(xaArchive, name + ".xa")).Animation
             ?? throw new InvalidDataException($"{name}.xa has no animation.");
         var player = new AnimationPlayer(render.Rig, animation, name) { FollowNext = false };
         player.Play(0);
@@ -87,8 +100,16 @@ public sealed class DsMenu
     public bool Play(string clipName, bool instant = false)
     {
         var clip = _player.Clips.FirstOrDefault(c => c.Name == clipName);
+        return clip is not null && Play(clip.Index, instant);
+    }
+
+    /// <summary>Plays a clip by index (names repeat, e.g. the two もどる選択ループ of the title); <paramref name="loop"/> repeats it.</summary>
+    public bool Play(int index, bool instant = false, bool loop = false)
+    {
+        var clip = _player.Clips.FirstOrDefault(c => c.Index == index);
         if (clip is null)
             return false;
+        IsLooping = loop && !clip.IsStatic;
         _player.Play(clip.Index);
         if (instant)
             _player.Advance((clip.End - clip.Start) / AnimationPlayer.BaseFramesPerSecond / Math.Max(0.01, clip.Speed) - 1e-6);
@@ -101,6 +122,16 @@ public sealed class DsMenu
     {
         if (_player.Current is not { IsStatic: false } clip)
             return;
+        if (IsLooping)
+        {
+            // Wrap inside the clip instead of following its "next" link.
+            double frames = seconds * AnimationPlayer.BaseFramesPerSecond * Math.Max(0.01, clip.Speed);
+            double time = clip.Start + ((_player.Time - clip.Start + frames) % Math.Max(1e-3, clip.End - clip.Start));
+            _player.Play(clip.Index);
+            _player.Advance((time - clip.Start) / AnimationPlayer.BaseFramesPerSecond / Math.Max(0.01, clip.Speed));
+            Evaluate();
+            return;
+        }
         double remaining = (clip.End - 1e-4 - _player.Time) / AnimationPlayer.BaseFramesPerSecond / Math.Max(0.01, clip.Speed);
         _player.Advance(Math.Clamp(seconds, 0, Math.Max(0, remaining)));
         Evaluate();

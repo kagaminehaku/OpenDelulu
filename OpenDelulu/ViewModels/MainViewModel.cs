@@ -220,6 +220,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     Config.ShowPage(page);
                 };
                 play.ExitRequested += () => AppHost.RequestExit?.Invoke();
+                play.MemoriesRequested += () => SelectedTab = 2;
             }
             if (Characters is not null)
             {
