@@ -328,7 +328,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             foreach (var (model, animator) in oilProps.Props)
                 objects.Add((model, animator));
         }
-        var scene = new ModelScene(objects, subject: 1);
+        var scene = new ModelScene(objects, subject: 1) { Glare = StageGlareFor(_stage) };
         if (particleObject >= 0 && StageParticlesFor(_stage) is { } sprites)
         {
             var stage = _stage;
@@ -745,6 +745,15 @@ public sealed partial class PlayViewModel : ViewModelBase
     /// </summary>
     readonly Dictionary<string, LightSet?> _lightFiles = [];
     readonly Dictionary<string, StageParticles?> _particleFiles = [];
+
+    /// <summary>The stage variant's .glare, or null when it has none (night beach, pool...).</summary>
+    StageGlare? StageGlareFor(Stage stage)
+    {
+        if (stage.Variant.Glare is not { } asset)
+            return null;
+        try { return StageGlare.FromFile(OpenDelulu.Formats.Scene.GlareFile.Read(_fs.ReadReferenced(asset.Archive, asset.File))); }
+        catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException or FileNotFoundException) { return null; }
+    }
 
     /// <summary>The stage variant's .ptcl sprites (cached), or null when it has none.</summary>
     StageParticles? StageParticlesFor(Stage stage)

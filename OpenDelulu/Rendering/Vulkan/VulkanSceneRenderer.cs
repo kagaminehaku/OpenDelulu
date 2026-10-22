@@ -5,6 +5,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Avalonia;
 using OpenDelulu.Engine.Assets;
+using OpenDelulu.Engine.Stages;
 using OpenDelulu.Formats.Imaging;
 using Silk.NET.Vulkan;
 
@@ -18,6 +19,8 @@ namespace OpenDelulu.Rendering.Vulkan;
 internal sealed unsafe class VulkanSceneRenderer : IDisposable
 {
     const Format ColorFormat = Format.R8G8B8A8Unorm;
+    /// <summary>The glare images: half floats, so glare meshes adding up keep their excess (the exe's float target).</summary>
+    const Format GlareFormat = Format.R16G16B16A16Sfloat;
 
     [StructLayout(LayoutKind.Sequential)]
     struct PushConstants
@@ -58,15 +61,16 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
     readonly ShaderModule _vertex, _fragment;
     readonly DescriptorSetLayout _setLayout;
     readonly PipelineLayout _pipelineLayout;
-    readonly RenderPass _renderPass;
-    readonly Pipeline _opaque, _translucent, _additive, _darken;
+    readonly RenderPass _renderPass, _glareSourcePass;
+    readonly Pipeline _opaque, _translucent, _additive, _darken, _glareSource;
     readonly Sampler _sampler;
+    readonly VulkanGlare _glare;
 
     PixelSize _size;
-    Image _color, _depth;
-    DeviceMemory _colorMemory, _depthMemory;
-    ImageView _colorView, _depthView;
-    Framebuffer _framebuffer;
+    Image _color, _depth, _glareImage;
+    DeviceMemory _colorMemory, _depthMemory, _glareMemory;
+    ImageView _colorView, _depthView, _glareView;
+    Framebuffer _framebuffer, _glareFramebuffer;
 
     ModelScene? _scene;
     readonly List<GpuMesh> _meshes = [];
@@ -117,10 +121,14 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         Api.CreatePipelineLayout(Device, in layoutInfo, null, out _pipelineLayout).ThrowOnError();
 
         _renderPass = CreateRenderPass();
+        _glareSourcePass = CreateGlareSourcePass();
         _opaque = CreatePipeline(translucent: false);
         _translucent = CreatePipeline(translucent: true);
         _additive = CreatePipeline(translucent: true, BlendFactor.SrcAlpha, BlendFactor.One);
         _darken = CreatePipeline(translucent: true, BlendFactor.Zero, BlendFactor.OneMinusSrcColor);
+        // Glare meshes, premultiplied by the shader, added up behind the scene's depth.
+        _glareSource = CreatePipeline(translucent: true, BlendFactor.One, BlendFactor.One, _glareSourcePass);
+        _glare = new VulkanGlare(vk, GlareFormat, ColorFormat, CreateShader);
 
         var samplerInfo = new SamplerCreateInfo
         {
@@ -203,6 +211,14 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         }
         Api.CmdEndRenderPass(cmd);
 
+        if (scene?.Glare is { } glare && _meshes.Count > 0 && HasGlareSource(scene))
+        {
+            DrawGlareSource(cmd, scene, glare, camera3.ViewProjection, camera3.LightDirection);
+            // Like the exe: the star turns by the camera's right vector x (_11 of the inverse view), in radians.
+            _glare.StarInclination = camera.CameraToWorld(scene.Subject).M11;
+            _glare.Apply(cmd, glare);
+        }
+
         // Offscreen color is now TRANSFER_SRC (render pass final layout); copy it into the shared image.
         if (target is not null)
         {
@@ -282,6 +298,64 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             Api.CmdBindIndexBuffer(cmd, mesh.Indices.Handle, 0, IndexType.Uint16);
             Api.CmdDrawIndexed(cmd, (uint)mesh.IndexCount, 1, 0, 0, 0);
         }
+    }
+
+    bool HasGlareSource(ModelScene scene)
+    {
+        for (int i = 0; i < _meshes.Count; i++)
+            if (scene.IsGlareSource(i))
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// The glare source: the glare meshes again, in their glare colour, hidden by the depth the scene pass left (the
+    /// exe redraws the whole scene into its glare target for that, with the glare meshes lifted by +100).
+    /// </summary>
+    void DrawGlareSource(CommandBuffer cmd, ModelScene scene, StageGlare glare, Matrix4x4 viewProjection, Vector3 light)
+    {
+        var clear = stackalloc ClearValue[2];
+        clear[0] = new ClearValue { Color = new ClearColorValue(0f, 0f, 0f, 1f) };
+        var begin = new RenderPassBeginInfo
+        {
+            SType = StructureType.RenderPassBeginInfo,
+            RenderPass = _glareSourcePass,
+            Framebuffer = _glareFramebuffer,
+            RenderArea = new Rect2D(new Offset2D(0, 0), new Extent2D((uint)_size.Width, (uint)_size.Height)),
+            ClearValueCount = 2,
+            PClearValues = clear,
+        };
+        Api.CmdBeginRenderPass(cmd, in begin, SubpassContents.Inline);
+        var viewport = new Viewport(0, 0, _size.Width, _size.Height, 0, 1);
+        Api.CmdSetViewport(cmd, 0, 1, in viewport);
+        var scissor = new Rect2D(new Offset2D(0, 0), new Extent2D((uint)_size.Width, (uint)_size.Height));
+        Api.CmdSetScissor(cmd, 0, 1, in scissor);
+        Api.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, _glareSource);
+        var push = new PushConstants
+        {
+            Mvp = viewProjection,
+            LightAndPass = new Vector4(light, 3 + (int)glare.Color),
+        };
+        for (int i = 0; i < _meshes.Count; i++)
+        {
+            if (!scene.IsGlareSource(i))
+                continue;
+            var mesh = _meshes[i];
+            var set = (mesh.Texture >= 0 ? _textures[mesh.Texture] : _white!).Set;
+            Api.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, _pipelineLayout, 0, 1, &set, 0, null);
+            var tint = new Vector4(scene.Light(i), 1);
+            push.Diffuse = mesh.Diffuse * tint;
+            push.Ambient = mesh.Ambient * tint;
+            push.Emissive = mesh.Emissive * tint;
+            Api.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
+                0, (uint)sizeof(PushConstants), &push);
+            var buffers = stackalloc Silk.NET.Vulkan.Buffer[2] { mesh.Vertices.Handle, mesh.Colors!.Handle };
+            var offsets = stackalloc ulong[2];
+            Api.CmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+            Api.CmdBindIndexBuffer(cmd, mesh.Indices.Handle, 0, IndexType.Uint16);
+            Api.CmdDrawIndexed(cmd, (uint)mesh.IndexCount, 1, 0, 0, 0);
+        }
+        Api.CmdEndRenderPass(cmd);
     }
 
     // ------------------------------------------------------------------ scene resources
@@ -482,6 +556,13 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             Layers = 1,
         };
         Api.CreateFramebuffer(Device, in info, null, out _framebuffer).ThrowOnError();
+
+        (_glareImage, _glareMemory, _glareView) = CreateImage(size.Width, size.Height, GlareFormat,
+            ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.SampledBit, ImageAspectFlags.ColorBit);
+        var glareAttachments = stackalloc ImageView[] { _glareView, _depthView };
+        var glareInfo = info with { RenderPass = _glareSourcePass, PAttachments = glareAttachments };
+        Api.CreateFramebuffer(Device, in glareInfo, null, out _glareFramebuffer).ThrowOnError();
+        _glare.Resize(size, _colorView, _glareView, (width, height, format, usage) => CreateImage(width, height, format, usage, ImageAspectFlags.ColorBit));
     }
 
     void DestroyTargets()
@@ -490,8 +571,10 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             return;
         Api.DeviceWaitIdle(Device);
         Api.DestroyFramebuffer(Device, _framebuffer, null);
+        Api.DestroyFramebuffer(Device, _glareFramebuffer, null);
         DestroyImage(_color, _colorMemory, _colorView);
         DestroyImage(_depth, _depthMemory, _depthView);
+        DestroyImage(_glareImage, _glareMemory, _glareView);
         _framebuffer = default;
         _size = default;
     }
@@ -593,7 +676,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             Format = _depthFormat,
             Samples = SampleCountFlags.Count1Bit,
             LoadOp = AttachmentLoadOp.Clear,
-            StoreOp = AttachmentStoreOp.DontCare,
+            StoreOp = AttachmentStoreOp.Store, // the glare source is hidden by it
             StencilLoadOp = AttachmentLoadOp.DontCare,
             StencilStoreOp = AttachmentStoreOp.DontCare,
             InitialLayout = ImageLayout.Undefined,
@@ -641,7 +724,79 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         return renderPass;
     }
 
-    Pipeline CreatePipeline(bool translucent, BlendFactor source = BlendFactor.SrcAlpha, BlendFactor destination = BlendFactor.OneMinusSrcAlpha)
+    /// <summary>
+    /// The glare source pass: a colour image of its own (cleared, then sampled by <see cref="VulkanGlare"/>) and the
+    /// scene pass's depth, tested but not written.
+    /// </summary>
+    RenderPass CreateGlareSourcePass()
+    {
+        var attachments = stackalloc AttachmentDescription[2];
+        attachments[0] = new AttachmentDescription
+        {
+            Format = GlareFormat,
+            Samples = SampleCountFlags.Count1Bit,
+            LoadOp = AttachmentLoadOp.Clear,
+            StoreOp = AttachmentStoreOp.Store,
+            StencilLoadOp = AttachmentLoadOp.DontCare,
+            StencilStoreOp = AttachmentStoreOp.DontCare,
+            InitialLayout = ImageLayout.Undefined,
+            FinalLayout = ImageLayout.ShaderReadOnlyOptimal,
+        };
+        attachments[1] = new AttachmentDescription
+        {
+            Format = _depthFormat,
+            Samples = SampleCountFlags.Count1Bit,
+            LoadOp = AttachmentLoadOp.Load,
+            StoreOp = AttachmentStoreOp.DontCare,
+            StencilLoadOp = AttachmentLoadOp.DontCare,
+            StencilStoreOp = AttachmentStoreOp.DontCare,
+            InitialLayout = ImageLayout.DepthStencilAttachmentOptimal,
+            FinalLayout = ImageLayout.DepthStencilAttachmentOptimal,
+        };
+        var colorRef = new AttachmentReference(0, ImageLayout.ColorAttachmentOptimal);
+        var depthRef = new AttachmentReference(1, ImageLayout.DepthStencilAttachmentOptimal);
+        var subpass = new SubpassDescription
+        {
+            PipelineBindPoint = PipelineBindPoint.Graphics,
+            ColorAttachmentCount = 1,
+            PColorAttachments = &colorRef,
+            PDepthStencilAttachment = &depthRef,
+        };
+        var dependencies = stackalloc SubpassDependency[2];
+        dependencies[0] = new SubpassDependency
+        {
+            SrcSubpass = Vk.SubpassExternal,
+            DstSubpass = 0,
+            SrcStageMask = PipelineStageFlags.LateFragmentTestsBit | PipelineStageFlags.FragmentShaderBit,
+            DstStageMask = PipelineStageFlags.EarlyFragmentTestsBit | PipelineStageFlags.ColorAttachmentOutputBit,
+            SrcAccessMask = AccessFlags.DepthStencilAttachmentWriteBit,
+            DstAccessMask = AccessFlags.DepthStencilAttachmentReadBit | AccessFlags.ColorAttachmentWriteBit,
+        };
+        dependencies[1] = new SubpassDependency
+        {
+            SrcSubpass = 0,
+            DstSubpass = Vk.SubpassExternal,
+            SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+            DstStageMask = PipelineStageFlags.FragmentShaderBit,
+            SrcAccessMask = AccessFlags.ColorAttachmentWriteBit,
+            DstAccessMask = AccessFlags.ShaderReadBit,
+        };
+        var info = new RenderPassCreateInfo
+        {
+            SType = StructureType.RenderPassCreateInfo,
+            AttachmentCount = 2,
+            PAttachments = attachments,
+            SubpassCount = 1,
+            PSubpasses = &subpass,
+            DependencyCount = 2,
+            PDependencies = dependencies,
+        };
+        Api.CreateRenderPass(Device, in info, null, out var renderPass).ThrowOnError();
+        return renderPass;
+    }
+
+    Pipeline CreatePipeline(bool translucent, BlendFactor source = BlendFactor.SrcAlpha, BlendFactor destination = BlendFactor.OneMinusSrcAlpha,
+        RenderPass renderPass = default)
     {
         using var entry = new ByteString("main");
         var stages = stackalloc PipelineShaderStageCreateInfo[2];
@@ -747,7 +902,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             PColorBlendState = &blend,
             PDynamicState = &dynamic,
             Layout = _pipelineLayout,
-            RenderPass = _renderPass,
+            RenderPass = renderPass.Handle != 0 ? renderPass : _renderPass,
             Subpass = 0,
             BasePipelineIndex = -1,
         };
@@ -760,12 +915,15 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         Api.DeviceWaitIdle(Device);
         ReleaseScene();
         DestroyTargets();
+        _glare.Dispose();
         Api.DestroySampler(Device, _sampler, null);
         Api.DestroyPipeline(Device, _opaque, null);
         Api.DestroyPipeline(Device, _translucent, null);
         Api.DestroyPipeline(Device, _additive, null);
         Api.DestroyPipeline(Device, _darken, null);
+        Api.DestroyPipeline(Device, _glareSource, null);
         Api.DestroyRenderPass(Device, _renderPass, null);
+        Api.DestroyRenderPass(Device, _glareSourcePass, null);
         Api.DestroyPipelineLayout(Device, _pipelineLayout, null);
         Api.DestroyDescriptorSetLayout(Device, _setLayout, null);
         Api.DestroyShaderModule(Device, _vertex, null);

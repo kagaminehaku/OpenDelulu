@@ -16,6 +16,8 @@ internal sealed unsafe class GlExtras
     readonly delegate* unmanaged[Stdcall]<int, float, float, float, void> _uniform3f;
     readonly delegate* unmanaged[Stdcall]<int, int, void> _blendFunc;
     readonly delegate* unmanaged[Stdcall]<int, void> _generateMipmap;
+    readonly delegate* unmanaged[Stdcall]<byte, byte, byte, byte, void> _colorMask;
+    readonly delegate* unmanaged[Stdcall]<int, void> _disableVertexAttribArray;
 
     public GlExtras(GlInterface gl)
     {
@@ -23,7 +25,9 @@ internal sealed unsafe class GlExtras
         _uniform3f = (delegate* unmanaged[Stdcall]<int, float, float, float, void>)gl.GetProcAddress("glUniform3f");
         _blendFunc = (delegate* unmanaged[Stdcall]<int, int, void>)gl.GetProcAddress("glBlendFunc");
         _generateMipmap = (delegate* unmanaged[Stdcall]<int, void>)gl.GetProcAddress("glGenerateMipmap");
-        if (_uniform4f == null || _uniform3f == null || _blendFunc == null)
+        _colorMask = (delegate* unmanaged[Stdcall]<byte, byte, byte, byte, void>)gl.GetProcAddress("glColorMask");
+        _disableVertexAttribArray = (delegate* unmanaged[Stdcall]<int, void>)gl.GetProcAddress("glDisableVertexAttribArray");
+        if (_uniform4f == null || _uniform3f == null || _blendFunc == null || _colorMask == null || _disableVertexAttribArray == null)
             throw new System.NotSupportedException("Required GL functions are missing.");
     }
 
@@ -34,6 +38,14 @@ internal sealed unsafe class GlExtras
     public void Uniform3f(int location, float x, float y, float z) => _uniform3f(location, x, y, z);
 
     public void BlendFunc(int src, int dst) => _blendFunc(src, dst);
+
+    public void DisableVertexAttribArray(int index) => _disableVertexAttribArray(index);
+
+    public void ColorMask(bool write)
+    {
+        byte value = write ? (byte)1 : (byte)0;
+        _colorMask(value, value, value, value);
+    }
 
     public void GenerateMipmap(int target)
     {

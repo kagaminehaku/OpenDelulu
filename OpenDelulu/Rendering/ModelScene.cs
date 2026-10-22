@@ -259,6 +259,12 @@ public sealed class ModelScene
 
     public bool IsAnimating => _particles.Count > 0 || _objects.Any(o => o.Animator?.IsAnimating == true);
 
+    /// <summary>The stage glare drawn over the frame (null = none).</summary>
+    public StageGlare? Glare { get; set; }
+
+    /// <summary>True when a visible mesh lights the glare (<see cref="RenderMesh.IsGlareSource"/>).</summary>
+    public bool IsGlareSource(int meshIndex) => _visible[meshIndex] && _meshes[meshIndex].IsGlareSource;
+
     /// <summary>Camera pitch to start from (radians, positive = from above); null = the viewer's default.</summary>
     public float? CameraPitch { get; set; }
 

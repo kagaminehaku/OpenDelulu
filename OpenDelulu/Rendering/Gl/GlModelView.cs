@@ -26,6 +26,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
     }
 
     GlExtras? _ext;
+    GlGlare? _glare;
     int _program, _vao, _whiteTexture;
     int _uMvp, _uTex, _uDiffuse, _uLightDir, _uAlphaPass, _uAmbient, _uEmissive;
     readonly List<GpuMesh> _meshes = [];
@@ -121,12 +122,15 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             _vao = gl.GenVertexArray();
 
         _whiteTexture = CreateTexture(gl, 1, 1, [255, 255, 255, 255]);
+        _glare = new GlGlare(gl, _ext, vertexHeader, header);
         _sceneDirty = true;
     }
 
     protected override void OnOpenGlDeinit(GlInterface gl)
     {
         ReleaseScene(gl);
+        _glare?.Dispose(gl);
+        _glare = null;
         if (_whiteTexture != 0) gl.DeleteTexture(_whiteTexture);
         if (_vao != 0) gl.DeleteVertexArray(_vao);
         if (_program != 0) gl.DeleteProgram(_program);
@@ -181,6 +185,30 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.DepthMask(0);
         gl.Enable(GlExtras.GL_BLEND);
         DrawMeshes(gl, scene, translucentOnly: true);
+
+        if (scene.Glare is { } glare && _glare is not null && HasGlareSource(scene))
+        {
+            // The glare source: the scene's depth (opaque texels, no colour), then the glare meshes added up in their
+            // glare colour, ignoring their opacity (see the shader).
+            _glare.BeginSource(gl, width, height);
+            gl.Enable(GL_DEPTH_TEST);
+            _ext.ColorMask(false);
+            gl.DepthMask(1);
+            gl.Disable(GlExtras.GL_BLEND);
+            gl.Uniform1f(_uAlphaPass, 0f);
+            DrawMeshes(gl, scene, translucentOnly: false);
+            _ext.ColorMask(true);
+            gl.DepthMask(0);
+            gl.Enable(GlExtras.GL_BLEND);
+            _ext.BlendFunc(GL_ONE, GL_ONE);
+            gl.Uniform1f(_uAlphaPass, 3 + (int)glare.Color);
+            for (int i = 0; i < _meshes.Count; i++)
+                if (scene.IsGlareSource(i))
+                    DrawMesh(gl, scene, i);
+            _glare.StarInclination = Camera.CameraToWorld(scene.Subject).M11;
+            _glare.Apply(gl, fb, glare);
+            gl.UseProgram(_program);
+        }
 
         gl.DepthMask(1);
         gl.Disable(GlExtras.GL_BLEND);
@@ -264,31 +292,45 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
                 }
             }
 
-            gl.BindTexture(GL_TEXTURE_2D, mesh.TextureIndex >= 0 ? _textures[mesh.TextureIndex] : _whiteTexture);
-            var light = scene.Light(i);
-            var d = mesh.Diffuse;
-            var a = mesh.Ambient * new Vector4(light, 1);
-            var e = mesh.Emissive * new Vector4(light, 1);
-            _ext!.Uniform4f(_uDiffuse, d.X * light.X, d.Y * light.Y, d.Z * light.Z, d.W);
-            _ext.Uniform4f(_uAmbient, a.X, a.Y, a.Z, 0);
-            _ext.Uniform4f(_uEmissive, e.X, e.Y, e.Z, 0);
-
-            gl.BindBuffer(GL_ARRAY_BUFFER, mesh.VertexBuffer);
-            const int stride = RenderModelStride * sizeof(float);
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 3, GL_FLOAT, 0, stride, 0);
-            gl.EnableVertexAttribArray(1);
-            gl.VertexAttribPointer(1, 3, GL_FLOAT, 0, stride, 3 * sizeof(float));
-            gl.EnableVertexAttribArray(2);
-            gl.VertexAttribPointer(2, 2, GL_FLOAT, 0, stride, 6 * sizeof(float));
-            gl.EnableVertexAttribArray(3);
-            gl.VertexAttribPointer(3, 1, GL_FLOAT, 0, stride, 8 * sizeof(float));
-            gl.BindBuffer(GL_ARRAY_BUFFER, mesh.ColorBuffer);
-            gl.EnableVertexAttribArray(4);
-            gl.VertexAttribPointer(4, 4, GL_FLOAT, 0, 4 * sizeof(float), 0);
-            gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.IndexBuffer);
-            gl.DrawElements(GL_TRIANGLES, mesh.IndexCount, GL_UNSIGNED_SHORT, 0);
+            DrawMesh(gl, scene, i);
         }
+    }
+
+    bool HasGlareSource(ModelScene scene)
+    {
+        for (int i = 0; i < _meshes.Count; i++)
+            if (scene.IsGlareSource(i))
+                return true;
+        return false;
+    }
+
+    void DrawMesh(GlInterface gl, ModelScene scene, int i)
+    {
+        var mesh = _meshes[i];
+        gl.BindTexture(GL_TEXTURE_2D, mesh.TextureIndex >= 0 ? _textures[mesh.TextureIndex] : _whiteTexture);
+        var light = scene.Light(i);
+        var d = mesh.Diffuse;
+        var a = mesh.Ambient * new Vector4(light, 1);
+        var e = mesh.Emissive * new Vector4(light, 1);
+        _ext!.Uniform4f(_uDiffuse, d.X * light.X, d.Y * light.Y, d.Z * light.Z, d.W);
+        _ext.Uniform4f(_uAmbient, a.X, a.Y, a.Z, 0);
+        _ext.Uniform4f(_uEmissive, e.X, e.Y, e.Z, 0);
+
+        gl.BindBuffer(GL_ARRAY_BUFFER, mesh.VertexBuffer);
+        const int stride = RenderModelStride * sizeof(float);
+        gl.EnableVertexAttribArray(0);
+        gl.VertexAttribPointer(0, 3, GL_FLOAT, 0, stride, 0);
+        gl.EnableVertexAttribArray(1);
+        gl.VertexAttribPointer(1, 3, GL_FLOAT, 0, stride, 3 * sizeof(float));
+        gl.EnableVertexAttribArray(2);
+        gl.VertexAttribPointer(2, 2, GL_FLOAT, 0, stride, 6 * sizeof(float));
+        gl.EnableVertexAttribArray(3);
+        gl.VertexAttribPointer(3, 1, GL_FLOAT, 0, stride, 8 * sizeof(float));
+        gl.BindBuffer(GL_ARRAY_BUFFER, mesh.ColorBuffer);
+        gl.EnableVertexAttribArray(4);
+        gl.VertexAttribPointer(4, 4, GL_FLOAT, 0, 4 * sizeof(float), 0);
+        gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.IndexBuffer);
+        gl.DrawElements(GL_TRIANGLES, mesh.IndexCount, GL_UNSIGNED_SHORT, 0);
     }
 
     const int RenderModelStride = Engine.Assets.RenderModel.VertexStride;
@@ -366,7 +408,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         return texture;
     }
 
-    static void CheckShader(string? error, string stage)
+    internal static void CheckShader(string? error, string stage)
     {
         if (!string.IsNullOrEmpty(error))
         {
@@ -399,6 +441,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             """;
 
         // uAlphaPass 0: opaque texels (alpha test). 1: translucent edges only. 2: every texel (additive/darken).
+        // 3 + colour: the glare source (every texel whatever its alpha).
         public const string Fragment = """
             uniform sampler2D uTex;
             uniform vec4 uDiffuse;
@@ -418,7 +461,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
                     if (alpha < 0.5) discard;
                 } else if (uAlphaPass < 1.5) {
                     if (alpha >= 0.5 || alpha < 0.02) discard;
-                } else if (alpha < 0.004) {
+                } else if (uAlphaPass < 2.5 && alpha < 0.004) {
                     discard;
                 }
                 // Direct3D 9 fixed-function material lighting (two-sided): emissive + ambient * scene ambient
@@ -437,7 +480,16 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
                     float sheen = pow(1.0 - abs(dot(normal, view)), 3.0);
                     color = color * (1.0 - 0.12 * vGloss) + uDiffuse.rgb * vGloss * (0.75 * highlight + 0.18 * sheen);
                 }
-                fragColor = vec4(color, alpha);
+                if (uAlphaPass > 2.5) {
+                    // Glare source (giTechGlareDif/Spe/Emi/Lit): full strength, opacity ignored like the exe's
+                    // alpha = 1 output. 0 = lit diffuse, 1 = specular (none here), 2 = emissive, 3 = lit.
+                    float technique = uAlphaPass - 3.0;
+                    vec3 glare = technique > 1.5 && technique < 2.5 ? uEmissive.rgb * texel.rgb
+                        : technique > 0.5 && technique < 1.5 ? vec3(0.0) : clamp(color, 0.0, 1.0);
+                    fragColor = vec4(glare, 1.0);
+                } else {
+                    fragColor = vec4(color, alpha);
+                }
             }
             """;
     }

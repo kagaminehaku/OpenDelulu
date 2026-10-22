@@ -263,6 +263,7 @@ public sealed class RenderModel
                         BoneFrames = boneFrames,
                         BoneOffsets = boneOffsets,
                         Blend = BlendOf(submesh.Unknown1),
+                        Shader = frame.Unknown2.Length > 4 ? frame.Unknown2[4] : (byte)0,
                     };
                     renderMesh.Visible = (submesh.Unknown1.Length == 0 || (submesh.Unknown1[0] & 1) == 0)
                         && (visibility?.Invoke(renderMesh) ?? !IsHelperMaterial(renderMesh.MaterialName));
@@ -356,6 +357,15 @@ public sealed class RenderMesh
 
     /// <summary>Blending requested by the data (see <see cref="BlendMode"/>).</summary>
     public BlendMode Blend { get; init; }
+
+    /// <summary>
+    /// The frame's shader effect (byte 4 of its second unknown block), indexing the exe's draw table: 0 fixed function,
+    /// 1 toon, 2 bump, 3 water, 4 para, 5 cube, 6 glare (drawn into the glare source, see <see cref="IsGlareSource"/>).
+    /// </summary>
+    public byte Shader { get; init; }
+
+    /// <summary>The mesh lights the stage glare (.glare): water glints such as mp01's o01_P_mizu_hikari.</summary>
+    public bool IsGlareSource => Shader == 6;
 
     /// <summary>
     /// Per-vertex shine 0..1 (sun oil), copied into the vertices by <see cref="RenderModel.Skin"/>; null = matte.

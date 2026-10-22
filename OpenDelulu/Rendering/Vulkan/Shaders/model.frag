@@ -21,11 +21,12 @@ void main()
     vec4 texel = texture(uTex, vUV);
     float alpha = texel.a * pc.diffuse.a;
     // Pass 0: opaque texels (alpha test). 1: translucent edges only. 2: every texel (additive/darken effects).
+    // 3 + colour: the glare source (every texel whatever its alpha, see the end).
     if (pc.lightAndPass.w < 0.5) {
         if (alpha < 0.5) discard;
     } else if (pc.lightAndPass.w < 1.5) {
         if (alpha >= 0.5 || alpha < 0.02) discard;
-    } else if (alpha < 0.004) {
+    } else if (pc.lightAndPass.w < 2.5 && alpha < 0.004) {
         discard;
     }
     // Direct3D 9 fixed-function material lighting (two-sided); keep in sync with GlModelView's shader.
@@ -43,6 +44,16 @@ void main()
         float highlight = pow(abs(dot(normal, normalize(light + view))), 48.0);
         float sheen = pow(1.0 - abs(dot(normal, view)), 3.0);
         color = color * (1.0 - 0.12 * vGloss) + pc.diffuse.rgb * vGloss * (0.75 * highlight + 0.18 * sheen);
+    }
+    if (pc.lightAndPass.w > 2.5) {
+        // Glare source (the exe's giTechGlareDif/Spe/Emi/Lit): the glare meshes' own colour at full strength, added
+        // up. Like the originals' alpha = 1 output, the opacity is ignored: glints such as mp01's mizu_hikari are nearly
+        // invisible in the scene (material alpha 0.002..0.1) and only show through the glare.
+        // 0 = lit diffuse, 1 = specular (none here), 2 = emissive, 3 = lit.
+        int technique = int(pc.lightAndPass.w - 2.5);
+        vec3 glare = technique == 2 ? pc.emissive.rgb * texel.rgb : technique == 1 ? vec3(0.0) : clamp(color, 0.0, 1.0);
+        outColor = vec4(glare, 1.0);
+        return;
     }
     outColor = vec4(color, alpha);
 }
