@@ -63,6 +63,76 @@ public sealed class ModelScene
         }
         _visible = _meshes.Select(m => m.Visible).ToArray();
         _subject = Math.Clamp(subject, 0, _objects.Count - 1);
+        _objectLights = new LightSet?[_objects.Count];
+        _colors = new float[]?[_meshes.Count];
+        _colorVersion = new int[_meshes.Count];
+        _colorDirty = new bool[_meshes.Count];
+    }
+
+    // ------------------------------------------------------------------ Direct3D 9 fixed-function lighting
+
+    readonly LightSet?[] _objectLights;
+    readonly float[]?[] _colors;
+    readonly int[] _colorVersion;
+    readonly bool[] _colorDirty;
+    Matrix4x4? _lightCamera;
+
+    /// <summary>
+    /// Lights an object like the original (per-vertex Direct3D 9 lighting from its .xl lights, see
+    /// <see cref="FixedLighting"/>); null = the viewer's simple lighting.
+    /// </summary>
+    public void SetObjectLights(int objectIndex, LightSet? lights)
+    {
+        _objectLights[objectIndex] = lights;
+        MarkColorsDirty(objectIndex);
+        Changed?.Invoke();
+    }
+
+    void MarkColorsDirty(int objectIndex)
+    {
+        var o = _objects[objectIndex];
+        for (int m = o.MeshOffset; m < o.MeshOffset + o.Model.Meshes.Count; m++)
+            _colorDirty[m] = true;
+    }
+
+    /// <summary>Lit vertex colours (RGBA per vertex) of a mesh, or null when it uses the simple lighting.</summary>
+    public float[]? Colors(int mesh) => _colors[mesh];
+
+    /// <summary>Changes whenever <see cref="Colors"/> of the mesh changes (renderers re-upload).</summary>
+    public int ColorVersion(int mesh) => _colorVersion[mesh];
+
+    /// <summary>
+    /// Recomputes the vertex colours that are out of date: after the mesh moved (<paramref name="verticesChanged"/> for
+    /// animated meshes), when the camera moved for camera-relative lights, or after the lights or tints changed.
+    /// </summary>
+    public void UpdateLighting(Matrix4x4 cameraToWorld, bool verticesChanged)
+    {
+        bool cameraMoved = _lightCamera != cameraToWorld;
+        _lightCamera = cameraToWorld;
+        for (int m = 0; m < _meshes.Count; m++)
+        {
+            var lights = _objectLights[_owner[m]];
+            if (lights is null)
+            {
+                if (_colors[m] is not null)
+                {
+                    _colors[m] = null;
+                    _colorVersion[m]++;
+                }
+                continue;
+            }
+            bool dirty = _colorDirty[m] || _colors[m] is null || verticesChanged && IsDynamic(m) || cameraMoved && lights.HasCameraLights;
+            if (!dirty || !_visible[m])
+            {
+                _colorDirty[m] |= dirty;
+                continue;
+            }
+            var mesh = _meshes[m];
+            var colors = _colors[m] ??= new float[mesh.Vertices.Length / RenderModel.VertexStride * 4];
+            FixedLighting.Light(mesh, lights, cameraToWorld, Light(m), colors);
+            _colorDirty[m] = false;
+            _colorVersion[m]++;
+        }
     }
 
     /// <summary>The framed object's model (the only one for single-model scenes; mesh toggles use its indices).</summary>
@@ -85,6 +155,7 @@ public sealed class ModelScene
     public void SetLight(int objectIndex, Vector3 light)
     {
         _objects[objectIndex].Light = light;
+        MarkColorsDirty(objectIndex);
         Changed?.Invoke();
     }
 
@@ -107,6 +178,7 @@ public sealed class ModelScene
                 _tint[m] = t;
             else
                 _tint.Remove(m);
+            _colorDirty[m] = true;
         }
         Changed?.Invoke();
     }

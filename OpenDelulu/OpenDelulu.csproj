@@ -35,4 +35,8 @@
   <ItemGroup>
     <ProjectReference Include="..\OpenDelulu.Engine\OpenDelulu.Engine.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Headless rendering tests (offscreen Vulkan) live outside the repository for now. -->
+    <InternalsVisibleTo Include="rendertest" />
+  </ItemGroup>
 </Project>

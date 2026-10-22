@@ -332,9 +332,17 @@ public sealed partial class PlayViewModel : ViewModelBase
             scene.CameraZoom = lying ? 0.75f : 0.9f;
         }
         Scene = scene;
-        var light = CharacterLight(_stage, Time);
+        // Direct3D 9 lighting as in the original: the stage by its own .xl, the girl and the props by her bo00_NN.xl.
+        var stageLights = _stage.Lights is { } xl ? LightSet.FromXl(xl) : null;
+        var girlLights = CharacterLights(_girl.Girl, Time);
+        Scene.SetObjectLights(0, stageLights);
         for (int i = 1; i < objects.Count; i++)
-            Scene.SetLight(i, light);
+        {
+            if (girlLights is not null)
+                Scene.SetObjectLights(i, girlLights);
+            else
+                Scene.SetLight(i, CharacterLight(_stage, Time));
+        }
         ApplyLook();
         SyncHand();
     }
@@ -715,6 +723,24 @@ public sealed partial class PlayViewModel : ViewModelBase
     /// How the girl is lit on this stage: brightness by time of day, hue from the stage's ambient color (.xl),
     /// e.g. dark blue at night, orange in the evening. The stage itself has its lighting baked in.
     /// </summary>
+    readonly Dictionary<string, LightSet?> _lightFiles = [];
+
+    /// <summary>The girl's lights for a time of day (ld01 rows 41..45), or null when the table has none.</summary>
+    LightSet? CharacterLights(GirlInfo girl, StageTime time)
+    {
+        int index = Math.Clamp((int)time - 1, 0, 4);
+        if (index >= girl.Lights.Count || girl.Lights[index] is not { } asset)
+            return null;
+        string key = asset.Archive + "/" + asset.File;
+        if (!_lightFiles.TryGetValue(key, out var lights))
+        {
+            try { lights = LightSet.FromXl(OpenDelulu.Formats.Scene.XlFile.Read(_fs.ReadReferenced(asset.Archive, asset.File))); }
+            catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException) { lights = null; }
+            _lightFiles[key] = lights;
+        }
+        return lights;
+    }
+
     static Vector3 CharacterLight(Stage stage, StageTime time)
     {
         float brightness = time switch

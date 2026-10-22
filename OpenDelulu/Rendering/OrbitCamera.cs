@@ -37,6 +37,18 @@ public sealed class OrbitCamera
     /// GLSL's column-major read then equals the transpose needed for <c>M * v</c>.
     /// </summary>
     /// <param name="flipY">Vulkan's clip space points Y down.</param>
+    /// <summary>Camera space to world space (for camera-relative lights): the inverse of the view matrix.</summary>
+    public Matrix4x4 CameraToWorld(CameraSubject subject)
+    {
+        float raise = Math.Clamp((1f - Zoom) / 0.6f, 0f, 1f);
+        var target = Vector3.Lerp(subject.Center, subject.Aim, raise);
+        float distance = subject.Radius * 2.4f * Zoom;
+        float yaw = Yaw - subject.FacingYaw;
+        var eye = target + new Vector3(MathF.Sin(yaw) * MathF.Cos(Pitch), MathF.Sin(Pitch), -MathF.Cos(yaw) * MathF.Cos(Pitch)) * distance;
+        var view = Matrix4x4.CreateLookAtLeftHanded(eye, target, Vector3.UnitY);
+        return Matrix4x4.Invert(view, out var inverse) ? inverse : Matrix4x4.Identity;
+    }
+
     public (Matrix4x4 ViewProjection, Vector3 LightDirection, Vector3 Eye) Compute(CameraSubject subject, float aspect, bool flipY)
     {
         float radius = subject.Radius;

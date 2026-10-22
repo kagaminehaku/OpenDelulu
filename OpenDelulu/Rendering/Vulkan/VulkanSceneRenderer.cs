@@ -39,6 +39,9 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
 
     sealed class GpuMesh(VulkanBuffer vertices, VulkanBuffer indices, int indexCount, int texture, Vector4 diffuse, Vector4 ambient, Vector4 emissive, bool hasAlpha, BlendMode blend)
     {
+        /// <summary>Lit vertex colours (binding 1, RGBA floats; A = 0 means "use the simple lighting").</summary>
+        public VulkanBuffer? Colors { get; set; }
+        public int ColorVersion { get; set; } = -1;
         public Vector4 Ambient { get; } = ambient;
         public Vector4 Emissive { get; } = emissive;
         public VulkanBuffer Vertices { get; } = vertices;
@@ -134,10 +137,14 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
     }
 
     /// <summary>Renders one frame into <paramref name="target"/>. Returns true while the scene keeps moving.</summary>
-    public bool Render(VulkanSharedImage target, ModelScene? scene, OrbitCamera camera, double deltaSeconds)
+    public bool Render(VulkanSharedImage target, ModelScene? scene, OrbitCamera camera, double deltaSeconds) =>
+        Render(target, target.Size, scene, camera, deltaSeconds);
+
+    /// <summary>Renders into the renderer's own image; with a <paramref name="target"/>, copies it there.</summary>
+    public bool Render(VulkanSharedImage? target, PixelSize size, ModelScene? scene, OrbitCamera camera, double deltaSeconds)
     {
-        if (target.Size != _size)
-            CreateTargets(target.Size);
+        if (size != _size)
+            CreateTargets(size);
 
         if (!ReferenceEquals(scene, _scene))
         {
@@ -156,10 +163,13 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         if (scene is not null)
         {
             scene.SetLookTarget(camera3.Eye);
-            if (scene.Update(deltaSeconds))
+            bool moved = scene.Update(deltaSeconds);
+            if (moved)
                 for (int i = 0; i < _meshes.Count; i++)
                     if (scene.IsVisible(i) && scene.IsDynamic(i))
                         _meshes[i].Vertices.Write<float>(scene.Meshes[i].Vertices);
+            scene.UpdateLighting(camera.CameraToWorld(scene.Subject), moved);
+            UploadColors(scene);
             animating = scene.IsAnimating;
         }
 
@@ -194,13 +204,42 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         Api.CmdEndRenderPass(cmd);
 
         // Offscreen color is now TRANSFER_SRC (render pass final layout); copy it into the shared image.
-        target.TransitionLayout(cmd, ImageLayout.TransferDstOptimal, AccessFlags.TransferWriteBit);
-        var layers = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1);
-        var region = new ImageCopy(layers, new Offset3D(0, 0, 0), layers, new Offset3D(0, 0, 0),
-            new Extent3D((uint)_size.Width, (uint)_size.Height, 1));
-        Api.CmdCopyImage(cmd, _color, ImageLayout.TransferSrcOptimal, target.Image, ImageLayout.TransferDstOptimal, 1, in region);
+        if (target is not null)
+        {
+            target.TransitionLayout(cmd, ImageLayout.TransferDstOptimal, AccessFlags.TransferWriteBit);
+            var layers = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1);
+            var region = new ImageCopy(layers, new Offset3D(0, 0, 0), layers, new Offset3D(0, 0, 0),
+                new Extent3D((uint)_size.Width, (uint)_size.Height, 1));
+            Api.CmdCopyImage(cmd, _color, ImageLayout.TransferSrcOptimal, target.Image, ImageLayout.TransferDstOptimal, 1, in region);
+        }
         commands.Submit();
         return animating;
+    }
+
+    /// <summary>
+    /// The last rendered frame as RGBA rows from the top (waits for the GPU). The image is stored bottom-up for the
+    /// compositor (see <see cref="Render(VulkanSharedImage?, PixelSize, ModelScene?, OrbitCamera, double)"/>), so rows
+    /// are flipped here. For headless rendering tests.
+    /// </summary>
+    public byte[] ReadPixels()
+    {
+        int width = _size.Width, height = _size.Height;
+        using var buffer = new VulkanBuffer(_vk, (ulong)(width * height * 4), BufferUsageFlags.TransferDstBit);
+        var commands = _vk.Pool.CreateCommandBuffer();
+        commands.BeginRecording();
+        var copy = new BufferImageCopy
+        {
+            ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
+            ImageExtent = new Extent3D((uint)width, (uint)height, 1),
+        };
+        Api.CmdCopyImageToBuffer(commands.Handle, _color, ImageLayout.TransferSrcOptimal, buffer.Handle, 1, in copy);
+        commands.Submit();
+        _vk.Pool.FreeUsedCommandBuffers();
+        var pixels = new byte[width * height * 4];
+        var source = new ReadOnlySpan<byte>(buffer.Mapped, pixels.Length);
+        for (int y = 0; y < height; y++)
+            source.Slice((height - 1 - y) * width * 4, width * 4).CopyTo(pixels.AsSpan(y * width * 4));
+        return pixels;
     }
 
     void DrawPass(CommandBuffer cmd, ModelScene scene, Pipeline pipeline, Matrix4x4 viewProjection, Vector3 light, bool translucent)
@@ -237,9 +276,9 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             push.Emissive = mesh.Emissive * tint;
             Api.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
                 0, (uint)sizeof(PushConstants), &push);
-            var buffer = mesh.Vertices.Handle;
-            ulong offset = 0;
-            Api.CmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
+            var buffers = stackalloc Silk.NET.Vulkan.Buffer[2] { mesh.Vertices.Handle, mesh.Colors!.Handle };
+            var offsets = stackalloc ulong[2];
+            Api.CmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
             Api.CmdBindIndexBuffer(cmd, mesh.Indices.Handle, 0, IndexType.Uint16);
             Api.CmdDrawIndexed(cmd, (uint)mesh.IndexCount, 1, 0, 0, 0);
         }
@@ -282,7 +321,30 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             var diffuse = mesh.Diffuse;
             if (diffuse.X + diffuse.Y + diffuse.Z < 0.05f)
                 diffuse = new Vector4(1, 1, 1, diffuse.W); // some materials only use ambient/emissive; keep their opacity
-            _meshes.Add(new GpuMesh(vertices, indices, mesh.Indices.Length, scene.TextureIndex(m), diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha, mesh.Blend));
+            var gpu = new GpuMesh(vertices, indices, mesh.Indices.Length, scene.TextureIndex(m), diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha, mesh.Blend)
+            {
+                // Zeroed: unlit until the scene provides colours.
+                Colors = new VulkanBuffer(_vk, (ulong)(mesh.Vertices.Length / RenderModel.VertexStride * 4 * sizeof(float)), BufferUsageFlags.VertexBufferBit),
+            };
+            new Span<byte>(gpu.Colors.Mapped, (int)gpu.Colors.Size).Clear();
+            _meshes.Add(gpu);
+        }
+    }
+
+    /// <summary>Uploads the vertex colours the scene recomputed (Direct3D 9 fixed-function lighting).</summary>
+    void UploadColors(ModelScene scene)
+    {
+        for (int i = 0; i < _meshes.Count; i++)
+        {
+            var gpu = _meshes[i];
+            int version = scene.ColorVersion(i);
+            if (gpu.ColorVersion == version || gpu.Colors is not { } buffer)
+                continue;
+            gpu.ColorVersion = version;
+            if (scene.Colors(i) is { } colors)
+                buffer.Write<float>(colors);
+            else
+                new Span<byte>(buffer.Mapped, (int)buffer.Size).Clear();
         }
     }
 
@@ -380,6 +442,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         {
             mesh.Vertices.Dispose();
             mesh.Indices.Dispose();
+            mesh.Colors?.Dispose();
         }
         _meshes.Clear();
         var destroyed = new HashSet<GpuTexture>();
@@ -598,18 +661,21 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         };
 
         // RenderModel vertex: position (3), normal (3), uv (2), gloss (1) floats.
-        var binding = new VertexInputBindingDescription(0, RenderModel.VertexStride * sizeof(float), VertexInputRate.Vertex);
-        var attributes = stackalloc VertexInputAttributeDescription[4];
+        var bindings = stackalloc VertexInputBindingDescription[2];
+        bindings[0] = new VertexInputBindingDescription(0, RenderModel.VertexStride * sizeof(float), VertexInputRate.Vertex);
+        bindings[1] = new VertexInputBindingDescription(1, 4 * sizeof(float), VertexInputRate.Vertex);
+        var attributes = stackalloc VertexInputAttributeDescription[5];
         attributes[0] = new VertexInputAttributeDescription(0, 0, Format.R32G32B32Sfloat, 0);
         attributes[1] = new VertexInputAttributeDescription(1, 0, Format.R32G32B32Sfloat, 3 * sizeof(float));
         attributes[2] = new VertexInputAttributeDescription(2, 0, Format.R32G32Sfloat, 6 * sizeof(float));
         attributes[3] = new VertexInputAttributeDescription(3, 0, Format.R32Sfloat, 8 * sizeof(float));
+        attributes[4] = new VertexInputAttributeDescription(4, 1, Format.R32G32B32A32Sfloat, 0);
         var vertexInput = new PipelineVertexInputStateCreateInfo
         {
             SType = StructureType.PipelineVertexInputStateCreateInfo,
-            VertexBindingDescriptionCount = 1,
-            PVertexBindingDescriptions = &binding,
-            VertexAttributeDescriptionCount = 4,
+            VertexBindingDescriptionCount = 2,
+            PVertexBindingDescriptions = bindings,
+            VertexAttributeDescriptionCount = 5,
             PVertexAttributeDescriptions = attributes,
         };
         var inputAssembly = new PipelineInputAssemblyStateCreateInfo

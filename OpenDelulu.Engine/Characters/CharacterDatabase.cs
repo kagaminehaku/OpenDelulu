@@ -66,6 +66,13 @@ public sealed record GirlInfo(
     public IReadOnlyList<AssetRef?> Deformations { get; init; } = [];
 
     /// <summary>
+    /// ld01 rows 41..46: the character lights (bo00_NN.xl, four camera-relative directional lights and an ambient colour)
+    /// per time of day: morning, noon, evening, night, late night (rows 41..45; 46 and the second set 51..56 are not
+    /// placed yet).
+    /// </summary>
+    public IReadOnlyList<AssetRef?> Lights { get; init; } = [];
+
+    /// <summary>
     /// Texture of the intimate-area overlay meshes (ld00 rows 21..28, "zxNN_*.tga"; the base game ships 16x16
     /// mosaic tiles, texture mods replace them), or null.
     /// </summary>
@@ -198,6 +205,10 @@ public sealed class CharacterDatabase
                             : null)
                     .OfType<DateActivity>().ToList(),
                 BodyPhysics = new[] { Physics(31, ".tty"), Physics(32, ".tty") }.OfType<AssetRef>().ToList(),
+                Lights = Enumerable.Range(41, 6)
+                    .Select<int, AssetRef?>(n => rows.TryGetValue(n, out var r) && AssetRef.FromRow(r, 1) is { } xl
+                        && xl.File.EndsWith(".xl", StringComparison.OrdinalIgnoreCase) && fs.ExistsReferenced(xl.Archive, xl.File) ? xl : null)
+                    .ToList(),
                 Deformations = Enumerable.Range(71, 7)
                     .Select<int, AssetRef?>(n => rows.TryGetValue(n, out var r) && AssetRef.FromRow(r, 1) is { } xm
                         && xm.File.EndsWith(".xm", StringComparison.OrdinalIgnoreCase) && fs.ExistsReferenced(xm.Archive, xm.File) ? xm : null)

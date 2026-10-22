@@ -33,6 +33,75 @@ internal sealed unsafe class VulkanContext : IDisposable
     public required string DeviceName { get; init; }
     public required string ShareMode { get; init; }
 
+    /// <summary>
+    /// A context with no compositor to share images with: renders into the renderer's own image only, read back with
+    /// <see cref="VulkanSceneRenderer.ReadPixels"/> (headless rendering tests; no window is involved).
+    /// </summary>
+    public static VulkanContext? TryCreateOffscreen()
+    {
+        var api = Vk.GetApi();
+        using var appName = new ByteString("Open Delulu");
+        var appInfo = new ApplicationInfo
+        {
+            SType = StructureType.ApplicationInfo,
+            PApplicationName = appName,
+            PEngineName = appName,
+            ApiVersion = new Version32(1, 1, 0),
+        };
+        var instanceInfo = new InstanceCreateInfo { SType = StructureType.InstanceCreateInfo, PApplicationInfo = &appInfo };
+        api.CreateInstance(in instanceInfo, null, out var instance).ThrowOnError();
+        uint count = 0;
+        api.EnumeratePhysicalDevices(instance, ref count, null).ThrowOnError();
+        var physicalDevices = new PhysicalDevice[count];
+        fixed (PhysicalDevice* p = physicalDevices)
+            api.EnumeratePhysicalDevices(instance, ref count, p).ThrowOnError();
+        foreach (var physicalDevice in physicalDevices)
+        {
+            uint familyCount = 0;
+            api.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, ref familyCount, null);
+            var families = new QueueFamilyProperties[familyCount];
+            fixed (QueueFamilyProperties* f = families)
+                api.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, ref familyCount, f);
+            int family = Array.FindIndex(families, f => f.QueueFlags.HasFlag(QueueFlags.GraphicsBit));
+            if (family < 0)
+                continue;
+            float priority = 1f;
+            var queueInfo = new DeviceQueueCreateInfo
+            {
+                SType = StructureType.DeviceQueueCreateInfo,
+                QueueFamilyIndex = (uint)family,
+                QueueCount = 1,
+                PQueuePriorities = &priority,
+            };
+            var features = new PhysicalDeviceFeatures();
+            var deviceInfo = new DeviceCreateInfo
+            {
+                SType = StructureType.DeviceCreateInfo,
+                QueueCreateInfoCount = 1,
+                PQueueCreateInfos = &queueInfo,
+                PEnabledFeatures = &features,
+            };
+            api.CreateDevice(physicalDevice, in deviceInfo, null, out var device).ThrowOnError();
+            api.GetDeviceQueue(device, (uint)family, 0, out var queue);
+            api.GetPhysicalDeviceProperties(physicalDevice, out var properties);
+            return new VulkanContext
+            {
+                Api = api,
+                Instance = instance,
+                PhysicalDevice = physicalDevice,
+                Device = device,
+                Queue = queue,
+                QueueFamilyIndex = (uint)family,
+                Pool = new VulkanCommandBufferPool(api, device, queue, (uint)family),
+                D3DDevice = default,
+                DeviceName = Marshal.PtrToStringAnsi((IntPtr)properties.DeviceName) ?? "GPU",
+                ShareMode = "offscreen",
+            };
+        }
+        api.DestroyInstance(instance, null);
+        return null;
+    }
+
     public static (VulkanContext? Context, string Info) TryCreate(ICompositionGpuInterop interop)
     {
         Vk api;

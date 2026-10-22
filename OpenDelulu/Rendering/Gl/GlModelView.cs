@@ -17,7 +17,13 @@ namespace OpenDelulu.Rendering.Gl;
 /// </summary>
 internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
 {
-    sealed record GpuMesh(int VertexBuffer, int IndexBuffer, int IndexCount, int TextureIndex, Vector4 Diffuse, Vector4 Ambient, Vector4 Emissive, bool HasAlpha, BlendMode Blend);
+    sealed record GpuMesh(int VertexBuffer, int IndexBuffer, int IndexCount, int TextureIndex, Vector4 Diffuse, Vector4 Ambient, Vector4 Emissive, bool HasAlpha, BlendMode Blend)
+    {
+        /// <summary>Lit vertex colours (attribute 4, RGBA floats; A = 0 means "use the simple lighting").</summary>
+        public int ColorBuffer { get; init; }
+        public int ColorVersion { get; set; } = -1;
+        public int VertexCount { get; init; }
+    }
 
     GlExtras? _ext;
     int _program, _vao, _whiteTexture;
@@ -98,6 +104,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.BindAttribLocationString(_program, 1, "aNormal");
         gl.BindAttribLocationString(_program, 2, "aUV");
         gl.BindAttribLocationString(_program, 3, "aGloss");
+        gl.BindAttribLocationString(_program, 4, "aColor");
         CheckShader(gl.LinkProgramAndGetError(_program), "link");
         gl.DeleteShader(vs);
         gl.DeleteShader(fs);
@@ -150,7 +157,9 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
 
         var (mvp, light, eye) = Camera.Compute(scene.Subject, width / (float)height, flipY: false);
         scene.SetLookTarget(eye);
-        AnimateScene(gl, scene);
+        bool moved = AnimateScene(gl, scene);
+        scene.UpdateLighting(Camera.CameraToWorld(scene.Subject), moved);
+        UploadColors(gl, scene);
 
 
         gl.UseProgram(_program);
@@ -181,10 +190,29 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.UseProgram(0);
     }
 
-    /// <summary>Advances the animators, re-uploads the re-skinned vertices and keeps frames coming while they move.</summary>
-    unsafe void AnimateScene(GlInterface gl, ModelScene scene)
+    /// <summary>Uploads the vertex colours the scene recomputed (Direct3D 9 fixed-function lighting).</summary>
+    unsafe void UploadColors(GlInterface gl, ModelScene scene)
     {
-        if (scene.Update(_clock.Tick()))
+        for (int i = 0; i < _meshes.Count; i++)
+        {
+            var mesh = _meshes[i];
+            int version = scene.ColorVersion(i);
+            if (mesh.ColorVersion == version)
+                continue;
+            mesh.ColorVersion = version;
+            var colors = scene.Colors(i) ?? new float[mesh.VertexCount * 4];
+            gl.BindBuffer(GL_ARRAY_BUFFER, mesh.ColorBuffer);
+            fixed (float* c = colors)
+                gl.BufferData(GL_ARRAY_BUFFER, colors.Length * sizeof(float), (IntPtr)c, GL_DYNAMIC_DRAW);
+        }
+        gl.BindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+    /// <summary>Advances the animators, re-uploads the re-skinned vertices and keeps frames coming while they move.</summary>
+    unsafe bool AnimateScene(GlInterface gl, ModelScene scene)
+    {
+        bool moved = scene.Update(_clock.Tick());
+        if (moved)
         {
             var meshes = scene.Meshes;
             for (int i = 0; i < _meshes.Count; i++)
@@ -203,6 +231,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             RequestNextFrameRendering();
         else
             _clock.Pause();
+        return moved;
     }
 
     const int GL_DYNAMIC_DRAW = 0x88E8;
@@ -254,6 +283,9 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             gl.VertexAttribPointer(2, 2, GL_FLOAT, 0, stride, 6 * sizeof(float));
             gl.EnableVertexAttribArray(3);
             gl.VertexAttribPointer(3, 1, GL_FLOAT, 0, stride, 8 * sizeof(float));
+            gl.BindBuffer(GL_ARRAY_BUFFER, mesh.ColorBuffer);
+            gl.EnableVertexAttribArray(4);
+            gl.VertexAttribPointer(4, 4, GL_FLOAT, 0, 4 * sizeof(float), 0);
             gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.IndexBuffer);
             gl.DrawElements(GL_TRIANGLES, mesh.IndexCount, GL_UNSIGNED_SHORT, 0);
         }
@@ -282,7 +314,17 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             var diffuse = mesh.Diffuse;
             if (diffuse.X + diffuse.Y + diffuse.Z < 0.05f)
                 diffuse = new Vector4(1, 1, 1, diffuse.W); // some materials only use ambient/emissive; keep their opacity
-            _meshes.Add(new GpuMesh(vbo, ibo, mesh.Indices.Length, scene.TextureIndex(m), diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha, mesh.Blend));
+            int vertexCount = mesh.Vertices.Length / RenderModelStride;
+            int cbo = gl.GenBuffer();
+            gl.BindBuffer(GL_ARRAY_BUFFER, cbo);
+            var unlit = new float[vertexCount * 4];
+            fixed (float* c = unlit)
+                gl.BufferData(GL_ARRAY_BUFFER, unlit.Length * sizeof(float), (IntPtr)c, GL_DYNAMIC_DRAW);
+            _meshes.Add(new GpuMesh(vbo, ibo, mesh.Indices.Length, scene.TextureIndex(m), diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha, mesh.Blend)
+            {
+                ColorBuffer = cbo,
+                VertexCount = vertexCount,
+            });
         }
         gl.BindBuffer(GL_ARRAY_BUFFER, 0);
         gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -295,6 +337,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         {
             gl.DeleteBuffer(mesh.VertexBuffer);
             gl.DeleteBuffer(mesh.IndexBuffer);
+            gl.DeleteBuffer(mesh.ColorBuffer);
         }
         foreach (int texture in _textures)
             if (texture != _whiteTexture)
@@ -339,15 +382,18 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             ATTRIB vec3 aNormal;
             ATTRIB vec2 aUV;
             ATTRIB float aGloss;
+            ATTRIB vec4 aColor;
             uniform mat4 uMvp;
             VOUT vec3 vNormal;
             VOUT vec2 vUV;
             VOUT float vGloss;
+            VOUT vec4 vColor;
             void main()
             {
                 vNormal = aNormal;
                 vUV = aUV;
                 vGloss = aGloss;
+                vColor = aColor;
                 gl_Position = uMvp * vec4(aPos, 1.0);
             }
             """;
@@ -363,6 +409,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             VIN vec3 vNormal;
             VIN vec2 vUV;
             VIN float vGloss;
+            VIN vec4 vColor;
             void main()
             {
                 vec4 texel = TEX(uTex, vUV);
@@ -379,7 +426,8 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
                 vec3 normal = normalize(vNormal);
                 float lambert = abs(dot(normal, uLightDir));
                 vec3 lit = uEmissive.rgb + uAmbient.rgb * 0.35 + uDiffuse.rgb * 0.55 * lambert;
-                vec3 color = texel.rgb * min(lit, vec3(1.15));
+                // Objects with .xl lights: the per-vertex Direct3D 9 colour (clamped and tinted on the CPU).
+                vec3 color = vColor.a > 0.5 ? texel.rgb * vColor.rgb : texel.rgb * min(lit, vec3(1.15));
                 // Sun oil: wet, darker skin with a sharp highlight. The camera direction is recovered from the
                 // light, which OrbitCamera puts at normalize(eye direction + 0.6 up).
                 if (vGloss > 0.001) {
