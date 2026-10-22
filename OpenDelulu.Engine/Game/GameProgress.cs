@@ -16,6 +16,12 @@ public sealed class GirlProgress
     /// <summary>Row of the swimsuit she wears (lbNN table), or null for her first one.</summary>
     public int? SwimsuitRow { get; set; }
 
+    /// <summary>Colours chosen in the wardrobe (nails, eyes, hair).</summary>
+    public GirlLook Look { get; set; } = new();
+
+    /// <summary>The wardrobe's 12 favourite sets (null = empty).</summary>
+    public List<FavoriteSet?> Favorites { get; set; } = [];
+
     /// <summary>
     /// Album pictures she unlocked (st03_03_GG_NN): 1..4 when her level rises from that number to the next, 5 for her
     /// H picture. The exe keeps the same flags in the item list save, 20 bytes per girl from offset 0x18.
@@ -30,6 +36,40 @@ public sealed class GirlProgress
         Intimacy++;
         MetAtLevel = false;
     }
+}
+
+/// <summary>
+/// The wardrobe's Color and Hair pages: colour (0..255 per channel, multiplied with the texture), gloss and
+/// transparency (0..100) of the hand nails, foot nails and eyes, and the hair colour.
+/// </summary>
+public sealed class GirlLook
+{
+    public int[] Hand { get; set; } = [255, 255, 255];
+    public int[] HandGloss { get; set; } = [255, 255, 255];
+    public int HandOpacity { get; set; } = 100;
+    public int[] Feet { get; set; } = [255, 255, 255];
+    public int[] FeetGloss { get; set; } = [255, 255, 255];
+    public int FeetOpacity { get; set; } = 100;
+    public int[] Eyes { get; set; } = [255, 255, 255];
+    public int[] EyesGloss { get; set; } = [255, 255, 255];
+    public int EyesOpacity { get; set; } = 100;
+    public int[] Hair { get; set; } = [255, 255, 255];
+
+    public GirlLook Clone() => new()
+    {
+        Hand = [.. Hand], HandGloss = [.. HandGloss], HandOpacity = HandOpacity,
+        Feet = [.. Feet], FeetGloss = [.. FeetGloss], FeetOpacity = FeetOpacity,
+        Eyes = [.. Eyes], EyesGloss = [.. EyesGloss], EyesOpacity = EyesOpacity,
+        Hair = [.. Hair],
+    };
+}
+
+/// <summary>A favourite set of the wardrobe: when it was saved, the swimsuit and the colours.</summary>
+public sealed class FavoriteSet
+{
+    public DateTime Saved { get; set; }
+    public int? SwimsuitRow { get; set; }
+    public GirlLook Look { get; set; } = new();
 }
 
 /// <summary>

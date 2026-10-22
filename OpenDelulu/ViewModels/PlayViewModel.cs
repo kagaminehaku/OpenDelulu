@@ -335,6 +335,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         var light = CharacterLight(_stage, Time);
         for (int i = 1; i < objects.Count; i++)
             Scene.SetLight(i, light);
+        ApplyLook();
         SyncHand();
     }
 

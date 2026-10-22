@@ -7,19 +7,127 @@
     <Viewbox Stretch="Uniform">
         <Canvas Width="1024" Height="768">
             <Image Source="{Binding WardrobePanel}" Canvas.Left="496" Canvas.Top="40" Width="512" Height="688" />
+            <!-- Page tabs (Suits, Accessory, Color, Hair, Favorite) painted across the top of the panel. -->
+            <Panel Canvas.Left="496" Canvas.Top="40" Width="512" Height="36" Background="Transparent" Cursor="Hand"
+                   PointerPressed="OnPageTabsPressed" />
             <Image Source="{Binding SelectedCategoryTab}" Canvas.Left="482" Canvas.Top="{Binding SelectedCategoryTop}"
-                   Width="64" Height="136" IsHitTestVisible="False" />
+                   Width="64" Height="136" IsHitTestVisible="False" IsVisible="{Binding IsSuitsPage}" />
             <!-- Category tabs and page arrows: hit areas over the panel picture. -->
             <Panel Canvas.Left="490" Canvas.Top="100" Width="44" Height="480" Background="Transparent" Cursor="Hand"
-                   PointerPressed="OnCategoryPressed" />
+                   PointerPressed="OnCategoryPressed" IsVisible="{Binding IsSuitsPage}" />
             <Panel Canvas.Left="976" Canvas.Top="216" Width="32" Height="80" Background="Transparent" Cursor="Hand"
-                   PointerPressed="OnPageUpPressed" />
+                   PointerPressed="OnPageUpPressed" IsVisible="{Binding IsSuitsPage}" />
             <Panel Canvas.Left="976" Canvas.Top="448" Width="32" Height="80" Background="Transparent" Cursor="Hand"
-                   PointerPressed="OnPageDownPressed" />
+                   PointerPressed="OnPageDownPressed" IsVisible="{Binding IsSuitsPage}" />
             <TextBlock Text="{Binding WardrobePageText}" Canvas.Left="962" Canvas.Top="404" Width="60" FontSize="14"
-                       FontWeight="Bold" Foreground="#FF2060C0" TextAlignment="Center" IsHitTestVisible="False" />
+                       FontWeight="Bold" Foreground="#FF2060C0" TextAlignment="Center" IsHitTestVisible="False"
+                       IsVisible="{Binding IsSuitsPage}" />
 
-            <ItemsControl ItemsSource="{Binding SwimsuitCards}" Width="1024" Height="768">
+            <!-- Accessory: the body-part tabs wait for the accessory system. -->
+            <Image Source="{Binding AccessoryPartTab}" Canvas.Left="488" Canvas.Top="88" Width="64" Height="64"
+                   IsHitTestVisible="False" IsVisible="{Binding IsAccessoryPage}" />
+
+            <!-- Color: Hand / Feet / Eyes tabs, colour, gloss and transparency sliders. -->
+            <Image Source="{Binding ColorPartTab}" Canvas.Left="488" Canvas.Top="{Binding ColorPartTop}" Width="64" Height="136"
+                   IsHitTestVisible="False" IsVisible="{Binding IsColorPage}" />
+            <Panel Canvas.Left="488" Canvas.Top="88" Width="64" Height="360" Background="Transparent" Cursor="Hand"
+                   PointerPressed="OnColorPartPressed" IsVisible="{Binding IsColorPage}" />
+            <ItemsControl ItemsSource="{Binding WardrobeSliders}" Width="1024" Height="768">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ConfigSlider">
+                        <Canvas Width="1024" Height="768">
+                            <Panel Canvas.Left="{Binding TrackX}" Canvas.Top="{Binding TrackY}" Width="{Binding TrackWidth}"
+                                   Height="16" Background="Transparent" Cursor="Hand"
+                                   PointerPressed="OnTrackPressed" PointerMoved="OnTrackMoved" PointerReleased="OnTrackReleased" />
+                            <Image Source="{Binding Knob}" Canvas.Left="{Binding KnobLeft}" Canvas.Top="{Binding KnobTop}"
+                                   Width="24" Height="24" IsHitTestVisible="False" />
+                            <Image Source="{Binding Digit0}" Canvas.Left="{Binding DigitsX}" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
+                            <Image Source="{Binding Digit1}" Canvas.Left="{Binding Digit1X}" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
+                            <Image Source="{Binding Digit2}" Canvas.Left="{Binding Digit2X}" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
+                        </Canvas>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Hair: the ten colour swatches painted on the panel. -->
+            <ItemsControl ItemsSource="{Binding HairPresets}" Width="1024" Height="768" IsVisible="{Binding IsHairPage}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:HairPreset">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                    </Style>
+                    <Style Selector="Image.frame">
+                        <Setter Property="Opacity" Value="0" />
+                    </Style>
+                    <Style Selector="Panel:pointerover > Image.frame">
+                        <Setter Property="Opacity" Value="0.45" />
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:HairPreset">
+                        <Panel Width="80" Height="56" Background="Transparent" Cursor="Hand" PointerPressed="OnHairPresetPressed">
+                            <Image Classes="frame" Source="{Binding $parent[UserControl].((vm:PlayViewModel)DataContext).HairPresetFrame}"
+                                   Stretch="Fill" />
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Favorite: twelve dated sets; the chosen row is highlighted. -->
+            <ItemsControl ItemsSource="{Binding FavoriteRows}" Width="1024" Height="768" IsVisible="{Binding IsFavoritePage}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FavoriteRow">
+                        <Canvas Width="1024" Height="768">
+                            <Image Source="{Binding $parent[UserControl].((vm:PlayViewModel)DataContext).FavoriteHighlight}"
+                                   Canvas.Left="528" Canvas.Top="{Binding Y}" Width="464" Height="48" Opacity="0.55"
+                                   IsVisible="{Binding IsSelected}" IsHitTestVisible="False" />
+                            <ItemsControl ItemsSource="{Binding DigitImages}" Width="1024" Height="768" IsHitTestVisible="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.Styles>
+                                    <Style Selector="ContentPresenter" x:DataType="vm:FavoriteDigit">
+                                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                    </Style>
+                                </ItemsControl.Styles>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FavoriteDigit">
+                                        <Image Source="{Binding Image}" Width="24" Height="24" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Panel Canvas.Left="536" Canvas.Top="{Binding Y}" Width="448" Height="44" Background="Transparent"
+                                   Cursor="Hand" PointerPressed="OnFavoriteRowPressed" />
+                        </Canvas>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Image Source="{Binding FavoriteDelete}" Canvas.Left="536" Canvas.Top="690" Width="80" Height="32" Cursor="Hand"
+                   PointerPressed="OnFavoriteDeletePressed" IsVisible="{Binding IsFavoritePage}" />
+            <Image Source="{Binding FavoriteSave}" Canvas.Left="809" Canvas.Top="690" Width="80" Height="32" Cursor="Hand"
+                   PointerPressed="OnFavoriteSavePressed" IsVisible="{Binding IsFavoritePage}" />
+            <Image Source="{Binding FavoriteLoad}" Canvas.Left="905" Canvas.Top="690" Width="80" Height="32" Cursor="Hand"
+                   PointerPressed="OnFavoriteLoadPressed" IsVisible="{Binding IsFavoritePage}" />
+
+            <ItemsControl ItemsSource="{Binding SwimsuitCards}" Width="1024" Height="768" IsVisible="{Binding IsSuitsPage}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <Canvas />

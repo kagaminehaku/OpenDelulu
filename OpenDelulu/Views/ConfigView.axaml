@@ -24,9 +24,9 @@
                                        PointerPressed="OnTrackPressed" PointerMoved="OnTrackMoved" PointerReleased="OnTrackReleased" />
                                 <Image Source="{Binding Knob}" Canvas.Left="{Binding KnobLeft}" Canvas.Top="{Binding KnobTop}"
                                        Width="24" Height="24" IsHitTestVisible="False" />
-                                <Image Source="{Binding Digit0}" Canvas.Left="752" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
-                                <Image Source="{Binding Digit1}" Canvas.Left="764" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
-                                <Image Source="{Binding Digit2}" Canvas.Left="776" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
+                                <Image Source="{Binding Digit0}" Canvas.Left="{Binding DigitsX}" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
+                                <Image Source="{Binding Digit1}" Canvas.Left="{Binding Digit1X}" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
+                                <Image Source="{Binding Digit2}" Canvas.Left="{Binding Digit2X}" Canvas.Top="{Binding DigitsY}" Width="16" Height="24" />
                                 <Border Canvas.Left="824" Canvas.Top="{Binding SampleY}" Width="32" Height="32"
                                         Background="{Binding Sample}" IsVisible="{Binding HasSample}" />
                             </Canvas>

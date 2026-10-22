@@ -29,7 +29,6 @@ public sealed partial class PlayViewModel
     int? _wardrobeStart;
 
     public bool HasOriginalWardrobe => Ui.Get("st02_05_01_00_00.tga") is not null;
-    public Bitmap? WardrobePanel => Ui.Get("st02_05_01_00_00.tga");
     public Bitmap? WardrobeOk => Ui.Get("st02_03_02_00_00.tga");
     public Bitmap? WardrobeCancel => Ui.Get("st02_04_02_00_00.tga");
 
@@ -56,6 +55,9 @@ public sealed partial class PlayViewModel
         if (_girl is null)
             return;
         _wardrobeStart = Progress.SwimsuitRow;
+        _lookStart = Progress.Look.Clone();
+        ColorPart = 0;
+        ShowWardrobePage(0);
         var worn = _girl.Girl.Swimsuits.FirstOrDefault(s => s.Row == Progress.SwimsuitRow) ?? _girl.Girl.Swimsuits.FirstOrDefault();
         WardrobeCategory = worn?.Category is >= 1 and <= 4 ? worn.Category : 1;
         var list = CategorySwimsuits.ToList();
@@ -109,6 +111,14 @@ public sealed partial class PlayViewModel
     {
         IsWardrobeOpen = false;
         SwimsuitCards.Clear();
+        if (keep)
+            _progress.Save(ProgressPath);
+        else if (_lookStart is not null)
+        {
+            Progress.Look = _lookStart;
+            ApplyLook();
+        }
+        _lookStart = null;
         if (!keep && _wardrobeStart != Progress.SwimsuitRow && _girl is not null)
         {
             int row = _wardrobeStart ?? _girl.Girl.Swimsuits.FirstOrDefault()?.Row ?? 0;

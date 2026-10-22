@@ -53,9 +53,9 @@ public sealed class ConfigSlider : ObservableObject
 
     public ConfigSlider(double trackX, double trackY, double trackWidth, double knobMin, double knobMax, double knobTop,
         int max, double digitsY, Bitmap? knob, Bitmap?[] digits, Func<int> get, Action<int> set,
-        double? sampleY = null, Func<int, IBrush>? sample = null)
+        double? sampleY = null, Func<int, IBrush>? sample = null, double digitsX = 752)
     {
-        TrackX = trackX; TrackY = trackY; TrackWidth = trackWidth;
+        TrackX = trackX; TrackY = trackY; TrackWidth = trackWidth; DigitsX = digitsX;
         KnobMin = knobMin; KnobMax = knobMax; KnobTop = knobTop; Max = max; DigitsY = digitsY;
         Knob = knob; _digits = digits; _get = get; _set = set; SampleY = sampleY ?? 0; HasSample = sampleY is not null;
         _sample = sample;
@@ -69,6 +69,10 @@ public sealed class ConfigSlider : ObservableObject
     public double KnobTop { get; }
     public int Max { get; }
     public double DigitsY { get; }
+    /// <summary>Left of the three digits (16 px apart by 12; 752 on CONFIG, 920 in the wardrobe).</summary>
+    public double DigitsX { get; }
+    public double Digit1X => DigitsX + 12;
+    public double Digit2X => DigitsX + 24;
     public double SampleY { get; }
     public bool HasSample { get; }
     public Bitmap? Knob { get; }

@@ -88,7 +88,28 @@ public sealed class ModelScene
         Changed?.Invoke();
     }
 
-    public Vector3 Light(int mesh) => _objects[_owner[mesh]].Light;
+    public Vector3 Light(int mesh) => _objects[_owner[mesh]].Light * (_tint.TryGetValue(mesh, out var tint) ? tint : Vector3.One);
+
+    readonly Dictionary<int, Vector3> _tint = [];
+
+    /// <summary>
+    /// Multiplies the colour of the subject's meshes that <paramref name="match"/> (the wardrobe's nail, eye and hair
+    /// colours); null puts the original colour back.
+    /// </summary>
+    public void SetSubjectTint(Func<RenderMesh, bool> match, Vector3? tint)
+    {
+        var o = _objects[_subject];
+        for (int m = o.MeshOffset; m < o.MeshOffset + o.Model.Meshes.Count; m++)
+        {
+            if (!match(_meshes[m]))
+                continue;
+            if (tint is { } t)
+                _tint[m] = t;
+            else
+                _tint.Remove(m);
+        }
+        Changed?.Invoke();
+    }
 
     /// <summary>True when the mesh's vertices change while animating (re-upload after <see cref="Update"/>).</summary>
     public bool IsDynamic(int mesh) =>
