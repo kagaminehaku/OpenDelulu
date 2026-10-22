@@ -200,6 +200,12 @@
                         <Panel IsVisible="{Binding DateHud.IsVisible, FallbackValue=False}">
                             <v:DsHudView DataContext="{Binding DateHud}" />
                         </Panel>
+                        <Panel IsVisible="{Binding SystemHud.IsVisible, FallbackValue=False}">
+                            <v:DsHudView DataContext="{Binding SystemHud}" />
+                        </Panel>
+                        <!-- Pointing at the top edge slides the system menu bar in. -->
+                        <Border Height="6" VerticalAlignment="Top" Background="Transparent"
+                                IsVisible="{Binding SystemHud.IsVisible, FallbackValue=False}" PointerEntered="OnTopEdgeEntered" />
                         <Panel IsVisible="{Binding CameraHud.IsVisible, FallbackValue=False}">
                             <v:DsHudView DataContext="{Binding CameraHud}" />
                         </Panel>

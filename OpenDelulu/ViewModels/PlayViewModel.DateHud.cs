@@ -25,6 +25,7 @@ public sealed partial class PlayViewModel
         {
             var hud = new DsHud(DsMenu.Load(_fs, "ds01_03_00_00_00"), 96, 24 + 4 * 96);
             hud.Pressed += PressDateHud;
+            hud.Move(0, 24); // below the system menu bar
             hud.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName == nameof(DsHud.IsClosed))

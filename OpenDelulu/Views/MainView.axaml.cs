@@ -116,4 +116,7 @@ public partial class MainView : UserControl
         Grid.SetColumn(CharacterPreview, narrow ? 0 : 1);
         Grid.SetRow(CharacterPreview, narrow ? 1 : 0);
     }
+
+    void OnTopEdgeEntered(object? sender, Avalonia.Input.PointerEventArgs e) =>
+        ((sender as Avalonia.Controls.Control)?.DataContext as OpenDelulu.ViewModels.PlayViewModel)?.PointAtTopEdge();
 }

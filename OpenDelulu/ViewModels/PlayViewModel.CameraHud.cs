@@ -44,7 +44,7 @@ public sealed partial class PlayViewModel
                 if (e.PropertyName == nameof(DsHud.IsClosed))
                     OnPropertyChanged(nameof(IsHudClosed));
             };
-            hud.Move(1024 - 96, 0);
+            hud.Move(1024 - 96, 24);
             CameraHud = hud;
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or EndOfStreamException)

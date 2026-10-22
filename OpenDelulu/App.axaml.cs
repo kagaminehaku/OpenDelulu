@@ -20,6 +20,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            Services.AppHost.RequestExit = () => desktop.Shutdown();
             desktop.MainWindow = new MainWindow
             {
                 DataContext = new MainViewModel()

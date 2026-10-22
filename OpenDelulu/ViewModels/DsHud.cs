@@ -79,6 +79,9 @@ public sealed partial class DsHud : ObservableObject
     /// <summary>The unfolded state as a clip name without suffix ("シーン表示" when nothing is open).</summary>
     public Func<string> State { get; set; } = () => "シーン表示";
 
+    /// <summary>The owner handles "…Close" itself (the system bar slides away instead of closing).</summary>
+    public bool OwnerHandlesClose { get; init; }
+
     /// <summary>The clip of the folded menu (シーン最小化; カメラ最小化 for the camera menu).</summary>
     public string MinimizedState { get; set; } = "シーン最小化";
 
@@ -148,7 +151,7 @@ public sealed partial class DsHud : ObservableObject
             IsMinimized = !IsMinimized;
             Play(instant: false);
         }
-        else if (quad.Key.EndsWith("Close", StringComparison.Ordinal))
+        else if (quad.Key.EndsWith("Close", StringComparison.Ordinal) && !OwnerHandlesClose)
         {
             IsClosed = true;
             IsVisible = false;

@@ -63,6 +63,7 @@ public sealed partial class PlayViewModel
             ImageFor = OilHudImage,
         };
         hud.Pressed += PressOilHud;
+        hud.Move(0, 24); // below the system menu bar
         hud.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(DsHud.IsClosed))
@@ -101,6 +102,7 @@ public sealed partial class PlayViewModel
         _oilHudGroup = 0;
         hud.Show();
         ShowCameraHud();
+        ShowSystemHud();
     }
 
     void HideOilHud() => OilHud?.Hide();

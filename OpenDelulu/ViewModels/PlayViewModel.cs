@@ -277,6 +277,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     {
         StopOil(restore: false);
         HideDateHud();
+        HideSystemHud();
         Dialogue.Hide();
         AudioSystem.Shared.StopMusic();
         Scene = null;
@@ -808,6 +809,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         Dialogue.ShowMenu(F("play.menu", CharacterDatabase.NameOf(girl), progress.Intimacy), options);
         hud?.Show();
         ShowCameraHud();
+        ShowSystemHud();
     }
 
     /// <summary>Her level has a lead-in to the next one (an H scene from level 2 on).</summary>

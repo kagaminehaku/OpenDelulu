@@ -212,6 +212,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             Play = characters is ({ Girls.Count: > 0 } pdb, var pvoices, { Scripts.Count: > 0 } plib) && stageDb is { Stages.Count: > 0 }
                 ? new PlayViewModel(fileSystem, pdb, stageDb, plib, pvoices) : null;
             Config = new ConfigViewModel(this, fileSystem);
+            if (Play is { } play)
+            {
+                play.ConfigRequested += page =>
+                {
+                    Config.Open();
+                    Config.ShowPage(page);
+                };
+                play.ExitRequested += () => AppHost.RequestExit?.Invoke();
+            }
             if (Characters is not null)
             {
                 Characters.SelectedGirl = Characters.Girls.FirstOrDefault(g => g.Id == AppHost.StartupCharacter) ?? Characters.Girls[0];

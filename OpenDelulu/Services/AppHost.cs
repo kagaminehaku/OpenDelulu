@@ -76,6 +76,9 @@ public static class AppHost
     /// <summary>Start with all sound muted (desktop: <c>--mute</c>), e.g. for automated screenshots.</summary>
     public static bool StartupMute { get; set; }
 
+    /// <summary>Ends the app ("End the game" in the system menu); set by heads that can quit.</summary>
+    public static Action? RequestExit { get; set; }
+
     /// <summary>Optional initial camera zoom for the 3D viewer (desktop: <c>--zoom 0.3</c>).</summary>
     public static float? StartupZoom { get; set; }
 }
