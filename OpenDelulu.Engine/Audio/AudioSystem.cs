@@ -17,7 +17,7 @@ public sealed class AudioSystem : IDisposable
     readonly IAudioOutput _output;
     SoundHandle? _music;
     SoundHandle? _ambient;
-    (string Archive, string File)? _musicName;
+    (string Archive, string File)? _musicName, _ambientName;
 
     AudioSystem(IAudioOutput output)
     {
@@ -80,9 +80,19 @@ public sealed class AudioSystem : IDisposable
     /// <summary>Looping ambience (waves, wind…), one at a time.</summary>
     public SoundHandle PlayAmbient(GameFileSystem fs, string archive, string file, double fadeSeconds = 1)
     {
+        if (_ambient is { IsPlaying: true } current && _ambientName == (archive, file))
+            return current;
         _ambient?.Stop(fadeSeconds);
         _ambient = Mixer.Play(AudioSources.Open(fs.ReadReferenced(archive, file)), AudioBus.Ambient, loop: true, fadeInSeconds: fadeSeconds);
+        _ambientName = (archive, file);
         return _ambient;
+    }
+
+    public void StopAmbient(double fadeSeconds = 1)
+    {
+        _ambient?.Stop(fadeSeconds);
+        _ambient = null;
+        _ambientName = null;
     }
 
     public void Dispose()

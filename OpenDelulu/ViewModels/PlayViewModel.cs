@@ -258,7 +258,7 @@ public sealed partial class PlayViewModel : ViewModelBase
                 StartActivity(first);
             }
             Status = F("play.where", choice.Name, StageNames[SelectedStageIndex], Times[SelectedTimeIndex]);
-            PlayAmbience(stageInfo.Id);
+            UpdateMusic();
             if (startupOil is null)
                 Meet();
         }
@@ -281,7 +281,6 @@ public sealed partial class PlayViewModel : ViewModelBase
         HideDateHud();
         HideSystemHud();
         Dialogue.Hide();
-        AudioSystem.Shared.StopMusic();
         Scene = null;
         _girl = null;
         _stage = null;
@@ -395,6 +394,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             session.Refused += _ => ShowStatus(F("oil.refused", CharacterDatabase.NameOf(girl.Girl.Id)), seconds: 3);
             session.ActionsOffered += OfferActions;
             _oil = session;
+            UpdateMusic();
             _activity = null;
             _prop = null;
             PlaceForOil();
@@ -430,6 +430,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         oil.End();
         oil.Detach();
         _oil = null;
+        UpdateMusic();
         bool tanned = ApplyTan(oil);
         _statusHoldUntil = 0;
         oil.Girl.Animator.Face?.SetExpression(0, 0);
@@ -830,14 +831,40 @@ public sealed partial class PlayViewModel : ViewModelBase
         return Vector3.Lerp(Vector3.One, hue, time is StageTime.Noon or StageTime.Morning ? 0.15f : 0.5f) * brightness;
     }
 
-    void PlayAmbience(int stage)
+    partial void OnIsTitleVisibleChanged(bool value) => UpdateMusic();
+    partial void OnIsLobbyVisibleChanged(bool value) => UpdateMusic();
+    partial void OnIsAlbumOpenChanged(bool value) => UpdateMusic();
+
+    /// <summary>The screen being shown, for its music: the title, album and lobby over the island; else the stage.</summary>
+    MusicScene CurrentMusicScene =>
+        IsTitleVisible ? MusicScene.Title
+        : IsAlbumOpen ? MusicScene.EventCg
+        : IsLobbyVisible ? MusicScene.Lobby
+        : _stage is null ? MusicScene.Map
+        : _oil is not null ? MusicScene.Oil
+        : MusicScene.Date;
+
+    /// <summary>
+    /// Plays the music and ambience the exe chooses for the current screen (<see cref="SceneMusic"/>); a track that is
+    /// already playing keeps playing.
+    /// </summary>
+    void UpdateMusic()
     {
-        // es01..08 are the beach ambiences in sb3_0600; fall back to silence when missing.
-        string file = $"es{Math.Clamp(stage, 1, 8):00}_00_00_00_00.ogg";
+        var scene = CurrentMusicScene;
+        int stage = _stage?.Variant.Stage ?? SelectedStageIndex + 1;
+        var time = _stage?.Variant.Time ?? Time;
+        var (music, ambience) = SceneMusic.For(scene, stage, time);
+        var audio = AudioSystem.Shared;
         try
         {
-            if (_fs.ExistsReferenced("sb3_0600.pp", file))
-                AudioSystem.Shared.PlayMusic(_fs, "sb3_0600.pp", file);
+            if (music > 0 && _fs.ExistsReferenced(SceneMusic.Archive, SceneMusic.MusicFile(music)))
+                audio.PlayMusic(_fs, SceneMusic.Archive, SceneMusic.MusicFile(music));
+            else
+                audio.StopMusic();
+            if (ambience > 0 && _fs.ExistsReferenced(SceneMusic.Archive, SceneMusic.AmbienceFile(ambience)))
+                audio.PlayAmbient(_fs, SceneMusic.Archive, SceneMusic.AmbienceFile(ambience));
+            else
+                audio.StopAmbient();
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
         {
