@@ -23,12 +23,16 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         public int ColorBuffer { get; init; }
         public int ColorVersion { get; set; } = -1;
         public int VertexCount { get; init; }
+        /// <summary>Second texture stage data (attribute 5: u, v, blend, 1); 0 = none.</summary>
+        public int LayerBuffer { get; init; }
+        public int LayerVersion { get; set; } = -1;
+        public int LayerTexture { get; init; } = -1;
     }
 
     GlExtras? _ext;
     GlGlare? _glare;
     int _program, _vao, _whiteTexture;
-    int _uMvp, _uTex, _uDiffuse, _uLightDir, _uAlphaPass, _uAmbient, _uEmissive, _uWater;
+    int _uMvp, _uTex, _uLayer, _uDiffuse, _uLightDir, _uAlphaPass, _uAmbient, _uEmissive, _uWater;
     readonly List<GpuMesh> _meshes = [];
     readonly List<int> _textures = [];
     ModelScene? _uploaded;
@@ -106,12 +110,14 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.BindAttribLocationString(_program, 2, "aUV");
         gl.BindAttribLocationString(_program, 3, "aGloss");
         gl.BindAttribLocationString(_program, 4, "aColor");
+        gl.BindAttribLocationString(_program, 5, "aLayer");
         CheckShader(gl.LinkProgramAndGetError(_program), "link");
         gl.DeleteShader(vs);
         gl.DeleteShader(fs);
 
         _uMvp = gl.GetUniformLocationString(_program, "uMvp");
         _uTex = gl.GetUniformLocationString(_program, "uTex");
+        _uLayer = gl.GetUniformLocationString(_program, "uLayer");
         _uDiffuse = gl.GetUniformLocationString(_program, "uDiffuse");
         _uLightDir = gl.GetUniformLocationString(_program, "uLightDir");
         _uAlphaPass = gl.GetUniformLocationString(_program, "uAlphaPass");
@@ -170,6 +176,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         if (_vao != 0) gl.BindVertexArray(_vao);
         gl.UniformMatrix4fv(_uMvp, 1, false, &mvp);
         gl.Uniform1i(_uTex, 0);
+        gl.Uniform1i(_uLayer, 1);
         _ext!.Uniform3f(_uLightDir, light.X, light.Y, light.Z);
         gl.ActiveTexture(GL_TEXTURE0);
         gl.Enable(GL_DEPTH_TEST);
@@ -232,6 +239,17 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             gl.BindBuffer(GL_ARRAY_BUFFER, mesh.ColorBuffer);
             fixed (float* c = colors)
                 gl.BufferData(GL_ARRAY_BUFFER, colors.Length * sizeof(float), (IntPtr)c, GL_DYNAMIC_DRAW);
+        }
+        for (int i = 0; i < _meshes.Count; i++)
+        {
+            var mesh = _meshes[i];
+            int version = scene.LayerVersion(i);
+            if (mesh.LayerBuffer == 0 || mesh.LayerVersion == version || scene.LayerData(i) is not { } data)
+                continue;
+            mesh.LayerVersion = version;
+            gl.BindBuffer(GL_ARRAY_BUFFER, mesh.LayerBuffer);
+            fixed (float* c = data)
+                gl.BufferData(GL_ARRAY_BUFFER, data.Length * sizeof(float), (IntPtr)c, GL_DYNAMIC_DRAW);
         }
         gl.BindBuffer(GL_ARRAY_BUFFER, 0);
     }
@@ -308,6 +326,9 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
     void DrawMesh(GlInterface gl, ModelScene scene, int i)
     {
         var mesh = _meshes[i];
+        gl.ActiveTexture(GL_TEXTURE0 + 1);
+        gl.BindTexture(GL_TEXTURE_2D, mesh.LayerTexture >= 0 ? _textures[mesh.LayerTexture] : _whiteTexture);
+        gl.ActiveTexture(GL_TEXTURE0);
         gl.BindTexture(GL_TEXTURE_2D, mesh.TextureIndex >= 0 ? _textures[mesh.TextureIndex] : _whiteTexture);
         var light = scene.Light(i);
         var d = mesh.Diffuse;
@@ -334,6 +355,17 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.BindBuffer(GL_ARRAY_BUFFER, mesh.ColorBuffer);
         gl.EnableVertexAttribArray(4);
         gl.VertexAttribPointer(4, 4, GL_FLOAT, 0, 4 * sizeof(float), 0);
+        if (mesh.LayerBuffer != 0)
+        {
+            gl.BindBuffer(GL_ARRAY_BUFFER, mesh.LayerBuffer);
+            gl.EnableVertexAttribArray(5);
+            gl.VertexAttribPointer(5, 4, GL_FLOAT, 0, 4 * sizeof(float), 0);
+        }
+        else
+        {
+            _ext.DisableVertexAttribArray(5);
+            _ext.VertexAttrib4f(5, 0, 0, 0, 0);
+        }
         gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.IndexBuffer);
         gl.DrawElements(GL_TRIANGLES, mesh.IndexCount, GL_UNSIGNED_SHORT, 0);
     }
@@ -367,10 +399,20 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             var unlit = new float[vertexCount * 4];
             fixed (float* c = unlit)
                 gl.BufferData(GL_ARRAY_BUFFER, unlit.Length * sizeof(float), (IntPtr)c, GL_DYNAMIC_DRAW);
+            int layers = 0;
+            if (mesh.Layer is not null)
+            {
+                layers = gl.GenBuffer();
+                gl.BindBuffer(GL_ARRAY_BUFFER, layers);
+                fixed (float* c = unlit)
+                    gl.BufferData(GL_ARRAY_BUFFER, unlit.Length * sizeof(float), (IntPtr)c, GL_DYNAMIC_DRAW);
+            }
             _meshes.Add(new GpuMesh(vbo, ibo, mesh.Indices.Length, scene.TextureIndex(m), diffuse, mesh.Ambient, mesh.Emissive, mesh.HasAlpha, mesh.Blend)
             {
                 ColorBuffer = cbo,
                 VertexCount = vertexCount,
+                LayerBuffer = layers,
+                LayerTexture = scene.LayerTextureIndex(m),
             });
         }
         gl.BindBuffer(GL_ARRAY_BUFFER, 0);
@@ -385,6 +427,8 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             gl.DeleteBuffer(mesh.VertexBuffer);
             gl.DeleteBuffer(mesh.IndexBuffer);
             gl.DeleteBuffer(mesh.ColorBuffer);
+            if (mesh.LayerBuffer != 0)
+                gl.DeleteBuffer(mesh.LayerBuffer);
         }
         foreach (int texture in _textures)
             if (texture != _whiteTexture)
@@ -430,13 +474,16 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             ATTRIB vec2 aUV;
             ATTRIB float aGloss;
             ATTRIB vec4 aColor;
+            ATTRIB vec4 aLayer;
             uniform mat4 uMvp;
             VOUT vec3 vNormal;
             VOUT vec2 vUV;
             VOUT float vGloss;
             VOUT vec4 vColor;
+            VOUT vec4 vLayer;
             void main()
             {
+                vLayer = aLayer;
                 vNormal = aNormal;
                 vUV = aUV;
                 vGloss = aGloss;
@@ -449,6 +496,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         // 3 + colour: the glare source (every texel whatever its alpha).
         public const string Fragment = """
             uniform sampler2D uTex;
+            uniform sampler2D uLayer;
             uniform vec4 uDiffuse;
             uniform vec4 uAmbient;
             uniform vec4 uEmissive;
@@ -459,6 +507,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             VIN vec2 vUV;
             VIN float vGloss;
             VIN vec4 vColor;
+            VIN vec4 vLayer;
             void main()
             {
                 // Water (frame shader 3, giTechWater): the texture read through the turning procedural wave map.
@@ -487,6 +536,12 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
                 vec3 lit = uEmissive.rgb + uAmbient.rgb * 0.35 + uDiffuse.rgb * 0.55 * lambert;
                 // Objects with .xl lights: the per-vertex Direct3D 9 colour (clamped and tinted on the CPU).
                 vec3 color = vColor.a > 0.5 ? texel.rgb * vColor.rgb : texel.rgb * min(lit, vec3(1.15));
+                // Texture stage 1: gloss maps added through reflection coordinates, chrome.
+                if (vLayer.w > 0.5) {
+                    vec3 layer = TEX(uLayer, vLayer.xy).rgb;
+                    color = vLayer.z < 1.5 ? color * layer : vLayer.z < 2.5 ? color + layer : color + layer - 0.5;
+                    color = clamp(color, 0.0, 1.0);
+                }
                 // Sun oil: wet, darker skin with a sharp highlight. The camera direction is recovered from the
                 // light, which OrbitCamera puts at normalize(eye direction + 0.6 up).
                 if (vGloss > 0.001) {

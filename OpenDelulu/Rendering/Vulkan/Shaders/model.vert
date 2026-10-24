@@ -5,6 +5,7 @@ layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aUV;
 layout(location = 3) in float aGloss;
 layout(location = 4) in vec4 aColor; // Direct3D 9 fixed-function lighting computed on the CPU; a = 0: not lit
+layout(location = 5) in vec4 aLayer; // second texture stage: uv, blend (1 modulate, 2 add, 3 add signed), w = 1 when used
 
 layout(push_constant) uniform Push
 {
@@ -19,6 +20,7 @@ layout(location = 0) out vec3 vNormal;
 layout(location = 1) out vec2 vUV;
 layout(location = 2) out float vGloss;
 layout(location = 3) out vec4 vColor;
+layout(location = 4) out vec4 vLayer;
 
 void main()
 {
@@ -26,5 +28,6 @@ void main()
     vUV = aUV;
     vGloss = aGloss;
     vColor = aColor;
+    vLayer = aLayer;
     gl_Position = pc.mvp * vec4(aPos, 1.0);
 }

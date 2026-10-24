@@ -68,6 +68,8 @@ public sealed class ModelScene
         _colors = new float[]?[_meshes.Count];
         _colorVersion = new int[_meshes.Count];
         _colorDirty = new bool[_meshes.Count];
+        _layers = new float[]?[_meshes.Count];
+        _layerVersion = new int[_meshes.Count];
     }
 
     // ------------------------------------------------------------------ Direct3D 9 fixed-function lighting
@@ -111,6 +113,36 @@ public sealed class ModelScene
         Changed?.Invoke();
     }
 
+    readonly float[]?[] _layers;
+    readonly int[] _layerVersion;
+
+    /// <summary>Index into <see cref="Textures"/> of a mesh's second texture stage (<see cref="RenderMesh.Layer"/>), or -1.</summary>
+    public int LayerTextureIndex(int mesh) =>
+        _meshes[mesh].Layer is { } layer ? layer.TextureIndex + _objects[_owner[mesh]].TextureOffset : -1;
+
+    /// <summary>
+    /// Per-vertex data of a mesh's second texture stage: u, v, blend (<see cref="LayerBlend"/>), 1; null without one.
+    /// </summary>
+    public float[]? LayerData(int mesh) => _layers[mesh];
+
+    /// <summary>Changes whenever <see cref="LayerData"/> of the mesh changes.</summary>
+    public int LayerVersion(int mesh) => _layerVersion[mesh];
+
+    void UpdateLayers(Matrix4x4 cameraToWorld, bool cameraMoved, bool verticesChanged)
+    {
+        for (int m = 0; m < _meshes.Count; m++)
+        {
+            if (_meshes[m].Layer is not { } layer || !_visible[m] && _layers[m] is not null)
+                continue;
+            bool fixedCoordinates = layer.Coordinates == LayerCoordinates.Uv;
+            if (_layers[m] is not null && (fixedCoordinates || !cameraMoved && !(verticesChanged && IsDynamic(m))))
+                continue;
+            var data = _layers[m] ??= new float[_meshes[m].Vertices.Length / RenderModel.VertexStride * 4];
+            layer.Evaluate(_meshes[m], cameraToWorld, data);
+            _layerVersion[m]++;
+        }
+    }
+
     /// <summary>Lit vertex colours (RGBA per vertex) of a mesh, or null when it uses the simple lighting.</summary>
     public float[]? Colors(int mesh) => _colors[mesh];
 
@@ -126,6 +158,7 @@ public sealed class ModelScene
     {
         bool cameraMoved = _lightCamera != cameraToWorld;
         _lightCamera = cameraToWorld;
+        UpdateLayers(cameraToWorld, cameraMoved, verticesChanged);
         foreach (var (index, (particles, attach)) in _particles)
         {
             var o = _objects[index];

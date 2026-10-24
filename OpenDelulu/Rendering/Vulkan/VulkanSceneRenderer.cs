@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -37,7 +38,6 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         public Image Image;
         public DeviceMemory Memory;
         public ImageView View;
-        public DescriptorSet Set;
     }
 
     sealed class GpuMesh(VulkanBuffer vertices, VulkanBuffer indices, int indexCount, int texture, Vector4 diffuse, Vector4 ambient, Vector4 emissive, bool hasAlpha, BlendMode blend)
@@ -45,6 +45,11 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         /// <summary>Lit vertex colours (binding 1, RGBA floats; A = 0 means "use the simple lighting").</summary>
         public VulkanBuffer? Colors { get; set; }
         public int ColorVersion { get; set; } = -1;
+        /// <summary>Second texture stage data (binding 2: u, v, blend, 1), or null to read the shared zeros.</summary>
+        public VulkanBuffer? Layers { get; set; }
+        public int LayerVersion { get; set; } = -1;
+        /// <summary>The texture and the layer texture (bindings 0 and 1).</summary>
+        public DescriptorSet Set { get; set; }
         public Vector4 Ambient { get; } = ambient;
         public Vector4 Emissive { get; } = emissive;
         public VulkanBuffer Vertices { get; } = vertices;
@@ -76,6 +81,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
     readonly List<GpuMesh> _meshes = [];
     readonly List<GpuTexture> _textures = [];
     GpuTexture? _white;
+    VulkanBuffer? _noLayers;
     DescriptorPool _descriptorPool;
 
     Vk Api => _vk.Api;
@@ -88,18 +94,21 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         _vertex = CreateShader("model.vert.spv");
         _fragment = CreateShader("model.frag.spv");
 
-        var binding = new DescriptorSetLayoutBinding
-        {
-            Binding = 0,
-            DescriptorType = DescriptorType.CombinedImageSampler,
-            DescriptorCount = 1,
-            StageFlags = ShaderStageFlags.FragmentBit,
-        };
+        // Binding 0: the material texture; 1: its second texture stage (white when unused).
+        var bindings = stackalloc DescriptorSetLayoutBinding[2];
+        for (uint b = 0; b < 2; b++)
+            bindings[b] = new DescriptorSetLayoutBinding
+            {
+                Binding = b,
+                DescriptorType = DescriptorType.CombinedImageSampler,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.FragmentBit,
+            };
         var setLayoutInfo = new DescriptorSetLayoutCreateInfo
         {
             SType = StructureType.DescriptorSetLayoutCreateInfo,
-            BindingCount = 1,
-            PBindings = &binding,
+            BindingCount = 2,
+            PBindings = bindings,
         };
         Api.CreateDescriptorSetLayout(Device, in setLayoutInfo, null, out _setLayout).ThrowOnError();
 
@@ -284,7 +293,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
                 push.LightAndPass.W = mesh.Blend == BlendMode.Normal ? 1f : 2f;
             }
 
-            var set = (mesh.Texture >= 0 ? _textures[mesh.Texture] : _white!).Set;
+            var set = mesh.Set;
             Api.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, _pipelineLayout, 0, 1, &set, 0, null);
             var tint = new Vector4(scene.Light(i), 1);
             push.Diffuse = mesh.Diffuse * tint;
@@ -293,9 +302,9 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             SetWater(ref push, scene, i);
             Api.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
                 0, (uint)sizeof(PushConstants), &push);
-            var buffers = stackalloc Silk.NET.Vulkan.Buffer[2] { mesh.Vertices.Handle, mesh.Colors!.Handle };
-            var offsets = stackalloc ulong[2];
-            Api.CmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+            var buffers = stackalloc Silk.NET.Vulkan.Buffer[3] { mesh.Vertices.Handle, mesh.Colors!.Handle, (mesh.Layers ?? _noLayers!).Handle };
+            var offsets = stackalloc ulong[3];
+            Api.CmdBindVertexBuffers(cmd, 0, 3, buffers, offsets);
             Api.CmdBindIndexBuffer(cmd, mesh.Indices.Handle, 0, IndexType.Uint16);
             Api.CmdDrawIndexed(cmd, (uint)mesh.IndexCount, 1, 0, 0, 0);
         }
@@ -350,7 +359,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             if (!scene.IsGlareSource(i))
                 continue;
             var mesh = _meshes[i];
-            var set = (mesh.Texture >= 0 ? _textures[mesh.Texture] : _white!).Set;
+            var set = mesh.Set;
             Api.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, _pipelineLayout, 0, 1, &set, 0, null);
             var tint = new Vector4(scene.Light(i), 1);
             push.Diffuse = mesh.Diffuse * tint;
@@ -359,9 +368,9 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             SetWater(ref push, scene, i);
             Api.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
                 0, (uint)sizeof(PushConstants), &push);
-            var buffers = stackalloc Silk.NET.Vulkan.Buffer[2] { mesh.Vertices.Handle, mesh.Colors!.Handle };
-            var offsets = stackalloc ulong[2];
-            Api.CmdBindVertexBuffers(cmd, 0, 2, buffers, offsets);
+            var buffers = stackalloc Silk.NET.Vulkan.Buffer[3] { mesh.Vertices.Handle, mesh.Colors!.Handle, (mesh.Layers ?? _noLayers!).Handle };
+            var offsets = stackalloc ulong[3];
+            Api.CmdBindVertexBuffers(cmd, 0, 3, buffers, offsets);
             Api.CmdBindIndexBuffer(cmd, mesh.Indices.Handle, 0, IndexType.Uint16);
             Api.CmdDrawIndexed(cmd, (uint)mesh.IndexCount, 1, 0, 0, 0);
         }
@@ -372,12 +381,13 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
 
     void UploadScene(ModelScene scene)
     {
-        int textureCount = scene.Textures.Count + 1;
-        var poolSize = new DescriptorPoolSize(DescriptorType.CombinedImageSampler, (uint)textureCount);
+        // One descriptor set per (texture, layer texture) pair in use.
+        var pairs = Enumerable.Range(0, scene.Meshes.Count).Select(m => (scene.TextureIndex(m), scene.LayerTextureIndex(m))).Distinct().ToList();
+        var poolSize = new DescriptorPoolSize(DescriptorType.CombinedImageSampler, (uint)Math.Max(2, pairs.Count * 2));
         var poolInfo = new DescriptorPoolCreateInfo
         {
             SType = StructureType.DescriptorPoolCreateInfo,
-            MaxSets = (uint)textureCount,
+            MaxSets = (uint)Math.Max(1, pairs.Count),
             PoolSizeCount = 1,
             PPoolSizes = &poolSize,
         };
@@ -394,7 +404,10 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         Api.QueueWaitIdle(_vk.Queue).ThrowOnError();
         foreach (var buffer in staging)
             buffer.Dispose();
+        var sets = pairs.ToDictionary(pair => pair, pair => CreateSet(
+            pair.Item1 >= 0 ? _textures[pair.Item1] : _white!, pair.Item2 >= 0 ? _textures[pair.Item2] : _white!));
 
+        int maxVertices = 1;
         for (int m = 0; m < scene.Meshes.Count; m++)
         {
             var mesh = scene.Meshes[m];
@@ -411,8 +424,19 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
                 Colors = new VulkanBuffer(_vk, (ulong)(mesh.Vertices.Length / RenderModel.VertexStride * 4 * sizeof(float)), BufferUsageFlags.VertexBufferBit),
             };
             new Span<byte>(gpu.Colors.Mapped, (int)gpu.Colors.Size).Clear();
+            gpu.Set = sets[(scene.TextureIndex(m), scene.LayerTextureIndex(m))];
+            int vertexCount = mesh.Vertices.Length / RenderModel.VertexStride;
+            maxVertices = Math.Max(maxVertices, vertexCount);
+            if (mesh.Layer is not null)
+            {
+                gpu.Layers = new VulkanBuffer(_vk, (ulong)(vertexCount * 4 * sizeof(float)), BufferUsageFlags.VertexBufferBit);
+                new Span<byte>(gpu.Layers.Mapped, (int)gpu.Layers.Size).Clear();
+            }
             _meshes.Add(gpu);
         }
+        // Meshes without a second stage read zeros (w = 0: unused).
+        _noLayers = new VulkanBuffer(_vk, (ulong)(maxVertices * 4 * sizeof(float)), BufferUsageFlags.VertexBufferBit);
+        new Span<byte>(_noLayers.Mapped, (int)_noLayers.Size).Clear();
     }
 
     /// <summary>Uploads the vertex colours the scene recomputed (Direct3D 9 fixed-function lighting).</summary>
@@ -430,6 +454,46 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             else
                 new Span<byte>(buffer.Mapped, (int)buffer.Size).Clear();
         }
+        for (int i = 0; i < _meshes.Count; i++)
+        {
+            var gpu = _meshes[i];
+            int version = scene.LayerVersion(i);
+            if (gpu.LayerVersion == version || gpu.Layers is not { } buffer || scene.LayerData(i) is not { } data)
+                continue;
+            gpu.LayerVersion = version;
+            buffer.Write<float>(data);
+        }
+    }
+
+    DescriptorSet CreateSet(GpuTexture texture, GpuTexture layer)
+    {
+        var setLayout = _setLayout;
+        var allocate = new DescriptorSetAllocateInfo
+        {
+            SType = StructureType.DescriptorSetAllocateInfo,
+            DescriptorPool = _descriptorPool,
+            DescriptorSetCount = 1,
+            PSetLayouts = &setLayout,
+        };
+        Api.AllocateDescriptorSets(Device, in allocate, out var set).ThrowOnError();
+        var images = stackalloc DescriptorImageInfo[2]
+        {
+            new(_sampler, texture.View, ImageLayout.ShaderReadOnlyOptimal),
+            new(_sampler, layer.View, ImageLayout.ShaderReadOnlyOptimal),
+        };
+        var writes = stackalloc WriteDescriptorSet[2];
+        for (int b = 0; b < 2; b++)
+            writes[b] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = set,
+                DstBinding = (uint)b,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.CombinedImageSampler,
+                PImageInfo = &images[b],
+            };
+        Api.UpdateDescriptorSets(Device, 2, writes, 0, null);
+        return set;
     }
 
     GpuTexture CreateTexture(CommandBuffer cmd, RgbaImage image, List<VulkanBuffer> staging)
@@ -475,27 +539,6 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         }
         TransitionMip(cmd, texture.Image, mipLevels - 1, ImageLayout.TransferDstOptimal, AccessFlags.TransferWriteBit,
             ImageLayout.ShaderReadOnlyOptimal, AccessFlags.ShaderReadBit);
-
-        var setLayout = _setLayout;
-        var allocate = new DescriptorSetAllocateInfo
-        {
-            SType = StructureType.DescriptorSetAllocateInfo,
-            DescriptorPool = _descriptorPool,
-            DescriptorSetCount = 1,
-            PSetLayouts = &setLayout,
-        };
-        Api.AllocateDescriptorSets(Device, in allocate, out texture.Set).ThrowOnError();
-        var imageInfo = new DescriptorImageInfo(_sampler, texture.View, ImageLayout.ShaderReadOnlyOptimal);
-        var write = new WriteDescriptorSet
-        {
-            SType = StructureType.WriteDescriptorSet,
-            DstSet = texture.Set,
-            DstBinding = 0,
-            DescriptorCount = 1,
-            DescriptorType = DescriptorType.CombinedImageSampler,
-            PImageInfo = &imageInfo,
-        };
-        Api.UpdateDescriptorSets(Device, 1, in write, 0, null);
         return texture;
     }
 
@@ -527,7 +570,10 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             mesh.Vertices.Dispose();
             mesh.Indices.Dispose();
             mesh.Colors?.Dispose();
+            mesh.Layers?.Dispose();
         }
+        _noLayers?.Dispose();
+        _noLayers = null;
         _meshes.Clear();
         var destroyed = new HashSet<GpuTexture>();
         foreach (var texture in _textures)
@@ -826,21 +872,23 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         };
 
         // RenderModel vertex: position (3), normal (3), uv (2), gloss (1) floats.
-        var bindings = stackalloc VertexInputBindingDescription[2];
+        var bindings = stackalloc VertexInputBindingDescription[3];
         bindings[0] = new VertexInputBindingDescription(0, RenderModel.VertexStride * sizeof(float), VertexInputRate.Vertex);
         bindings[1] = new VertexInputBindingDescription(1, 4 * sizeof(float), VertexInputRate.Vertex);
-        var attributes = stackalloc VertexInputAttributeDescription[5];
+        bindings[2] = new VertexInputBindingDescription(2, 4 * sizeof(float), VertexInputRate.Vertex);
+        var attributes = stackalloc VertexInputAttributeDescription[6];
         attributes[0] = new VertexInputAttributeDescription(0, 0, Format.R32G32B32Sfloat, 0);
         attributes[1] = new VertexInputAttributeDescription(1, 0, Format.R32G32B32Sfloat, 3 * sizeof(float));
         attributes[2] = new VertexInputAttributeDescription(2, 0, Format.R32G32Sfloat, 6 * sizeof(float));
         attributes[3] = new VertexInputAttributeDescription(3, 0, Format.R32Sfloat, 8 * sizeof(float));
         attributes[4] = new VertexInputAttributeDescription(4, 1, Format.R32G32B32A32Sfloat, 0);
+        attributes[5] = new VertexInputAttributeDescription(5, 2, Format.R32G32B32A32Sfloat, 0);
         var vertexInput = new PipelineVertexInputStateCreateInfo
         {
             SType = StructureType.PipelineVertexInputStateCreateInfo,
-            VertexBindingDescriptionCount = 2,
+            VertexBindingDescriptionCount = 3,
             PVertexBindingDescriptions = bindings,
-            VertexAttributeDescriptionCount = 5,
+            VertexAttributeDescriptionCount = 6,
             PVertexAttributeDescriptions = attributes,
         };
         var inputAssembly = new PipelineInputAssemblyStateCreateInfo

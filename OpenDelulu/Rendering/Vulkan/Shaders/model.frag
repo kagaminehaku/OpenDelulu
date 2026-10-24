@@ -1,5 +1,6 @@
 #version 450
 layout(set = 0, binding = 0) uniform sampler2D uTex;
+layout(set = 0, binding = 1) uniform sampler2D uLayer;
 
 layout(push_constant) uniform Push
 {
@@ -14,6 +15,7 @@ layout(location = 0) in vec3 vNormal;
 layout(location = 1) in vec2 vUV;
 layout(location = 2) in float vGloss;
 layout(location = 3) in vec4 vColor;
+layout(location = 4) in vec4 vLayer;
 layout(location = 0) out vec4 outColor;
 
 void main()
@@ -49,6 +51,12 @@ void main()
     vec3 lit = pc.emissive.rgb + pc.ambient.rgb * 0.35 + pc.diffuse.rgb * 0.55 * lambert;
     // Objects with .xl lights: the per-vertex Direct3D 9 colour (already clamped and tinted) modulates the texture.
     vec3 color = vColor.a > 0.5 ? texel.rgb * vColor.rgb : texel.rgb * min(lit, vec3(1.15));
+    // Texture stage 1 (the material's second texture): gloss maps added through reflection coordinates, chrome.
+    if (vLayer.w > 0.5) {
+        vec3 layer = texture(uLayer, vLayer.xy).rgb;
+        color = vLayer.z < 1.5 ? color * layer : vLayer.z < 2.5 ? color + layer : color + layer - 0.5;
+        color = clamp(color, 0.0, 1.0);
+    }
     // Sun oil: wet, darker skin with a sharp highlight. The camera direction is recovered from the light,
     // which OrbitCamera puts at normalize(eye direction + 0.6 up).
     if (vGloss > 0.001) {

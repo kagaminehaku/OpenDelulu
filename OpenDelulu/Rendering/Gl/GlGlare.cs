@@ -172,7 +172,7 @@ internal sealed class GlGlare
         gl.ActiveTexture(GL_TEXTURE0);
         gl.Disable(GL_DEPTH_TEST);
         gl.DepthMask(0);
-        for (int i = 1; i <= 4; i++)
+        for (int i = 1; i <= 5; i++)
             _ext.DisableVertexAttribArray(i);
         gl.BindBuffer(GL_ARRAY_BUFFER, _triangle);
         gl.EnableVertexAttribArray(0);

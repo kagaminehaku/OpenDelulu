@@ -266,6 +266,16 @@ public sealed class RenderModel
                         Blend = BlendOf(submesh.Unknown1),
                         Shader = frame.Unknown2.Length > 4 ? frame.Unknown2[4] : (byte)0,
                     };
+                    if (material is { Textures.Length: > 1 } && material.Textures[1] is { Name.Length: > 0 } second
+                        && !second.Name.Equals(material.Textures[0].Name, StringComparison.OrdinalIgnoreCase)
+                        && TextureLayer.Describe(second.Unknown1) is { } layer
+                        && ResolveTexture(p, second.Name) is int layerTexture and >= 0)
+                    {
+                        renderMesh.Layer = new TextureLayer(layerTexture, layer.Blend, layer.Coordinates, layer.UvSet);
+                        if (layer.Coordinates == LayerCoordinates.Uv && layer.UvSet > 0 && submesh.ExtraUVs is { } layerSets
+                            && layerSets.Length == submesh.Vertices.Length && layerSets.All(e => e.Length >= layer.UvSet))
+                            renderMesh.LayerUV = [.. layerSets.Select(e => e[layer.UvSet - 1])];
+                    }
                     if (renderMesh.Shader == 3)
                     {
                         renderMesh.Water = WaterBump.FromByte(submesh.Unknown1.Length > 5 ? submesh.Unknown1[5] : (byte)0);
@@ -377,6 +387,12 @@ public sealed class RenderMesh
 
     /// <summary>The water distortion of shader 3 (sea, pools, falls); null for other meshes.</summary>
     public WaterBump? Water { get; internal set; }
+
+    /// <summary>The material's second texture stage (gloss, chrome), or null.</summary>
+    public TextureLayer? Layer { get; internal set; }
+
+    /// <summary>The UV set <see cref="Layer"/> reads when it is not the first one.</summary>
+    public Vector2[]? LayerUV { get; internal set; }
 
     /// <summary>Texture coordinates replacing the first set (the water shader samples the second one).</summary>
     public Vector2[]? DecalUV { get; internal set; }
