@@ -290,6 +290,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             push.Diffuse = mesh.Diffuse * tint;
             push.Ambient = mesh.Ambient * tint;
             push.Emissive = mesh.Emissive * tint;
+            SetWater(ref push, scene, i);
             Api.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
                 0, (uint)sizeof(PushConstants), &push);
             var buffers = stackalloc Silk.NET.Vulkan.Buffer[2] { mesh.Vertices.Handle, mesh.Colors!.Handle };
@@ -298,6 +299,14 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             Api.CmdBindIndexBuffer(cmd, mesh.Indices.Handle, 0, IndexType.Uint16);
             Api.CmdDrawIndexed(cmd, (uint)mesh.IndexCount, 1, 0, 0, 0);
         }
+    }
+
+    /// <summary>Packs the water shader into the free w of ambient (10 x wave + scale) and emissive (angle).</summary>
+    static void SetWater(ref PushConstants push, ModelScene scene, int mesh)
+    {
+        var water = scene.Water(mesh);
+        push.Ambient.W = water is { } w ? MathF.Round(w.Wave * 10) + w.Scale : 0;
+        push.Emissive.W = water?.Angle ?? 0;
     }
 
     bool HasGlareSource(ModelScene scene)
@@ -347,6 +356,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             push.Diffuse = mesh.Diffuse * tint;
             push.Ambient = mesh.Ambient * tint;
             push.Emissive = mesh.Emissive * tint;
+            SetWater(ref push, scene, i);
             Api.CmdPushConstants(cmd, _pipelineLayout, ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit,
                 0, (uint)sizeof(PushConstants), &push);
             var buffers = stackalloc Silk.NET.Vulkan.Buffer[2] { mesh.Vertices.Handle, mesh.Colors!.Handle };

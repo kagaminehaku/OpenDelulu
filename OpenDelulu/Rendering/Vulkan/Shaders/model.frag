@@ -18,7 +18,20 @@ layout(location = 0) out vec4 outColor;
 
 void main()
 {
-    vec4 texel = texture(uTex, vUV);
+    // Water (frame shader 3, the exe's giTechWater after the SDK BumpWaves): the texture is read through the procedural
+    // wave map turned by the bump matrix. ambient.w = 10 x wave frequency + scale (0 = no water), emissive.w = angle.
+    vec2 uv = vUV;
+    if (pc.ambient.w > 0.5) {
+        float wave = floor(pc.ambient.w) * 0.1;
+        float scale = fract(pc.ambient.w);
+        vec2 p = fract(vUV) - 0.5;
+        float a = 150.0 * wave * (p.x + p.y), b = 140.0 * wave * (0.85 * p.x - p.y);
+        vec2 bump = vec2(32.0 * cos(a) + 16.0 * cos(b), 32.0 * sin(a) + 16.0 * sin(b)) / 127.0;
+        float s = sin(pc.emissive.w), c = cos(pc.emissive.w);
+        uv += scale * vec2(s * bump.x + c * bump.y, -c * bump.x + s * bump.y);
+    }
+    // Gradients of the undistorted coordinates: the wave map's seams must not pick a blurry mip level.
+    vec4 texel = textureGrad(uTex, uv, dFdx(vUV), dFdy(vUV));
     float alpha = texel.a * pc.diffuse.a;
     // Pass 0: opaque texels (alpha test). 1: translucent edges only. 2: every texel (additive/darken effects).
     // 3 + colour: the glare source (every texel whatever its alpha, see the end).

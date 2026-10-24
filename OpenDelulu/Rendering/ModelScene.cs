@@ -259,6 +259,15 @@ public sealed class ModelScene
 
     public bool IsAnimating => _particles.Count > 0 || _objects.Any(o => o.Animator?.IsAnimating == true);
 
+    /// <summary>Seconds of play seen by the effects (.ptcl sprites, water shader).</summary>
+    public double EffectTime => _effectTime;
+
+    /// <summary>
+    /// The water shader of a mesh as (scale, bump matrix angle, wave frequency), or null when it has none.
+    /// </summary>
+    public (float Scale, float Angle, float Wave)? Water(int meshIndex) =>
+        _meshes[meshIndex].Water is { } water ? (water.Scale, water.AngleAt(_effectTime), water.Wave) : null;
+
     /// <summary>The stage glare drawn over the frame (null = none).</summary>
     public StageGlare? Glare { get; set; }
 

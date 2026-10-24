@@ -28,7 +28,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
     GlExtras? _ext;
     GlGlare? _glare;
     int _program, _vao, _whiteTexture;
-    int _uMvp, _uTex, _uDiffuse, _uLightDir, _uAlphaPass, _uAmbient, _uEmissive;
+    int _uMvp, _uTex, _uDiffuse, _uLightDir, _uAlphaPass, _uAmbient, _uEmissive, _uWater;
     readonly List<GpuMesh> _meshes = [];
     readonly List<int> _textures = [];
     ModelScene? _uploaded;
@@ -117,6 +117,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         _uAlphaPass = gl.GetUniformLocationString(_program, "uAlphaPass");
         _uAmbient = gl.GetUniformLocationString(_program, "uAmbient");
         _uEmissive = gl.GetUniformLocationString(_program, "uEmissive");
+        _uWater = gl.GetUniformLocationString(_program, "uWater");
 
         if (gl.IsGenVertexArraysAvailable)
             _vao = gl.GenVertexArray();
@@ -315,6 +316,10 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         _ext!.Uniform4f(_uDiffuse, d.X * light.X, d.Y * light.Y, d.Z * light.Z, d.W);
         _ext.Uniform4f(_uAmbient, a.X, a.Y, a.Z, 0);
         _ext.Uniform4f(_uEmissive, e.X, e.Y, e.Z, 0);
+        if (scene.Water(i) is { } water)
+            _ext.Uniform4f(_uWater, water.Scale, water.Angle, water.Wave, 1);
+        else
+            _ext.Uniform4f(_uWater, 0, 0, 0, 0);
 
         gl.BindBuffer(GL_ARRAY_BUFFER, mesh.VertexBuffer);
         const int stride = RenderModelStride * sizeof(float);
@@ -449,13 +454,24 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             uniform vec4 uEmissive;
             uniform vec3 uLightDir;
             uniform float uAlphaPass;
+            uniform vec4 uWater; // water shader: scale, bump matrix angle, wave frequency, on
             VIN vec3 vNormal;
             VIN vec2 vUV;
             VIN float vGloss;
             VIN vec4 vColor;
             void main()
             {
-                vec4 texel = TEX(uTex, vUV);
+                // Water (frame shader 3, giTechWater): the texture read through the turning procedural wave map.
+                // Keep in sync with the Vulkan shader (model.frag).
+                vec2 uv = vUV;
+                if (uWater.w > 0.5) {
+                    vec2 p = fract(vUV) - 0.5;
+                    float a = 150.0 * uWater.z * (p.x + p.y), b = 140.0 * uWater.z * (0.85 * p.x - p.y);
+                    vec2 bump = vec2(32.0 * cos(a) + 16.0 * cos(b), 32.0 * sin(a) + 16.0 * sin(b)) / 127.0;
+                    float s = sin(uWater.y), c = cos(uWater.y);
+                    uv += uWater.x * vec2(s * bump.x + c * bump.y, -c * bump.x + s * bump.y);
+                }
+                vec4 texel = TEX(uTex, uv);
                 float alpha = texel.a * uDiffuse.a;
                 if (uAlphaPass < 0.5) {
                     if (alpha < 0.5) discard;

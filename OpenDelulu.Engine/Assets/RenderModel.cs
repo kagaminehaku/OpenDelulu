@@ -143,7 +143,8 @@ public sealed class RenderModel
             int o = v * VertexStride;
             output[o] = position.X; output[o + 1] = position.Y; output[o + 2] = position.Z;
             output[o + 3] = normal.X; output[o + 4] = normal.Y; output[o + 5] = normal.Z;
-            output[o + 6] = src.UV.X; output[o + 7] = src.UV.Y;
+            var uv = mesh.DecalUV is { } decal ? decal[v] : src.UV;
+            output[o + 6] = uv.X; output[o + 7] = uv.Y;
             output[o + 8] = gloss is null ? 0 : gloss[v];
         }
     }
@@ -265,6 +266,13 @@ public sealed class RenderModel
                         Blend = BlendOf(submesh.Unknown1),
                         Shader = frame.Unknown2.Length > 4 ? frame.Unknown2[4] : (byte)0,
                     };
+                    if (renderMesh.Shader == 3)
+                    {
+                        renderMesh.Water = WaterBump.FromByte(submesh.Unknown1.Length > 5 ? submesh.Unknown1[5] : (byte)0);
+                        // The water shader reads its texture with the second UV set (TEXCOORD1).
+                        if (submesh.ExtraUVs is { } extra && extra.Length == submesh.Vertices.Length && extra.All(e => e.Length > 0))
+                            renderMesh.DecalUV = [.. extra.Select(e => e[0])];
+                    }
                     renderMesh.Visible = (submesh.Unknown1.Length == 0 || (submesh.Unknown1[0] & 1) == 0)
                         && (visibility?.Invoke(renderMesh) ?? !IsHelperMaterial(renderMesh.MaterialName));
                     meshes.Add(renderMesh);
@@ -366,6 +374,12 @@ public sealed class RenderMesh
 
     /// <summary>The mesh lights the stage glare (.glare): water glints such as mp01's o01_P_mizu_hikari.</summary>
     public bool IsGlareSource => Shader == 6;
+
+    /// <summary>The water distortion of shader 3 (sea, pools, falls); null for other meshes.</summary>
+    public WaterBump? Water { get; internal set; }
+
+    /// <summary>Texture coordinates replacing the first set (the water shader samples the second one).</summary>
+    public Vector2[]? DecalUV { get; internal set; }
 
     /// <summary>
     /// Per-vertex shine 0..1 (sun oil), copied into the vertices by <see cref="RenderModel.Skin"/>; null = matte.
