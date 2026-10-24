@@ -309,6 +309,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         _prop = null;
         _activity = null;
         InGame = false;
+        RefreshStatus();
         RefreshGirls(Girls.Select(g => g.Id).ToList());
         Status = T("play.prompt");
         if (_memoryReplay is not null)
@@ -367,6 +368,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (markerObject >= 0)
             scene.SetCameraMarker(markerObject);
         scene.SetObstacles(ObstaclesFor(_stage));
+        RefreshStatus();
         scene.EraseObstacles = Services.GameConfig.Current.EraseObstacles;
         if (particleObject >= 0 && StageParticlesFor(_stage) is { } sprites)
         {
