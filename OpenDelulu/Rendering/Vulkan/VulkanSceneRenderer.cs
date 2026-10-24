@@ -67,7 +67,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
     readonly DescriptorSetLayout _setLayout;
     readonly PipelineLayout _pipelineLayout;
     readonly RenderPass _renderPass, _glareSourcePass;
-    readonly Pipeline _opaque, _translucent, _additive, _darken, _glareSource;
+    readonly Pipeline _opaque, _translucent, _additive, _darken, _glareSource, _overlay;
     readonly Sampler _sampler;
     readonly VulkanGlare _glare;
 
@@ -135,6 +135,8 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         _translucent = CreatePipeline(translucent: true);
         _additive = CreatePipeline(translucent: true, BlendFactor.SrcAlpha, BlendFactor.One);
         _darken = CreatePipeline(translucent: true, BlendFactor.Zero, BlendFactor.OneMinusSrcColor);
+        // Markers drawn over everything (the camera target).
+        _overlay = CreatePipeline(translucent: true, depthTest: false);
         // Glare meshes, premultiplied by the shader, added up behind the scene's depth.
         _glareSource = CreatePipeline(translucent: true, BlendFactor.One, BlendFactor.One, _glareSourcePass);
         _glare = new VulkanGlare(vk, GlareFormat, ColorFormat, CreateShader);
@@ -179,7 +181,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         bool animating = false;
         if (scene is not null)
         {
-            scene.SetLookTarget(camera3.Eye);
+            scene.SetLookTarget(camera3.Eye, camera.Target(scene.Subject));
             bool moved = scene.Update(deltaSeconds);
             bool effects = scene.UpdateLighting(camera.CameraToWorld(scene.Subject), moved);
             if (moved || effects)
@@ -217,6 +219,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         {
             DrawPass(cmd, scene, _opaque, camera3.ViewProjection, camera3.LightDirection, translucent: false);
             DrawPass(cmd, scene, _translucent, camera3.ViewProjection, camera3.LightDirection, translucent: true);
+            DrawPass(cmd, scene, _overlay, camera3.ViewProjection, camera3.LightDirection, translucent: true, overlay: true);
         }
         Api.CmdEndRenderPass(cmd);
 
@@ -267,7 +270,10 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         return pixels;
     }
 
-    void DrawPass(CommandBuffer cmd, ModelScene scene, Pipeline pipeline, Matrix4x4 viewProjection, Vector3 light, bool translucent)
+    /// <param name="overlay">Draws only the meshes shown over everything (<see cref="ModelScene.IsOverlay"/>), which
+    /// the other passes skip.</param>
+    void DrawPass(CommandBuffer cmd, ModelScene scene, Pipeline pipeline, Matrix4x4 viewProjection, Vector3 light, bool translucent,
+        bool overlay = false)
     {
         var bound = pipeline;
         Api.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, pipeline);
@@ -279,9 +285,13 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         for (int i = 0; i < _meshes.Count; i++)
         {
             var mesh = _meshes[i];
-            if (!scene.IsVisible(i) || (translucent ? !mesh.HasAlpha : mesh.Blend != BlendMode.Normal))
+            if (!scene.IsVisible(i) || scene.IsOverlay(i) != overlay)
                 continue;
-            if (translucent)
+            if (overlay)
+                push.LightAndPass.W = 2f;
+            else if (translucent ? !mesh.HasAlpha : mesh.Blend != BlendMode.Normal)
+                continue;
+            if (translucent && !overlay)
             {
                 // Pass value 1: only the edges left by pass 1; 2: every texel (effects skipped by pass 1).
                 var wanted = mesh.Blend switch { BlendMode.Additive => _additive, BlendMode.Darken => _darken, _ => pipeline };
@@ -852,7 +862,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
     }
 
     Pipeline CreatePipeline(bool translucent, BlendFactor source = BlendFactor.SrcAlpha, BlendFactor destination = BlendFactor.OneMinusSrcAlpha,
-        RenderPass renderPass = default)
+        RenderPass renderPass = default, bool depthTest = true)
     {
         using var entry = new ByteString("main");
         var stages = stackalloc PipelineShaderStageCreateInfo[2];
@@ -918,7 +928,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         var depth = new PipelineDepthStencilStateCreateInfo
         {
             SType = StructureType.PipelineDepthStencilStateCreateInfo,
-            DepthTestEnable = true,
+            DepthTestEnable = depthTest,
             DepthWriteEnable = !translucent,
             DepthCompareOp = CompareOp.LessOrEqual,
         };
@@ -979,6 +989,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         Api.DestroyPipeline(Device, _translucent, null);
         Api.DestroyPipeline(Device, _additive, null);
         Api.DestroyPipeline(Device, _darken, null);
+        Api.DestroyPipeline(Device, _overlay, null);
         Api.DestroyPipeline(Device, _glareSource, null);
         Api.DestroyRenderPass(Device, _renderPass, null);
         Api.DestroyRenderPass(Device, _glareSourcePass, null);

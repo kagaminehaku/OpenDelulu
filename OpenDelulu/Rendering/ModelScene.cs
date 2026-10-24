@@ -394,9 +394,31 @@ public sealed class ModelScene
     }
 
     /// <summary>Points the characters' eyes at the camera.</summary>
-    public void SetLookTarget(Vector3 eye)
+    int _markerObject = -1;
+
+    /// <summary>
+    /// Makes an object the camera target marker (cm00, CONFIG's crosshair): a quad that follows the camera's target,
+    /// faces the camera and is drawn over everything.
+    /// </summary>
+    public void SetCameraMarker(int objectIndex) => _markerObject = objectIndex;
+
+    /// <summary>Meshes drawn last without depth test (the camera marker).</summary>
+    public bool IsOverlay(int mesh) => _markerObject >= 0 && _owner[mesh] == _markerObject;
+
+    /// <param name="eye">The camera position: characters look at it, obstacles in front of it are hidden.</param>
+    /// <param name="cameraTarget">The point the camera looks at (moves the crosshair marker).</param>
+    public void SetLookTarget(Vector3 eye, Vector3? cameraTarget = null)
     {
         UpdateObstacles(eye);
+        if (_markerObject >= 0 && cameraTarget is { } target && _objects[_markerObject].Animator is { } marker)
+        {
+            var facing = eye - target;
+            var placement = facing.LengthSquared() > 1e-6f
+                ? Matrix4x4.CreateWorld(target, Vector3.Normalize(facing), Vector3.UnitY)
+                : Matrix4x4.CreateTranslation(target);
+            if (marker.Placement != placement)
+                marker.Placement = placement;
+        }
         foreach (var o in _objects)
             if (o.Animator is { } animator)
                 animator.LookTarget = eye;

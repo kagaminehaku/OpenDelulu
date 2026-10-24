@@ -167,7 +167,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
             return;
 
         var (mvp, light, eye) = Camera.Compute(scene.Subject, width / (float)height, flipY: false);
-        scene.SetLookTarget(eye);
+        scene.SetLookTarget(eye, Camera.Target(scene.Subject));
         AnimateScene(gl, scene, Camera.CameraToWorld(scene.Subject));
         UploadColors(gl, scene);
 
@@ -193,6 +193,15 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.DepthMask(0);
         gl.Enable(GlExtras.GL_BLEND);
         DrawMeshes(gl, scene, translucentOnly: true);
+
+        // Markers over everything (the camera target), every texel blended.
+        gl.Disable(GL_DEPTH_TEST);
+        _ext!.BlendFunc(GlExtras.GL_SRC_ALPHA, GlExtras.GL_ONE_MINUS_SRC_ALPHA);
+        gl.Uniform1f(_uAlphaPass, 2f);
+        for (int i = 0; i < _meshes.Count; i++)
+            if (scene.IsVisible(i) && scene.IsOverlay(i))
+                DrawMesh(gl, scene, i);
+        gl.Enable(GL_DEPTH_TEST);
 
         if (scene.Glare is { } glare && _glare is not null && HasGlareSource(scene))
         {
@@ -289,7 +298,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         for (int i = 0; i < _meshes.Count; i++)
         {
             var mesh = _meshes[i];
-            if (!scene.IsVisible(i) || (translucentOnly ? !mesh.HasAlpha : mesh.Blend != BlendMode.Normal))
+            if (!scene.IsVisible(i) || scene.IsOverlay(i) || (translucentOnly ? !mesh.HasAlpha : mesh.Blend != BlendMode.Normal))
                 continue;
             if (translucentOnly)
             {

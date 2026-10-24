@@ -49,13 +49,20 @@ public sealed class OrbitCamera
         return Matrix4x4.Invert(view, out var inverse) ? inverse : Matrix4x4.Identity;
     }
 
+    /// <summary>
+    /// The point the camera looks at: zooming in also moves the orbit centre from the middle of the model to its focus
+    /// point (between a character's eyes), so close-ups are not seen from waist height.
+    /// </summary>
+    public Vector3 Target(CameraSubject subject)
+    {
+        float raise = Math.Clamp((1f - Zoom) / 0.6f, 0f, 1f);
+        return Vector3.Lerp(subject.Center, subject.Aim, raise);
+    }
+
     public (Matrix4x4 ViewProjection, Vector3 LightDirection, Vector3 Eye) Compute(CameraSubject subject, float aspect, bool flipY)
     {
         float radius = subject.Radius;
-        // Zooming in also moves the orbit centre from the middle of the model to its focus point (between a
-        // character's eyes), so close-ups are not seen from waist height.
-        float raise = Math.Clamp((1f - Zoom) / 0.6f, 0f, 1f);
-        var target = Vector3.Lerp(subject.Center, subject.Aim, raise);
+        var target = Target(subject);
         float distance = radius * 2.4f * Zoom;
         float yaw = Yaw - subject.FacingYaw; // DefaultYaw looks at the subject's face
         var eyeDir = new Vector3(

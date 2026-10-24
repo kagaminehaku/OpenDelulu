@@ -76,6 +76,8 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             if (e.PropertyName == nameof(Services.GameConfig.EraseObstacles) && Scene is { } scene)
                 scene.EraseObstacles = Services.GameConfig.Current.EraseObstacles;
+            else if (e.PropertyName == nameof(Services.GameConfig.Crosshair) && Scene is not null)
+                BuildScene();
         };
         Dialogue = new DialogueViewModel(fs, library)
         {
@@ -344,7 +346,16 @@ public sealed partial class PlayViewModel : ViewModelBase
             foreach (var (model, animator) in oilProps.Props)
                 objects.Add((model, animator));
         }
+        // CONFIG's crosshair: the cm00 marker at the camera's target.
+        int markerObject = -1;
+        if (Services.GameConfig.Current.Crosshair && CameraMarker() is { } marker)
+        {
+            markerObject = objects.Count;
+            objects.Add((marker, new CharacterAnimator(marker)));
+        }
         var scene = new ModelScene(objects, subject: 1) { Glare = StageGlareFor(_stage) };
+        if (markerObject >= 0)
+            scene.SetCameraMarker(markerObject);
         scene.SetObstacles(ObstaclesFor(_stage));
         scene.EraseObstacles = Services.GameConfig.Current.EraseObstacles;
         if (particleObject >= 0 && StageParticlesFor(_stage) is { } sprites)
@@ -819,6 +830,27 @@ public sealed partial class PlayViewModel : ViewModelBase
             if (meshes.Count > 0)
                 yield return (meshes.ToArray(), footprint);
         }
+    }
+
+    RenderModel? _cameraMarker;
+    bool _cameraMarkerMissing;
+
+    /// <summary>cm00 (ld00 row 33), the camera target marker, loaded once.</summary>
+    RenderModel? CameraMarker()
+    {
+        if (_cameraMarker is null && !_cameraMarkerMissing)
+        {
+            try
+            {
+                var xx = _fs.ReadModel("sb3_0100.pp", "cm00_00_00_00_00.xx");
+                _cameraMarker = RenderModel.Build("cm00", [new RenderPart("cm00", xx, xx.Root)]);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or EndOfStreamException)
+            {
+                _cameraMarkerMissing = true;
+            }
+        }
+        return _cameraMarker;
     }
 
     /// <summary>The stage variant's .glare, or null when it has none (night beach, pool...).</summary>
