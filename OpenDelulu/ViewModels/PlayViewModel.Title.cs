@@ -224,7 +224,10 @@ public sealed partial class PlayViewModel
                 PlayTitle(entry.Choose, () =>
                 {
                     PlayTitle(entry.Return, () => PlayTitle(entry.Loop, loop: true));
-                    MemoriesRequested?.Invoke();
+                    if (HasOriginalMemory)
+                        OpenMemory();
+                    else
+                        MemoriesRequested?.Invoke();
                 });
                 break;
             case "System" or "Game" or "CH":

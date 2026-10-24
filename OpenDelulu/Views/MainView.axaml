@@ -201,6 +201,7 @@
                         <v:MapScreenView IsVisible="{Binding ShowMap}" />
                         <v:TitleView IsVisible="{Binding IsTitleVisible}" />
                         <v:TicketView IsVisible="{Binding IsTicketVisible}" />
+                        <v:MemoryView IsVisible="{Binding IsMemoryOpen}" />
                         <v:AlbumView IsVisible="{Binding IsAlbumOpen}" />
                         <Panel IsVisible="{Binding DateHud.IsVisible, FallbackValue=False}">
                             <v:DsHudView DataContext="{Binding DateHud}" />

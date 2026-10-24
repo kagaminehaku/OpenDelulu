@@ -278,7 +278,10 @@ public sealed partial class PlayViewModel : ViewModelBase
             }
             Status = F("play.where", choice.Name, StageNames[SelectedStageIndex], Times[SelectedTimeIndex]);
             UpdateMusic();
-            if (startupOil is null)
+            // A memory replay starts its date activity at once, without the greeting.
+            if (_memoryReplay is int replay && girl.Girl.DateActivities.FirstOrDefault(a => a.Number == replay) is { } remembered)
+                StartActivity(remembered);
+            else if (startupOil is null)
                 Meet();
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
@@ -308,6 +311,13 @@ public sealed partial class PlayViewModel : ViewModelBase
         InGame = false;
         RefreshGirls(Girls.Select(g => g.Id).ToList());
         Status = T("play.prompt");
+        if (_memoryReplay is not null)
+        {
+            // Back to the memory screen after a replay.
+            _memoryReplay = null;
+            OpenMemory();
+            return;
+        }
         ShowLobby(backFromIsland: true);
     }
 
@@ -913,11 +923,15 @@ public sealed partial class PlayViewModel : ViewModelBase
     partial void OnIsTitleVisibleChanged(bool value) => UpdateMusic();
     partial void OnIsLobbyVisibleChanged(bool value) => UpdateMusic();
     partial void OnIsAlbumOpenChanged(bool value) => UpdateMusic();
+    partial void OnIsMemoryOpenChanged(bool value) => UpdateMusic();
+    partial void OnIsTicketVisibleChanged(bool value) => UpdateMusic();
 
     /// <summary>The screen being shown, for its music: the title, album and lobby over the island; else the stage.</summary>
     MusicScene CurrentMusicScene =>
-        IsTitleVisible ? MusicScene.Title
+        IsTicketVisible ? MusicScene.Ticket
+        : IsTitleVisible ? MusicScene.Title
         : IsAlbumOpen ? MusicScene.EventCg
+        : IsMemoryOpen ? MusicScene.Memories
         : IsLobbyVisible ? MusicScene.Lobby
         : _stage is null ? MusicScene.Map
         : _oil is not null ? MusicScene.Oil
