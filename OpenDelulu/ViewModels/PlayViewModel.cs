@@ -88,7 +88,18 @@ public sealed partial class PlayViewModel : ViewModelBase
             _ = EnterAsync();
         }
         else
-            ShowTitle();
+            _ = StartAsync();
+    }
+
+    /// <summary>
+    /// Like the exe's boot: the logo scene (50_logo) plays data/sb3_0001.mpg (studio logo and opening), the opening scene
+    /// (58_opening) data/sb3_0002.mpg when installed, then the title. Each can be skipped; --no-movies skips them.
+    /// </summary>
+    async Task StartAsync()
+    {
+        await PlayMovieAsync("sb3_0001.mpg");
+        await PlayMovieAsync("sb3_0002.mpg");
+        ShowTitle();
     }
 
     public DialogueViewModel Dialogue { get; }
