@@ -14,6 +14,9 @@ public sealed class Stage
     public required RenderModel Model { get; init; }
     public XlFile? Lights { get; init; }
 
+    /// <summary>Objects that may be hidden in front of the camera, with their hit boxes seen from above (x, z triangles).</summary>
+    public IReadOnlyList<(StageObstacle Obstacle, Vector2[] Footprint)> Obstacles { get; init; } = [];
+
     /// <summary>The stage's looping background animation (waves, water, flags), or null.</summary>
     public CharacterAnimator? Animator { get; init; }
 
@@ -34,7 +37,7 @@ public sealed class Stage
     /// </summary>
     public const double AnimationSpeedScale = 0.1;
 
-    public static Stage Load(GameFileSystem fs, StageVariant variant)
+    public static Stage Load(GameFileSystem fs, StageVariant variant, IReadOnlyList<StageObstacle>? obstacles = null)
     {
         var main = XxReader.Read(fs.ReadReferenced(variant.Model.Archive, variant.Model.File));
         var parts = new List<RenderPart> { new(variant.Model.File, main, main.Root) };
@@ -46,10 +49,24 @@ public sealed class Stage
         var render = RenderModel.Build($"mp{variant.Stage:00} {variant.Time}", parts);
 
         var points = new Dictionary<string, Matrix4x4>(StringComparer.Ordinal);
+        var footprints = new List<(StageObstacle, Vector2[])>();
         if (variant.Positions is { } positions)
         {
             var model = XxReader.Read(fs.ReadReferenced(positions.Archive, positions.File));
             Collect(model.Root, Matrix4x4.Identity, points);
+            foreach (var obstacle in obstacles ?? [])
+                if (model.FindFrame(obstacle.HitBox) is { Mesh: { } box } frame)
+                {
+                    var world = frame.WorldMatrix;
+                    var triangles = new List<Vector2>();
+                    foreach (var submesh in box.Submeshes)
+                        foreach (ushort index in submesh.Indices)
+                        {
+                            var p = Vector3.Transform(submesh.Vertices[index].Position, world);
+                            triangles.Add(new Vector2(p.X, p.Z));
+                        }
+                    footprints.Add((obstacle, triangles.ToArray()));
+                }
         }
 
         XlFile? lights = null;
@@ -74,7 +91,7 @@ public sealed class Stage
             {
             }
         }
-        return new Stage { Variant = variant, Model = render, Lights = lights, Points = points, Animator = animator };
+        return new Stage { Variant = variant, Model = render, Lights = lights, Points = points, Animator = animator, Obstacles = footprints };
     }
 
     static void Collect(XxFrame frame, Matrix4x4 parent, Dictionary<string, Matrix4x4> points)

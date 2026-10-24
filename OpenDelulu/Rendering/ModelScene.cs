@@ -254,7 +254,42 @@ public sealed class ModelScene
     /// <summary>Raised when visibility or animation settings change; the viewer redraws.</summary>
     public event Action? Changed;
 
-    public bool IsVisible(int meshIndex) => _visible[meshIndex];
+    public bool IsVisible(int meshIndex) => _visible[meshIndex] && !(_obstacleHidden?[meshIndex] ?? false);
+
+    // ------------------------------------------------------------------ obstacles (CONFIG "erase obstacles")
+
+    readonly List<(int[] Meshes, Vector2[] Footprint)> _obstacles = [];
+    bool[]? _obstacleHidden;
+
+    /// <summary>Hide the stage objects that come between the camera and the subject (see <see cref="SetObstacles"/>).</summary>
+    public bool EraseObstacles { get; set; }
+
+    /// <summary>
+    /// The objects that may be hidden: their meshes and their hit boxes seen from above (x, z triangles, see
+    /// <see cref="StageObstacle.Blocks"/>). Checked against the camera every frame in <see cref="SetLookTarget"/>.
+    /// </summary>
+    public void SetObstacles(IEnumerable<(int[] Meshes, Vector2[] Footprint)> obstacles)
+    {
+        _obstacles.Clear();
+        _obstacles.AddRange(obstacles);
+        _obstacleHidden = _obstacles.Count > 0 ? new bool[_meshes.Count] : null;
+    }
+
+    void UpdateObstacles(Vector3 eye)
+    {
+        if (_obstacleHidden is not { } hidden)
+            return;
+        var o = _objects[_subject];
+        var target = Vector3.Transform(o.Model.Center, o.Animator?.Placement ?? Matrix4x4.Identity);
+        var from = new Vector2(eye.X, eye.Z);
+        var to = new Vector2(target.X, target.Z);
+        foreach (var (meshes, footprint) in _obstacles)
+        {
+            bool block = EraseObstacles && StageObstacle.Blocks(footprint, from, to);
+            foreach (int m in meshes)
+                hidden[m] = block;
+        }
+    }
 
     public void SetVisible(int meshIndex, bool visible)
     {
@@ -305,7 +340,7 @@ public sealed class ModelScene
     public StageGlare? Glare { get; set; }
 
     /// <summary>True when a visible mesh lights the glare (<see cref="RenderMesh.IsGlareSource"/>).</summary>
-    public bool IsGlareSource(int meshIndex) => _visible[meshIndex] && _meshes[meshIndex].IsGlareSource;
+    public bool IsGlareSource(int meshIndex) => IsVisible(meshIndex) && _meshes[meshIndex].IsGlareSource;
 
     /// <summary>Camera pitch to start from (radians, positive = from above); null = the viewer's default.</summary>
     public float? CameraPitch { get; set; }
@@ -361,6 +396,7 @@ public sealed class ModelScene
     /// <summary>Points the characters' eyes at the camera.</summary>
     public void SetLookTarget(Vector3 eye)
     {
+        UpdateObstacles(eye);
         foreach (var o in _objects)
             if (o.Animator is { } animator)
                 animator.LookTarget = eye;

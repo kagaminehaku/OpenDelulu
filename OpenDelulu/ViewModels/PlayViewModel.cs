@@ -72,6 +72,11 @@ public sealed partial class PlayViewModel : ViewModelBase
         _stages = stages;
         _library = library;
         _progress = GameProgress.Load(ProgressPath);
+        Services.GameConfig.Current.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Services.GameConfig.EraseObstacles) && Scene is { } scene)
+                scene.EraseObstacles = Services.GameConfig.Current.EraseObstacles;
+        };
         Dialogue = new DialogueViewModel(fs, library)
         {
             Speaker3D = () => _girl is { } girl && Scene is { } scene ? (girl, scene) : null,
@@ -247,7 +252,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             int? swimsuit = _progress.For(choice.Id).SwimsuitRow;
             // The stage loads while its introduction movie plays (as the original's date scene does).
-            var loading = Task.Run(() => (Stage.Load(_fs, variant), _assembler.Build(SpecFor(choice.Id, swimsuit))));
+            var loading = Task.Run(() => (Stage.Load(_fs, variant, stageInfo.Obstacles), _assembler.Build(SpecFor(choice.Id, swimsuit))));
             if (StageMovie(stageInfo.Id, Time) is { } movie)
                 await PlayMovieAsync(movie);
             var (stage, girl) = await loading;
@@ -340,6 +345,8 @@ public sealed partial class PlayViewModel : ViewModelBase
                 objects.Add((model, animator));
         }
         var scene = new ModelScene(objects, subject: 1) { Glare = StageGlareFor(_stage) };
+        scene.SetObstacles(ObstaclesFor(_stage));
+        scene.EraseObstacles = Services.GameConfig.Current.EraseObstacles;
         if (particleObject >= 0 && StageParticlesFor(_stage) is { } sprites)
         {
             var stage = _stage;
@@ -785,6 +792,34 @@ public sealed partial class PlayViewModel : ViewModelBase
     /// </summary>
     readonly Dictionary<string, LightSet?> _lightFiles = [];
     readonly Dictionary<string, StageParticles?> _particleFiles = [];
+
+    /// <summary>
+    /// The stage objects (object 0 of the scene) that may be hidden in front of the camera now: the ld02_02 flag of the
+    /// oil scene or of the date point she stands at. The exe indexes the date flags with a byte of its date state that
+    /// is not decoded; the point number stands in for it.
+    /// </summary>
+    IEnumerable<(int[] Meshes, Vector2[] Footprint)> ObstaclesFor(Stage stage)
+    {
+        var rig = stage.Model.Rig;
+        foreach (var (obstacle, footprint) in stage.Obstacles)
+        {
+            bool allowed = _oil is not null ? obstacle.Oil[0] : obstacle.Date[Math.Clamp(_point, 0, obstacle.Date.Length - 1)];
+            int frame = rig.Find(obstacle.Frame);
+            if (!allowed || frame < 0)
+                continue;
+            var meshes = new List<int>();
+            for (int m = 0; m < stage.Model.Meshes.Count; m++)
+            {
+                int f = stage.Model.Meshes[m].FrameIndex;
+                while (f >= 0 && f != frame)
+                    f = rig.Parents[f];
+                if (f == frame)
+                    meshes.Add(m);
+            }
+            if (meshes.Count > 0)
+                yield return (meshes.ToArray(), footprint);
+        }
+    }
 
     /// <summary>The stage variant's .glare, or null when it has none (night beach, pool...).</summary>
     StageGlare? StageGlareFor(Stage stage)

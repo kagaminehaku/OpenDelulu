@@ -30,6 +30,9 @@ public sealed record StageVariant(
 
 public sealed record StageInfo(int Id, IReadOnlyList<StageVariant> Variants)
 {
+    /// <summary>Objects hidden when they come between the camera and the girl (ld02_02).</summary>
+    public IReadOnlyList<StageObstacle> Obstacles { get; init; } = [];
+
     public StageVariant? At(StageTime time) => Variants.FirstOrDefault(v => v.Time == time) ?? Variants.FirstOrDefault();
 }
 
@@ -69,8 +72,11 @@ public sealed class StageDatabase
             variants.Add(new StageVariant(stage, (StageTime)slot, model, Optional(3), Optional(5), Optional(7), Optional(9), Optional(11), Optional(17)));
         }
 
+        var obstacles = archive.Find("ld02_02_00_00_00.lst") is { } obstacleEntry
+            ? StageObstacle.Load(LstTable.Decode(archive.ReadAllBytes(obstacleEntry), obstacleEntry.Name))
+            : [];
         var stages = variants.GroupBy(v => v.Stage).OrderBy(g => g.Key)
-            .Select(g => new StageInfo(g.Key, g.OrderBy(v => v.Time).ToList()))
+            .Select(g => new StageInfo(g.Key, g.OrderBy(v => v.Time).ToList()) { Obstacles = obstacles.GetValueOrDefault(g.Key, []) })
             .ToList();
         return new StageDatabase(stages);
     }
