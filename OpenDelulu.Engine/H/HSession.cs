@@ -1,12 +1,6 @@
-using System.Globalization;
-using System.Numerics;
 using OpenDelulu.Engine.Animation;
-using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
-using OpenDelulu.Formats.Lst;
-using OpenDelulu.Formats.Xa;
-using OpenDelulu.Formats.Xx;
 
 namespace OpenDelulu.Engine.H;
 
@@ -28,10 +22,9 @@ public enum HState
 }
 
 /// <summary>
-/// An H scene (08_h): the girl's hwBB_PP.xa and the man's hmBB_PP.xa (ld01 rows 121..124) played together on one of the
-/// stage's H points; the man is mb00 (ld01 row 101). The two files have the same 170 clips, so the man simply follows the
-/// girl's clip index. Each file holds two positions, A and B (the H menu's eight positions are the four files × A/B),
-/// each with 1 = vagina and 2 = anus. The clips, found by name:
+/// An H scene (08_h): hwBB_PP.xa / hmBB_PP.xa of ld01 rows 121..124 (P = 1..4) on one of the stage's H points. The two
+/// files have the same 170 clips. Each file holds two positions, A and B (the H menu's eight positions are the four files
+/// × A/B), each with 1 = vagina and 2 = anus. The clips, found by name:
 /// <list type="bullet">
 /// <item>羞恥 / 通常 / 淫乱待機 (shy, usual, lewd: her mood at the start) → Z待機, the standby; touches from it
 /// (キス, 乳もみ, ブラずらし, 股間いじり(前), パンツずらし, オナニー) loop until the way back.</item>
@@ -41,57 +34,27 @@ public enum HState
 /// <item>A1ピストンつく→A1う！待機 when he is about to come; then →A1絶頂(中だし) (inside: climax, 事後 loop, back to
 /// A1待機 by itself) or →F待機 (outside: F待機→F待機(胸 / 尻 / 脚 / 顔 / アソコ), back to Z待機 by itself).</item>
 /// </list>
-/// Expressions and voices per clip come from lh02_PP (columns 2, 14, 15) and lp02_LL (ph voices), like the oil scene.
+/// Expressions and voices per clip: lh02_PP and lp02_LL (ph voices).
 /// </summary>
-public sealed class HSession
+public sealed class HSession : CoupleSession
 {
-    public sealed record Partner(RenderModel Model, CharacterAnimator Animator);
-
     /// <summary>Where he comes outside (the F待機(…) clips).</summary>
     public static readonly string[] OutsideTargets = ["胸", "尻", "脚", "顔", "アソコ"];
 
-    readonly Dictionary<string, int> _clips;
-    readonly Dictionary<int, (int Expression, int VoiceRow, int Priority)> _events;
-    readonly Dictionary<int, IReadOnlyList<string>> _voices;
-    readonly VoiceLibrary? _voiceLibrary;
-    readonly AudioSystem? _audio;
-    readonly Random _random = new();
     readonly string _mood;
-    int _speakingPriority;
     int _queuedStrokes;
-    // A clip to play once the girl reaches another one (an order given in the middle of a transition).
-    (string When, string Then)? _after;
 
-    HSession(Character girl, Partner man, AnimationPlayer body, AnimationPlayer manBody, int file, string mood,
-        Dictionary<int, (int, int, int)> events, Dictionary<int, IReadOnlyList<string>> voices, VoiceLibrary? voiceLibrary, AudioSystem? audio)
+    HSession(Parts parts, int file, string mood) : base(parts)
     {
-        Girl = girl;
-        Man = man;
-        Body = body;
-        ManBody = manBody;
         File = file;
         _mood = mood;
-        _events = events;
-        _voices = voices;
-        _voiceLibrary = voiceLibrary;
-        _audio = audio;
-        _clips = body.Clips.Where(c => c.Name.Length > 0 && !c.IsStatic).GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First().Index);
-        body.ClipChanged += OnClipChanged;
     }
-
-    public Character Girl { get; }
-    public Partner Man { get; }
-    public AnimationPlayer Body { get; }
-    public AnimationPlayer ManBody { get; }
 
     /// <summary>1..4: the hwBB_PP file (a pair of positions).</summary>
     public int File { get; }
 
     /// <summary>The position and hole now inserted ("A1"…), or null.</summary>
     public string? Inserted { get; private set; }
-
-    /// <summary>0..1: how close he is; strokes raise it, and when it is full the next stroke ends at う！待機.</summary>
-    public double Excitement { get; private set; }
 
     /// <summary>Strokes keep going by themselves (the button held).</summary>
     public bool Continuous { get; set; }
@@ -102,13 +65,8 @@ public sealed class HSession
     /// </summary>
     public double StrokeSpeed { get; set; } = 4;
 
-    /// <summary>How much one stroke adds to <see cref="Excitement"/>.</summary>
+    /// <summary>How much one stroke adds to <see cref="CoupleSession.Excitement"/>.</summary>
     public double StrokeExcitement { get; set; } = 0.06;
-
-    /// <summary>Raised when he has come (true inside, false outside).</summary>
-    public event Action<bool>? Came;
-
-    public string Clip => Body.Current?.Name ?? "";
 
     public HState State
     {
@@ -128,114 +86,35 @@ public sealed class HSession
     }
 
     /// <summary>
-    /// Loads the scene's animations and the man (can run on a worker thread); <see cref="Attach"/> then starts it.
+    /// Loads the scene (can run on a worker thread); <see cref="CoupleSession.Attach"/> then starts it.
     /// <paramref name="file"/> is 1..4 (hwBB_01..04), <paramref name="level"/> her intimacy level (mood and voices).
     /// </summary>
     public static HSession Start(GameFileSystem fs, CharacterAssembler assembler, Character girl, int file, int level,
         VoiceLibrary? voices = null, AudioSystem? audio = null)
     {
-        string tables = assembler.Database.TableArchive;
         file = Math.Clamp(file, 1, 4);
-        var row = Row(fs, tables, girl.Girl.Id, 120 + file) ?? throw new InvalidDataException($"No H scene {file} for girl {girl.Girl.Id}.");
-        var womanXa = AssetRef.FromRow(row, 1) ?? throw new InvalidDataException("No woman's H animation.");
-        var manXa = AssetRef.FromRow(row, 3) ?? throw new InvalidDataException("No man's H animation.");
-        var manRef = Row(fs, tables, girl.Girl.Id, 101) is { } manRow && AssetRef.FromRow(manRow, 1) is { } r ? r : new AssetRef("guy_uncensor.pp", "mb00_00_00_00_00.xx");
-
-        var body = assembler.LoadBodyAnimation(girl.Model, womanXa) ?? throw new InvalidDataException($"{womanXa.File} has no animation.");
-        body.FollowNext = true;
-        var manModel = RenderModel.FromXx(XxReader.Read(fs.ReadReferenced(manRef.Archive, manRef.File)), manRef.File);
-        var manAnimation = XaReader.Read(fs.ReadReferenced(manXa.Archive, manXa.File)).Animation
-            ?? throw new InvalidDataException($"{manXa.File} has no animation.");
-        // He follows her clip changes; on his own he only loops.
-        var manBody = new AnimationPlayer(manModel.Rig, manAnimation, manXa.File) { FollowNext = false };
-        var man = new Partner(manModel, new CharacterAnimator(manModel) { Body = manBody, EyesFollowTarget = false });
-
-        var events = new Dictionary<int, (int, int, int)>();
-        foreach (var e in Table(fs, tables, $"lh02_{file:00}_00_00_00.lst")?.Rows ?? [])
-        {
-            if (e.Length < 16 || !int.TryParse(e[0], out int clip))
-                continue;
-            int Int(int column) => int.TryParse(e[column], NumberStyles.Integer, CultureInfo.InvariantCulture, out int v) ? v : 0;
-            events[clip] = (Int(2), Int(14), Int(15));
-        }
-        var lines = new Dictionary<int, IReadOnlyList<string>>();
-        foreach (var v in Table(fs, tables, $"lp02_{Math.Clamp(level, 2, 5):00}_00_00_00.lst")?.Rows ?? [])
-        {
-            if (v.Length < 2 || !int.TryParse(v[0], out int n) || !int.TryParse(v[1], out int count) || count <= 0)
-                continue;
-            var files = new List<string>();
-            for (int i = 0; i < count && 3 + i * 2 < v.Length; i++)
-                if (v[3 + i * 2] is { Length: > 1 } name && name != "0")
-                    files.Add(name);
-            if (files.Count > 0)
-                lines[n] = files;
-        }
+        var parts = Load(fs, assembler, girl, 120 + file, $"lh02_{file:00}_00_00_00.lst", $"lp02_{Math.Clamp(level, 2, 5):00}_00_00_00.lst", voices, audio);
         // Her mood by level: shy at first, then usual, lewd at the last level. The exe's own rule is not decoded.
         string mood = level <= 2 ? "羞恥待機" : level >= 5 ? "淫乱待機" : "通常待機";
-        return new HSession(girl, man, body, manBody, file, mood, events, lines, voices, audio);
+        return new HSession(parts, file, mood);
     }
 
-    static LstTable? Table(GameFileSystem fs, string archive, string name)
+    protected override void Begin()
     {
-        try { return fs.ReadTable(archive, name); }
-        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException) { return null; }
-    }
-
-    static string[]? Row(GameFileSystem fs, string archive, int girl, int row) =>
-        Table(fs, archive, $"ld01_{girl:00}_00_00_00.lst")?.Rows.FirstOrDefault(r => r.Length > 2 && r[0] == row.ToString(CultureInfo.InvariantCulture));
-
-    /// <summary>Puts both on the H point and starts at her mood standby (on the thread that renders).</summary>
-    public void Attach(Matrix4x4 placement)
-    {
-        Girl.Animator.Body = Body;
-        Girl.Animator.Placement = placement;
-        Man.Animator.Placement = placement;
-        Girl.Animator.Physics?.Reset();
         if (!Play(_mood))
             Play("Z待機");
     }
 
-    public void Detach()
-    {
-        Body.ClipChanged -= OnClipChanged;
-        Girl.Animator.Face?.SetExpression(0, 0);
-    }
+    protected override double SpeedFor(AnimationClipInfo clip) =>
+        clip.Name.Contains("ピストン", StringComparison.Ordinal) && !clip.Name.Contains("う！", StringComparison.Ordinal) ? StrokeSpeed : 1;
 
-    /// <summary>Plays a clip by name (the man follows); false when the scene has no such clip.</summary>
-    public bool Play(string name)
+    protected override void OnClip(AnimationClipInfo clip)
     {
-        if (!_clips.TryGetValue(name, out int index))
-            return false;
-        Body.Play(index);
-        return true;
-    }
-
-    public bool Has(string name) => _clips.ContainsKey(name);
-
-    void OnClipChanged(AnimationClipInfo clip)
-    {
-        if (ManBody.Current?.Index != clip.Index)
-            ManBody.Play(clip.Index);
         string name = clip.Name;
-        double speed = name.Contains("ピストン", StringComparison.Ordinal) && !name.Contains("う！", StringComparison.Ordinal) ? StrokeSpeed : 1;
-        Body.SpeedScale = ManBody.SpeedScale = speed;
         if (name.Length >= 2 && name[0] is 'A' or 'B' && name[1] is '1' or '2')
             Inserted = name[..2];
         else if (name.StartsWith('Z') || name.StartsWith('F'))
             Inserted = null;
-        if (_events.TryGetValue(clip.Index, out var e))
-        {
-            Girl.Animator.Face?.SetExpression(e.Expression, e.Expression);
-            Girl.Animator.Invalidate();
-            if (e.VoiceRow > 0)
-                Say(e.VoiceRow, e.Priority);
-        }
-        if (_after is { } after && after.When == name)
-        {
-            _after = null;
-            Play(after.Then);
-            return;
-        }
         if (Inserted is { } p && name == $"{p}待機" && (_queuedStrokes > 0 || Continuous))
         {
             _queuedStrokes = Math.Max(0, _queuedStrokes - 1);
@@ -243,26 +122,12 @@ public sealed class HSession
         }
     }
 
-    void Say(int row, int priority)
-    {
-        if (_voiceLibrary is null || _audio is null || !_voices.TryGetValue(row, out var files))
-            return;
-        if (Girl.Animator.Speech is not null && priority < _speakingPriority)
-            return;
-        string name = string.Format(CultureInfo.InvariantCulture, files[_random.Next(files.Count)], Girl.Girl.Id);
-        var line = _voiceLibrary.For(Girl.Girl.Id).FirstOrDefault(l => string.Equals(l.File, name, StringComparison.OrdinalIgnoreCase));
-        if (line is null)
-            return;
-        Girl.Animator.Speech = _voiceLibrary.Speak(line, _audio);
-        _speakingPriority = priority;
-    }
-
     /// <summary>From her mood standby: to Z待機 first, then <paramref name="then"/>; false when not in her mood standby.</summary>
     bool FromMood(string then)
     {
         if (Clip != _mood)
             return false;
-        _after = ("Z待機", then);
+        After = ("Z待機", then);
         return Play($"{_mood}→Z待機");
     }
 
@@ -283,7 +148,7 @@ public sealed class HSession
         {
             if (Play($"{now}待機→{target}待機"))
                 return true;
-            _after = ("Z待機", $"Z待機→{target}待機");
+            After = ("Z待機", $"Z待機→{target}待機");
             return Play($"{now}待機→Z待機");
         }
         return false;
@@ -299,7 +164,7 @@ public sealed class HSession
 
     /// <summary>
     /// One stroke from an inserted standby (the clip chain comes back to it; a stroke asked in the middle of one waits).
-    /// When <see cref="Excitement"/> is full the stroke ends at う！待機 instead.
+    /// When <see cref="CoupleSession.Excitement"/> is full the stroke ends at う！待機 instead.
     /// </summary>
     public bool Stroke()
     {
@@ -337,7 +202,7 @@ public sealed class HSession
         if (State != HState.Ready || Inserted is not { } p || !Play($"{p}う！待機→{p}絶頂(中だし)"))
             return false;
         Excitement = 0;
-        Came?.Invoke(true);
+        RaiseCame(true);
         return true;
     }
 
@@ -350,8 +215,8 @@ public sealed class HSession
             return false;
         Excitement = 0;
         if (Has($"F待機→F待機({target})"))
-            _after = ("F待機", $"F待機→F待機({target})");
-        Came?.Invoke(false);
+            After = ("F待機", $"F待機→F待機({target})");
+        RaiseCame(false);
         return true;
     }
 

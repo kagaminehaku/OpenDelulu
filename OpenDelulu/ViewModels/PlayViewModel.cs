@@ -17,6 +17,7 @@ using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
 using OpenDelulu.Engine.Game;
+using OpenDelulu.Engine.H;
 using OpenDelulu.Engine.Hud;
 using OpenDelulu.Engine.Oil;
 using OpenDelulu.Engine.Script;
@@ -310,15 +311,8 @@ public sealed partial class PlayViewModel : ViewModelBase
     void Leave()
     {
         StopOil(restore: false);
-        if (_h is { } h)
-        {
-            _hTimer.Stop();
-            HHud?.Hide();
-            TouchHandler = null;
-            h.Detach();
-            _h = null;
-            _hLevelUp = false;
-        }
+        EndCouple();
+        _hLevelUp = false;
         HideDateHud();
         HideSystemHud();
         Dialogue.Hide();
@@ -374,8 +368,8 @@ public sealed partial class PlayViewModel : ViewModelBase
         var objects = new List<(RenderModel, CharacterAnimator?)> { (_stage.Model, _stage.Animator), (_girl.Model, _girl.Animator) };
         if (_prop is { } prop)
             objects.Add(prop);
-        if (_h is { } h)
-            objects.Add((h.Man.Model, h.Man.Animator));
+        if (_couple is { } couple)
+            objects.Add((couple.Man.Model, couple.Man.Animator));
         _propObject = -1;
         // The stage's keyframed sprites (.ptcl): sun glow, splashes, steam, lamp glows.
         int particleObject = -1;
@@ -426,7 +420,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             scene.CameraPitch = lying ? 0.75f : 0.3f;
             scene.CameraZoom = lying ? 0.75f : 0.9f;
         }
-        else if (_h is not null)
+        else if (_couple is not null)
         {
             // Both of them, from the side and a little above.
             scene.FrameLivePose = true;
@@ -979,7 +973,9 @@ public sealed partial class PlayViewModel : ViewModelBase
         : IsLobbyVisible ? MusicScene.Lobby
         : _stage is null ? MusicScene.Map
         : _oil is not null ? MusicScene.Oil
-        : _h is not null ? MusicScene.H
+        : _couple is FeraSession ? MusicScene.Fera
+        : _couple is HapSession ? MusicScene.Hap
+        : _couple is not null ? MusicScene.H
         : MusicScene.Date;
 
     /// <summary>
