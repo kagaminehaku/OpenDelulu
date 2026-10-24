@@ -113,13 +113,16 @@ public sealed partial class PlayViewModel
         SwimsuitCards.Clear();
         if (keep)
             _progress.Save(ProgressPath);
-        else if (_lookStart is not null)
+        bool accessoriesChanged = false;
+        if (!keep && _lookStart is not null)
         {
+            accessoriesChanged = !SameAccessories(Progress.Look.Accessories, _lookStart.Accessories);
             Progress.Look = _lookStart;
             ApplyLook();
         }
         _lookStart = null;
-        if (!keep && _wardrobeStart != Progress.SwimsuitRow && _girl is not null)
+        AccessoryCards.Clear();
+        if (!keep && (_wardrobeStart != Progress.SwimsuitRow || accessoriesChanged) && _girl is not null)
         {
             int row = _wardrobeStart ?? _girl.Girl.Swimsuits.FirstOrDefault()?.Row ?? 0;
             _ = ChangeSwimsuitAsync(row);

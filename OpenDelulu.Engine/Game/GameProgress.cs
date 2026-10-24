@@ -54,6 +54,8 @@ public sealed class GirlLook
     public int[] EyesGloss { get; set; } = [255, 255, 255];
     public int EyesOpacity { get; set; } = 100;
     public int[] Hair { get; set; } = [255, 255, 255];
+    /// <summary>Worn accessories: place (lc00 row 1..15) → item row of its lcNN table.</summary>
+    public Dictionary<int, int> Accessories { get; set; } = [];
 
     public GirlLook Clone() => new()
     {
@@ -61,6 +63,7 @@ public sealed class GirlLook
         Feet = [.. Feet], FeetGloss = [.. FeetGloss], FeetOpacity = FeetOpacity,
         Eyes = [.. Eyes], EyesGloss = [.. EyesGloss], EyesOpacity = EyesOpacity,
         Hair = [.. Hair],
+        Accessories = new(Accessories),
     };
 }
 

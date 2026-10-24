@@ -12,7 +12,9 @@ namespace OpenDelulu.Engine.Characters;
 /// <param name="HairIndex">0-based index into <see cref="GirlInfo.Hairs"/>.</param>
 /// <param name="SwimsuitRow">Row in lbNN; null = first swimsuit.</param>
 /// <param name="CutOverride">Force a body variant (1-based) instead of the swimsuit's own.</param>
-public sealed record CharacterSpec(int GirlId, int HairIndex = 0, int? SwimsuitRow = null, int? CutOverride = null);
+/// <param name="Accessories">Worn accessories: place (lc00 row, 1..15) → item row of its lcNN table.</param>
+public sealed record CharacterSpec(int GirlId, int HairIndex = 0, int? SwimsuitRow = null, int? CutOverride = null,
+    IReadOnlyDictionary<int, int>? Accessories = null);
 
 /// <summary>An assembled, animatable character.</summary>
 public sealed record Character(GirlInfo Girl, RenderModel Model, CharacterAnimator Animator)
@@ -34,6 +36,14 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
     const string SwimsuitPlaceholderPrefix = "mizugi";
 
     public CharacterDatabase Database { get; } = database;
+
+    AccessoryDatabase? _accessories;
+
+    /// <summary>The accessory tables (lc00..lc11), read on first use.</summary>
+    public AccessoryDatabase Accessories => _accessories ??= AccessoryDatabase.Load(fs);
+
+    /// <summary>Placeholder of the body's pareo meshes, replaced by the chosen lc07 texture.</summary>
+    const string PareoPlaceholder = "pareo.tga";
 
     /// <summary>Builds the model and its animator (base body animation + face morphs).</summary>
     public Character Build(CharacterSpec spec)
@@ -159,16 +169,69 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
 
         var faceTextures = new Dictionary<string, RgbaImage>(StringComparer.OrdinalIgnoreCase);
         AddTexture(faceTextures, FacePlaceholder, girl.FaceTexture);
+        var holders = new List<XxModel> { body };
         if (Attach(body, girl.Face) is { } face)
+        {
             parts.Add(new RenderPart("face", face.Model, face.Root, faceTextures));
+            holders.Add(face.Model);
+        }
 
         if (girl.Hairs.Count > 0 && Attach(body, girl.Hairs[Math.Clamp(spec.HairIndex, 0, girl.Hairs.Count - 1)]) is { } hair)
+        {
             parts.Add(new RenderPart("hair", hair.Model, hair.Root));
+            holders.Add(hair.Model);
+        }
+
+        bool pareo = false;
+        foreach (var (place, row) in spec.Accessories ?? new Dictionary<int, int>())
+        {
+            if (Accessories.Slot(place) is not { } slot || Accessories.Find(slot.Table, row) is not { } item)
+                continue;
+            if (slot.IsPareo)
+            {
+                // The pareo is part of every body; the item is only its texture.
+                AddTexture(bodyTextures, PareoPlaceholder, item.Model);
+                pareo = bodyTextures.ContainsKey(PareoPlaceholder);
+                continue;
+            }
+            if (AttachAccessory(body, holders, slot, item) is { } accessory)
+                parts.Add(new RenderPart($"accessory{place}", accessory.Model, accessory.Root));
+        }
 
         string name = $"{girl.DisplayName} · {swimsuit?.Name ?? "?"}";
         // Like the exe's lx01 groups: the intimate-area meshes are shown when the outfit has no bottom covering them.
         bool covered = body.FindFrame("o01_P_Pantu01")?.Mesh is not null;
-        return RenderModel.Build(name, parts, mesh => IsVisibleByDefault(mesh) || (!covered && IsDetail(mesh.FrameName)));
+        return RenderModel.Build(name, parts, mesh => IsVisibleByDefault(mesh) || (!covered && IsDetail(mesh.FrameName))
+            || pareo && mesh.PartName == "body" && mesh.FrameName.StartsWith("o01_P_Pareo", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Hangs an accessory on the character: rigid items are modelled around their own root frame (o01_N_Mimi_AC…), which
+    /// takes the place of the holder frame of the same role on the body, face or hair (o01_N_Mimi_L_AC…); shoes are
+    /// skinned to the leg bones and only need to join the body's hierarchy.
+    /// </summary>
+    (XxModel Model, XxFrame Root)? AttachAccessory(XxModel body, IReadOnlyList<XxModel> holders, AccessorySlot slot, AccessoryItem item)
+    {
+        XxModel model;
+        try { model = LoadModel(item.Model); }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or EndOfStreamException) { return null; }
+        var root = (item.ItemFrame ?? slot.ItemFrame) is { } rootName ? model.FindFrame(rootName) : null;
+        if (root is null)
+            return null;
+        XxFrame? holder;
+        if (slot.IsShoes)
+        {
+            holder = body.Root;
+        }
+        else
+        {
+            string? holderName = item.BodyFrame ?? slot.BodyFrame;
+            holder = holderName is null ? null : holders.Select(h => h.FindFrame(holderName)).FirstOrDefault(f => f is not null);
+        }
+        if (holder is null)
+            return null;
+        holder.AttachChild(root);
+        return (model, root);
     }
 
     (XxModel Model, XxFrame Root)? Attach(XxModel body, PartRef part)

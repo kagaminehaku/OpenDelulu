@@ -62,7 +62,7 @@ public sealed partial class PlayViewModel
 
     public Bitmap? WardrobePanel => Ui.Get(WardrobePageIndex switch
     {
-        1 => "st02_11_01_00_00.tga",
+        1 => IsPairedAccessory ? "st02_12_01_00_00.tga" : "st02_11_01_00_00.tga",
         2 => "st02_24_01_00_00.tga",
         3 => "st02_27_01_00_01.tga",
         4 => "st02_28_01_00_00.tga",
@@ -71,7 +71,6 @@ public sealed partial class PlayViewModel
 
     public Bitmap? ColorPartTab => Ui.Get(ColorPartTabs[Math.Clamp(ColorPart, 0, 2)]);
     public double ColorPartTop => KigaeY + 64 + 120 * ColorPart;
-    public Bitmap? AccessoryPartTab => Ui.Get("st02_13_03_00_00.tga");
 
     public ObservableCollection<ConfigSlider> WardrobeSliders { get; } = [];
     public ObservableCollection<FavoriteRow> FavoriteRows { get; } = [];
@@ -108,6 +107,10 @@ public sealed partial class PlayViewModel
         }
         if (page == 4)
             FillFavorites();
+        if (page == 1)
+            FillAccessoryCards();
+        else
+            AccessoryCards.Clear();
     }
 
     public void ChooseColorPartAt(double y)
@@ -211,9 +214,12 @@ public sealed partial class PlayViewModel
     {
         if (FavoriteSelected < 0 || FavoriteSelected >= Progress.Favorites.Count || Progress.Favorites[FavoriteSelected] is not { } set)
             return;
+        bool accessoriesChanged = !SameAccessories(Progress.Look.Accessories, set.Look.Accessories);
         Progress.Look = set.Look.Clone();
         if (set.SwimsuitRow is { } row && row != Progress.SwimsuitRow)
             await ChangeSwimsuitAsync(row, showMenu: false);
+        else if (accessoriesChanged)
+            await RebuildGirlAsync();
         ApplyLook();
         FillCards();
     }

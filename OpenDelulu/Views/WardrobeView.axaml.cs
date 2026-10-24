@@ -40,6 +40,32 @@ public partial class WardrobeView : UserControl
         e.Handled = true;
     }
 
+    void OnAccessoryTabPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control tabs)
+            Play?.ChooseAccessoryTabAt(Canvas.GetTop(tabs) + e.GetPosition(tabs).Y);
+        e.Handled = true;
+    }
+
+    void OnAccessoryPageUpPressed(object? sender, PointerPressedEventArgs e)
+    {
+        Play?.TurnAccessoryPage(sender is Control { Tag: "0" } ? 0 : 1, -1);
+        e.Handled = true;
+    }
+
+    void OnAccessoryPageDownPressed(object? sender, PointerPressedEventArgs e)
+    {
+        Play?.TurnAccessoryPage(sender is Control { Tag: "0" } ? 0 : 1, 1);
+        e.Handled = true;
+    }
+
+    void OnAccessoryCardPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: AccessoryCard card })
+            Play?.ChooseAccessoryCard(card);
+        e.Handled = true;
+    }
+
     void OnOkPressed(object? sender, PointerPressedEventArgs e)
     {
         Play?.CloseWardrobe(keep: true);

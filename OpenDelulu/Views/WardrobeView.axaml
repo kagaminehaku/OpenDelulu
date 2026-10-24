@@ -23,9 +23,52 @@
                        FontWeight="Bold" Foreground="#FF2060C0" TextAlignment="Center" IsHitTestVisible="False"
                        IsVisible="{Binding IsSuitsPage}" />
 
-            <!-- Accessory: the body-part tabs wait for the accessory system. -->
-            <Image Source="{Binding AccessoryPartTab}" Canvas.Left="488" Canvas.Top="88" Width="64" Height="64"
+            <!-- Accessory: place tabs, one list (ten cards) or a left and a right list (five each) with their page arrows. -->
+            <Image Source="{Binding AccessoryPartTab}" Canvas.Left="488" Canvas.Top="{Binding AccessoryPartTop}" Width="64" Height="64"
                    IsHitTestVisible="False" IsVisible="{Binding IsAccessoryPage}" />
+            <Panel Canvas.Left="490" Canvas.Top="96" Width="44" Height="616" Background="Transparent" Cursor="Hand"
+                   PointerPressed="OnAccessoryTabPressed" IsVisible="{Binding IsAccessoryPage}" />
+            <Panel Canvas.Left="976" Canvas.Top="216" Width="32" Height="80" Background="Transparent" Cursor="Hand" Tag="1"
+                   PointerPressed="OnAccessoryPageUpPressed" IsVisible="{Binding IsAccessoryPage}" />
+            <Panel Canvas.Left="976" Canvas.Top="448" Width="32" Height="80" Background="Transparent" Cursor="Hand" Tag="1"
+                   PointerPressed="OnAccessoryPageDownPressed" IsVisible="{Binding IsAccessoryPage}" />
+            <TextBlock Text="{Binding AccessoryPageText}" Canvas.Left="962" Canvas.Top="404" Width="60" FontSize="14"
+                       FontWeight="Bold" Foreground="#FF20A040" TextAlignment="Center" IsHitTestVisible="False"
+                       IsVisible="{Binding IsAccessoryPage}" />
+            <Panel Canvas.Left="736" Canvas.Top="216" Width="32" Height="80" Background="Transparent" Cursor="Hand" Tag="0"
+                   PointerPressed="OnAccessoryPageUpPressed" IsVisible="{Binding IsPairedPageAccessory}" />
+            <Panel Canvas.Left="736" Canvas.Top="448" Width="32" Height="80" Background="Transparent" Cursor="Hand" Tag="0"
+                   PointerPressed="OnAccessoryPageDownPressed" IsVisible="{Binding IsPairedPageAccessory}" />
+            <TextBlock Text="{Binding AccessoryLeftPageText}" Canvas.Left="722" Canvas.Top="404" Width="60" FontSize="14"
+                       FontWeight="Bold" Foreground="#FF20A040" TextAlignment="Center" IsHitTestVisible="False"
+                       IsVisible="{Binding IsPairedPageAccessory}" />
+            <ItemsControl ItemsSource="{Binding AccessoryCards}" Width="1024" Height="768" IsVisible="{Binding IsAccessoryPage}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:AccessoryCard">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:AccessoryCard">
+                        <Panel Width="{Binding Width}" Height="120" Background="Transparent" Cursor="Hand"
+                               PointerPressed="OnAccessoryCardPressed" ToolTip.Tip="{Binding Name}">
+                            <Image Source="{Binding Image}" Stretch="Fill" />
+                            <Image Source="{Binding Frame}" Stretch="Fill" IsVisible="{Binding ShowFrame}" />
+                            <Border BorderBrush="#FFFF3080" BorderThickness="4" CornerRadius="6" Margin="4"
+                                    IsVisible="{Binding ShowBorder}" />
+                            <TextBlock Text="{Binding Name}" FontSize="14" Foreground="#FF006030" TextWrapping="Wrap"
+                                       Margin="8" VerticalAlignment="Center"
+                                       IsVisible="{Binding Image, Converter={x:Static ObjectConverters.IsNull}}" />
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <!-- Color: Hand / Feet / Eyes tabs, colour, gloss and transparency sliders. -->
             <Image Source="{Binding ColorPartTab}" Canvas.Left="488" Canvas.Top="{Binding ColorPartTop}" Width="64" Height="136"

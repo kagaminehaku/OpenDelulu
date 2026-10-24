@@ -235,7 +235,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             int? swimsuit = _progress.For(choice.Id).SwimsuitRow;
             // The stage loads while its introduction movie plays (as the original's date scene does).
-            var loading = Task.Run(() => (Stage.Load(_fs, variant), _assembler.Build(new CharacterSpec(choice.Id, SwimsuitRow: swimsuit))));
+            var loading = Task.Run(() => (Stage.Load(_fs, variant), _assembler.Build(SpecFor(choice.Id, swimsuit))));
             if (StageMovie(stageInfo.Id, Time) is { } movie)
                 await PlayMovieAsync(movie);
             var (stage, girl) = await loading;
@@ -693,7 +693,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             Dialogue.ShowMenu(T("swimsuit.changing"), []);
         try
         {
-            var girl = await Task.Run(() => _assembler.Build(new CharacterSpec(current.Girl.Id, SwimsuitRow: row)));
+            var girl = await Task.Run(() => _assembler.Build(SpecFor(current.Girl.Id, row)));
             _girl = girl;
             Progress.SwimsuitRow = row;
             _progress.Save(ProgressPath);
@@ -820,6 +820,19 @@ public sealed partial class PlayViewModel : ViewModelBase
     // ------------------------------------------------------------------ events
 
     GirlProgress Progress => _progress.For(_girl!.Girl.Id);
+
+    /// <summary>
+    /// What to build for a girl: her swimsuit and the accessories she wears, less those CONFIG hides (accessories,
+    /// pareo).
+    /// </summary>
+    CharacterSpec SpecFor(int girlId, int? swimsuitRow)
+    {
+        var config = Services.GameConfig.Current;
+        var worn = _progress.For(girlId).Look.Accessories
+            .Where(a => _assembler.Accessories.Slot(a.Key) is { } slot && (slot.IsPareo ? config.Pareo : config.Accessories))
+            .ToDictionary(a => a.Key, a => a.Value);
+        return new CharacterSpec(girlId, SwimsuitRow: swimsuitRow, Accessories: worn);
+    }
 
     void Meet()
     {
