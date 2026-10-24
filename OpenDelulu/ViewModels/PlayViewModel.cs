@@ -48,7 +48,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     readonly CharacterAssembler _assembler;
     readonly StageDatabase _stages;
     readonly ScriptLibrary _library;
-    readonly GameProgress _progress;
+    GameProgress _progress;
     Character? _girl;
     Stage? _stage;
     int _point;
@@ -89,6 +89,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         }
         else
             _ = StartAsync();
+        _playClock.Start();
     }
 
     /// <summary>
@@ -99,7 +100,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     {
         await PlayMovieAsync("sb3_0001.mpg");
         await PlayMovieAsync("sb3_0002.mpg");
-        ShowTitle();
+        ShowTicket();
     }
 
     public DialogueViewModel Dialogue { get; }
@@ -477,7 +478,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (change > 0)
             progress.TanSwimsuitRow = progress.SwimsuitRow ?? _girl.Girl.Swimsuits.FirstOrDefault()?.Row;
         progress.Tan = tan;
-        _progress.Save(ProgressPath);
+        SaveProgress();
         return true;
     }
 
@@ -735,7 +736,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             var girl = await Task.Run(() => _assembler.Build(SpecFor(current.Girl.Id, row)));
             _girl = girl;
             Progress.SwimsuitRow = row;
-            _progress.Save(ProgressPath);
+            SaveProgress();
             if (_activity is { } activity)
                 StartActivity(activity);
             else
@@ -909,7 +910,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             if (kind == EventKind.FirstMeeting)
             {
                 progress.MetAtLevel = true;
-                _progress.Save(ProgressPath);
+                SaveProgress();
             }
             ShowMenu();
         });
@@ -992,7 +993,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         {
             // The H scene that follows the lead-in is not implemented yet; the level still goes up.
             progress.LevelUp();
-            _progress.Save(ProgressPath);
+            SaveProgress();
             Meet();
         });
     }

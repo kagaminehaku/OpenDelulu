@@ -206,7 +206,7 @@ public sealed partial class PlayViewModel
         while (favorites.Count < 12)
             favorites.Add(null);
         favorites[FavoriteSelected] = new FavoriteSet { Saved = DateTime.Now, SwimsuitRow = Progress.SwimsuitRow, Look = Look.Clone() };
-        _progress.Save(ProgressPath);
+        SaveProgress();
         FillFavorites();
     }
 
@@ -229,7 +229,7 @@ public sealed partial class PlayViewModel
         if (FavoriteSelected < 0 || FavoriteSelected >= Progress.Favorites.Count)
             return;
         Progress.Favorites[FavoriteSelected] = null;
-        _progress.Save(ProgressPath);
+        SaveProgress();
         FillFavorites();
     }
 }

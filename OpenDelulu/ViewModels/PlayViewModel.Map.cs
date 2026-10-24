@@ -151,6 +151,7 @@ public sealed partial class PlayViewModel
         OnPropertyChanged(nameof(MapStages));
         foreach (var time in MapTimes)
             time.IsSelected = time.Index == value;
+        _progress.TimeOfDay = value + 1;
         UpdateMusic();
     }
 

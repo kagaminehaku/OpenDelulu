@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             x:Class="OpenDelulu.Views.TicketView"
+             x:DataType="vm:PlayViewModel">
+    <!-- The ticket counter (01_ticket) in 1024x768: three tickets (saved games), Delete / OK / Quit. -->
+    <Panel Background="Black">
+        <Viewbox Stretch="Uniform">
+            <Canvas Width="1024" Height="768">
+                <Image Source="{Binding TicketBackground}" Width="1024" Height="768" />
+                <ItemsControl ItemsSource="{Binding TicketSprites}" Width="1024" Height="768" IsHitTestVisible="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                        <Style Selector="ContentPresenter" x:DataType="vm:TicketSprite">
+                            <Setter Property="Canvas.Left" Value="{Binding X}" />
+                            <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                        </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:TicketSprite">
+                            <Image Source="{Binding Image}" Width="{Binding Width}" Height="{Binding Height}" Stretch="Fill" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Panel Canvas.Left="64" Canvas.Top="96" Width="896" Height="576" Background="Transparent" Cursor="Hand"
+                       PointerPressed="OnTicketsPressed" />
+                <Image Source="{Binding TicketDelete}" Canvas.Left="48" Canvas.Top="696" Width="112" Height="48" Cursor="Hand"
+                       PointerPressed="OnDeletePressed" />
+                <Image Source="{Binding TicketOk}" Canvas.Left="752" Canvas.Top="696" Width="112" Height="48" Cursor="Hand"
+                       PointerPressed="OnOkPressed" />
+                <Image Source="{Binding TicketQuit}" Canvas.Left="864" Canvas.Top="696" Width="112" Height="48" Cursor="Hand"
+                       PointerPressed="OnQuitPressed" />
+            </Canvas>
+        </Viewbox>
+    </Panel>
+</UserControl>

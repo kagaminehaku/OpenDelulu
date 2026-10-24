@@ -112,7 +112,7 @@ public sealed partial class PlayViewModel
         IsWardrobeOpen = false;
         SwimsuitCards.Clear();
         if (keep)
-            _progress.Save(ProgressPath);
+            SaveProgress();
         bool accessoriesChanged = false;
         if (!keep && _lookStart is not null)
         {

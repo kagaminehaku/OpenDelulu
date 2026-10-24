@@ -200,12 +200,11 @@ public sealed partial class PlayViewModel
                 PlayTitle(entry.Choose, () => EnterTitleMenu(TitleMain));
                 break;
             case "Ticket":
-                // 01_ticket is not built yet.
-                PlayTitle(entry.Choose, () =>
+                PlayTitle(entry.Choose, () => Confirm(QuestionTicket, "confirm.ticket", () =>
                 {
-                    Status = T("play.notYet");
-                    PlayTitle(entry.Loop, loop: true);
-                });
+                    SaveProgress();
+                    ShowTicket();
+                }, () => PlayTitle(entry.Loop, loop: true)));
                 break;
             case "Owaru":
                 PlayTitle(entry.Choose, () =>

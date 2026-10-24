@@ -53,7 +53,7 @@ public sealed partial class PlayViewModel
         if (!_progress.LobbyVisited)
         {
             _progress.LobbyVisited = true;
-            _progress.Save(ProgressPath);
+            SaveProgress();
             RunLobbyScript("c99_00_00");
         }
         else if (backFromIsland)
@@ -96,11 +96,12 @@ public sealed partial class PlayViewModel
                 break;
             case "Sleep":
                 SelectedTimeIndex = 0;
+                _progress.Day++;
                 Status = F("lobby.time", Times[SelectedTimeIndex]);
                 RunLobbyScript("c99_00_02");
                 break;
             case "Save":
-                _progress.Save(ProgressPath);
+                SaveProgress();
                 RunLobbyScript("s99_00_00");
                 break;
             case "Title":
@@ -129,7 +130,7 @@ public sealed partial class PlayViewModel
         var progress = _progress.For(girl);
         progress.Intimacy = level;
         progress.MetAtLevel = false;
-        _progress.Save(ProgressPath);
+        SaveProgress();
         RefreshGirls(Girls.ConvertAll(g => g.Id));
     }
 }

@@ -92,6 +92,15 @@ public sealed class GameProgress
     /// <summary>The front desk's welcome (c99_00_00) was seen on the first visit to the lobby.</summary>
     public bool LobbyVisited { get; set; }
 
+    /// <summary>Time played, shown on the ticket (hhh:mm).</summary>
+    public double PlaySeconds { get; set; }
+
+    /// <summary>Days on the island (1 on arrival, +1 for every night's sleep), shown on the ticket.</summary>
+    public int Day { get; set; } = 1;
+
+    /// <summary>Time of day (1 morning .. 5 late night) the game was left at.</summary>
+    public int TimeOfDay { get; set; } = 2;
+
     public GirlProgress For(int girlId)
     {
         if (!Girls.TryGetValue(girlId, out var progress))
