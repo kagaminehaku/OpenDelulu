@@ -55,7 +55,7 @@ public sealed partial class PlayViewModel
             Add(880, 688, 112, 48, "st09_08_02_00_00.tga");
             return;
         }
-        bool withDate = Ui.Get("st09_00_02_00_00.bmp") is not null;
+        bool withDate = !_photoSelect && Ui.Get("st09_00_02_00_00.bmp") is not null;
         Add(0, 0, 1024, 768, withDate ? "st09_00_02_00_00.bmp" : "st09_00_01_00_00.bmp");
         for (int c = 0; c < 5; c++)
         {
@@ -105,7 +105,10 @@ public sealed partial class PlayViewModel
         }
         if (y >= 688 && y < 736 && x >= 768 && x < 880)
         {
-            PlayMemory();
+            if (_photoSelect)
+                StartPhotoShoot();
+            else
+                PlayMemory();
             return;
         }
         if (y >= 688 && y < 736 && x >= 880 && x < 992)
@@ -113,7 +116,7 @@ public sealed partial class PlayViewModel
             CloseMemory();
             return;
         }
-        if (y >= 684 && y < 740 && x >= 306 && x < 746 && Ui.Get("st09_00_02_00_00.bmp") is not null)
+        if (y >= 684 && y < 740 && x >= 306 && x < 746 && !_photoSelect && Ui.Get("st09_00_02_00_00.bmp") is not null)
         {
             IsMemoryDateList = true;
             FillMemory();
@@ -131,6 +134,7 @@ public sealed partial class PlayViewModel
 
     void CloseMemory()
     {
+        _photoSelect = false;
         IsMemoryOpen = false;
         IsMemoryDateList = false;
         MemorySprites.Clear();

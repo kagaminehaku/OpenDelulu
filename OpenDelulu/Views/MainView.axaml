@@ -190,6 +190,9 @@
                         <Button Content="{l:Tr play.album}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                 Command="{Binding OpenAlbumCommand}" IsVisible="{Binding !InGame}"
                                 IsEnabled="{Binding HasOriginalAlbum}" />
+                        <Button Content="{l:Tr play.photo}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Command="{Binding OpenPhotoSelectCommand}" IsVisible="{Binding !InGame}"
+                                IsEnabled="{Binding HasPhotoMode}" />
                         <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
                         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.8" />
                         <TextBlock Text="{Binding Dialogue.Status}" TextWrapping="Wrap" Foreground="OrangeRed" />
@@ -197,6 +200,7 @@
                     <Grid Grid.Column="1" Margin="8">
                         <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" TouchHandler="{Binding TouchHandler}" />
                         <v:StatusView IsVisible="{Binding InGame}" />
+                        <v:PhotoView IsVisible="{Binding IsPhotoMenuVisible}" />
                         <v:LobbyView IsVisible="{Binding IsLobbyVisible}" />
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />
                         <v:MapScreenView IsVisible="{Binding ShowMap}" />

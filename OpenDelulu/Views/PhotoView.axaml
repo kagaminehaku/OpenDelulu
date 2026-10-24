@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:OpenDelulu.ViewModels"
+             x:Class="OpenDelulu.Views.PhotoView"
+             x:DataType="vm:PlayViewModel">
+    <!-- The photo menu (82_photo, st11) over the 3D view; clicks outside it reach the view (camera). -->
+    <Viewbox Stretch="Uniform">
+        <Canvas Width="1024" Height="768">
+            <ItemsControl ItemsSource="{Binding PhotoSprites}" Width="1024" Height="768" IsHitTestVisible="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Canvas />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:MemorySprite">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                    </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MemorySprite">
+                        <Image Source="{Binding Image}" Width="{Binding Width}" Height="{Binding Height}" Stretch="Fill" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Panel Canvas.Left="844" Canvas.Top="4" Width="176" Height="760" Background="Transparent" Cursor="Hand"
+                   PointerPressed="OnMenuPressed" IsVisible="{Binding !IsPhotoMenuFolded}" />
+            <Panel Canvas.Left="984" Canvas.Top="10" Width="24" Height="24" Background="Transparent" Cursor="Hand"
+                   PointerPressed="OnMenuPressed" IsVisible="{Binding IsPhotoMenuFolded}" />
+        </Canvas>
+    </Viewbox>
+</UserControl>

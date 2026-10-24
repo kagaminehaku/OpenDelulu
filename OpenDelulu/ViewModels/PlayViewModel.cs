@@ -279,7 +279,9 @@ public sealed partial class PlayViewModel : ViewModelBase
             Status = F("play.where", choice.Name, StageNames[SelectedStageIndex], Times[SelectedTimeIndex]);
             UpdateMusic();
             // A memory replay starts its date activity at once, without the greeting.
-            if (_memoryReplay is int replay && girl.Girl.DateActivities.FirstOrDefault(a => a.Number == replay) is { } remembered)
+            if (_photoShoot)
+                BeginPhotoShoot();
+            else if (_memoryReplay is int replay && girl.Girl.DateActivities.FirstOrDefault(a => a.Number == replay) is { } remembered)
                 StartActivity(remembered);
             else if (startupOil is null)
                 Meet();
@@ -312,6 +314,19 @@ public sealed partial class PlayViewModel : ViewModelBase
         RefreshStatus();
         RefreshGirls(Girls.Select(g => g.Id).ToList());
         Status = T("play.prompt");
+        if (_photoReturn is bool backToSelect)
+        {
+            // After a photo shoot: its selection screen, or the title.
+            _photoReturn = null;
+            if (backToSelect)
+            {
+                _photoSelect = true;
+                OpenMemory();
+            }
+            else
+                ShowTitle();
+            return;
+        }
         if (_memoryReplay is not null)
         {
             // Back to the memory screen after a replay.
