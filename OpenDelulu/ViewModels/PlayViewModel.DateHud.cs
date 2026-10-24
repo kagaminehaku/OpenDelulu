@@ -71,6 +71,12 @@ public sealed partial class PlayViewModel
                     HideDateHud();
                     LeadIn();
                 }
+                else if (Progress.Intimacy >= 3 && _stage?.PointGroup("H").Count > 0)
+                {
+                    // Her first H is behind her: H again without a lead-in.
+                    HideDateHud();
+                    _ = StartHAsync(0, levelUp: false);
+                }
                 else
                     ShowStatus(T("play.noLeadIn"), seconds: 3);
                 break;

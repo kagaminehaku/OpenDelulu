@@ -223,6 +223,9 @@
                         <Panel IsVisible="{Binding OilHud.IsVisible, FallbackValue=False}">
                             <v:DsHudView DataContext="{Binding OilHud}" />
                         </Panel>
+                        <Panel IsVisible="{Binding HHud.IsVisible, FallbackValue=False}">
+                            <v:DsHudView DataContext="{Binding HHud}" />
+                        </Panel>
                         <v:OilActionsView IsVisible="{Binding IsChoosingAction}" />
                         <v:WardrobeView IsVisible="{Binding IsWardrobeOpen}" />
                         <v:ConfirmView IsVisible="{Binding IsConfirming}" />

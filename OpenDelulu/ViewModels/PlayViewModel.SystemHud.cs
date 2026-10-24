@@ -106,7 +106,7 @@ public sealed partial class PlayViewModel
                 return;
             case "Menu05":
                 CloseSystemDrop();
-                (_oil is not null ? OilHud : DateHud)?.ToggleClosed();
+                MainHud?.ToggleClosed();
                 OnPropertyChanged(nameof(IsHudClosed));
                 return;
             case "Sistem" or "Game" or "H":

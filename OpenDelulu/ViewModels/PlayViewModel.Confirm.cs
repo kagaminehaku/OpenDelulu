@@ -11,7 +11,7 @@ namespace OpenDelulu.ViewModels;
 /// </summary>
 public sealed partial class PlayViewModel
 {
-    public const int QuestionEndDate = 6, QuestionEndOil = 7;
+    public const int QuestionEndDate = 6, QuestionEndOil = 7, QuestionEndH = 8, QuestionEndFera = 9;
 
     Action? _confirmYes, _confirmNo;
 

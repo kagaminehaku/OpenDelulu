@@ -250,6 +250,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         Status = T("play.loading");
         Dialogue.Hide();
         OilPose? startupOil = null;
+        int? startupH = null;
         try
         {
             int? swimsuit = _progress.For(choice.Id).SwimsuitRow;
@@ -283,6 +284,11 @@ public sealed partial class PlayViewModel : ViewModelBase
                 BeginPhotoShoot();
             else if (_memoryReplay is int replay && girl.Girl.DateActivities.FirstOrDefault(a => a.Number == replay) is { } remembered)
                 StartActivity(remembered);
+            else if (AppHost.StartupH is int hPosition)
+            {
+                AppHost.StartupH = null;
+                startupH = Math.Clamp(hPosition - 1, 0, HHudPositions.Length - 1);
+            }
             else if (startupOil is null)
                 Meet();
         }
@@ -296,12 +302,23 @@ public sealed partial class PlayViewModel : ViewModelBase
         }
         if (startupOil is not null)
             await StartOilAsync(startupOil);
+        else if (startupH is int position)
+            await StartHAsync(position, levelUp: false);
     }
 
     [RelayCommand]
     void Leave()
     {
         StopOil(restore: false);
+        if (_h is { } h)
+        {
+            _hTimer.Stop();
+            HHud?.Hide();
+            TouchHandler = null;
+            h.Detach();
+            _h = null;
+            _hLevelUp = false;
+        }
         HideDateHud();
         HideSystemHud();
         Dialogue.Hide();
@@ -357,6 +374,8 @@ public sealed partial class PlayViewModel : ViewModelBase
         var objects = new List<(RenderModel, CharacterAnimator?)> { (_stage.Model, _stage.Animator), (_girl.Model, _girl.Animator) };
         if (_prop is { } prop)
             objects.Add(prop);
+        if (_h is { } h)
+            objects.Add((h.Man.Model, h.Man.Animator));
         _propObject = -1;
         // The stage's keyframed sprites (.ptcl): sun glow, splashes, steam, lamp glows.
         int particleObject = -1;
@@ -406,6 +425,14 @@ public sealed partial class PlayViewModel : ViewModelBase
             scene.CameraYawOffset = lying ? MathF.PI / 2 : MathF.PI / 4;
             scene.CameraPitch = lying ? 0.75f : 0.3f;
             scene.CameraZoom = lying ? 0.75f : 0.9f;
+        }
+        else if (_h is not null)
+        {
+            // Both of them, from the side and a little above.
+            scene.FrameLivePose = true;
+            scene.CameraYawOffset = MathF.PI / 2;
+            scene.CameraPitch = 0.45f;
+            scene.CameraZoom = 0.8f;
         }
         Scene = scene;
         // Direct3D 9 lighting as in the original: the stage by its own .xl, the girl and the props by her bo00_NN.xl.
@@ -952,6 +979,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         : IsLobbyVisible ? MusicScene.Lobby
         : _stage is null ? MusicScene.Map
         : _oil is not null ? MusicScene.Oil
+        : _h is not null ? MusicScene.H
         : MusicScene.Date;
 
     /// <summary>
@@ -1089,7 +1117,12 @@ public sealed partial class PlayViewModel : ViewModelBase
         var progress = Progress;
         RunEvent(EventKind.LeadIn, () =>
         {
-            // The H scene that follows the lead-in is not implemented yet; the level still goes up.
+            // From level 2 on the lead-in leads to the H scene; the level goes up when it ends.
+            if (progress.Intimacy >= 2 && _stage?.PointGroup("H").Count > 0)
+            {
+                _ = StartHAsync(0, levelUp: true);
+                return;
+            }
             progress.LevelUp();
             SaveProgress();
             Meet();

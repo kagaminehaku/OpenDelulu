@@ -161,13 +161,17 @@ public sealed partial class PlayViewModel
     }
 
     /// <summary>A menu closed with its × (the side panel offers it again).</summary>
-    public bool IsHudClosed => OilHud is { IsClosed: true } || DateHud is { IsClosed: true } || CameraHud is { IsClosed: true };
+    public bool IsHudClosed => OilHud is { IsClosed: true } || HHud is { IsClosed: true } || DateHud is { IsClosed: true }
+        || CameraHud is { IsClosed: true };
+
+    /// <summary>The menu of the current scene: oil, H or the date's.</summary>
+    DsHud? MainHud => _oil is not null ? OilHud : _h is not null ? HHud : InGame ? DateHud : null;
 
     /// <summary>Tab, or the side panel button: brings closed menus back, or else hides the current ones.</summary>
     [RelayCommand]
     public void ToggleHud()
     {
-        var main = _oil is not null ? OilHud : InGame ? DateHud : null;
+        var main = MainHud;
         if (IsHudClosed)
         {
             foreach (var hud in new[] { main, CameraHud })

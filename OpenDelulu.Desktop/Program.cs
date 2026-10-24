@@ -109,6 +109,11 @@ sealed class Program
                 AppHost.StartupOil = oilPose;
                 i++;
             }
+            else if (args[i] == "--h" && i + 1 < args.Length && int.TryParse(args[i + 1], out int hPosition))
+            {
+                AppHost.StartupH = hPosition;
+                i++;
+            }
             else if (args[i] == "--touch" && i + 1 < args.Length)
             {
                 var points = args[++i].Split(';', StringSplitOptions.RemoveEmptyEntries)

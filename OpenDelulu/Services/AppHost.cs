@@ -61,6 +61,9 @@ public static class AppHost
     /// <summary>Start the sun oil scene in this pose after entering the game (desktop: <c>--oil &lt;pose&gt;</c>).</summary>
     public static int? StartupOil { get; set; }
 
+    /// <summary>Start the H scene in this position (1..8) after entering the game (desktop: <c>--h &lt;position&gt;</c>).</summary>
+    public static int? StartupH { get; set; }
+
     /// <summary>
     /// Test hook: a drag to replay on the 3D view once it accepts touches, as fractions of its size
     /// (desktop: <c>--touch 0.4,0.5;0.6,0.5 [seconds]</c>).
