@@ -430,6 +430,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         oil.End();
         oil.Detach();
         _oil = null;
+        bool tanned = ApplyTan(oil);
         _statusHoldUntil = 0;
         oil.Girl.Animator.Face?.SetExpression(0, 0);
         if (!restore || _girl is not { } girl)
@@ -440,6 +441,32 @@ public sealed partial class PlayViewModel : ViewModelBase
         PlaceGirl();
         BuildScene();
         Status = F("play.where", SelectedGirl?.Name ?? "", StageNames[SelectedStageIndex], Times[SelectedTimeIndex]);
+        if (tanned)
+            _ = RebuildGirlAsync();
+    }
+
+    /// <summary>Tan per oil of the oil menu (sun block, three tan oils, three whitening creams), times the coverage.</summary>
+    static readonly double[] OilTan = [0, 0.2, 0.35, 0.5, -0.2, -0.35, -0.5];
+
+    /// <summary>
+    /// After an oil scene: the tan oils tan her (with the lines of the swimsuit she wears), the whitening creams undo it,
+    /// in proportion to how much of her skin was oiled. The exe's own rates (sb_SunOilBase) are not decoded.
+    /// </summary>
+    bool ApplyTan(Engine.Oil.OilSession oil)
+    {
+        if (_girl is null)
+            return false;
+        int kind = OilHud is not null ? _oilHudOil : oil.OilKind switch { 2 => 2, 1 => 5, _ => 0 };
+        double change = OilTan[Math.Clamp(kind, 0, OilTan.Length - 1)] * oil.Coating.Coverage;
+        var progress = Progress;
+        double tan = Math.Clamp(progress.Tan + change, 0, 1);
+        if (Math.Abs(tan - progress.Tan) < 0.01)
+            return false;
+        if (change > 0)
+            progress.TanSwimsuitRow = progress.SwimsuitRow ?? _girl.Girl.Swimsuits.FirstOrDefault()?.Row;
+        progress.Tan = tan;
+        _progress.Save(ProgressPath);
+        return true;
     }
 
     /// <summary>The stage's oil point nearest to where she stands (moNN.xx has ten o01_N_Point_OilNN).</summary>
@@ -831,7 +858,8 @@ public sealed partial class PlayViewModel : ViewModelBase
         var worn = _progress.For(girlId).Look.Accessories
             .Where(a => _assembler.Accessories.Slot(a.Key) is { } slot && (slot.IsPareo ? config.Pareo : config.Accessories))
             .ToDictionary(a => a.Key, a => a.Value);
-        return new CharacterSpec(girlId, SwimsuitRow: swimsuitRow, Accessories: worn);
+        var progress = _progress.For(girlId);
+        return new CharacterSpec(girlId, SwimsuitRow: swimsuitRow, Accessories: worn, Tan: progress.Tan, TanSwimsuitRow: progress.TanSwimsuitRow);
     }
 
     void Meet()

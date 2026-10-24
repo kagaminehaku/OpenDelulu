@@ -19,6 +19,12 @@ public sealed class GirlProgress
     /// <summary>Colours chosen in the wardrobe (nails, eyes, hair).</summary>
     public GirlLook Look { get; set; } = new();
 
+    /// <summary>Sun tan, 0 (none) .. 1 (full): raised by the tan oils, lowered by the whitening creams.</summary>
+    public double Tan { get; set; }
+
+    /// <summary>The swimsuit she wore while tanning: its lines (lbNN column 4) stay on her skin.</summary>
+    public int? TanSwimsuitRow { get; set; }
+
     /// <summary>The wardrobe's 12 favourite sets (null = empty).</summary>
     public List<FavoriteSet?> Favorites { get; set; } = [];
 

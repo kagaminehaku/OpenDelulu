@@ -13,8 +13,9 @@ namespace OpenDelulu.Engine.Characters;
 /// <param name="SwimsuitRow">Row in lbNN; null = first swimsuit.</param>
 /// <param name="CutOverride">Force a body variant (1-based) instead of the swimsuit's own.</param>
 /// <param name="Accessories">Worn accessories: place (lc00 row, 1..15) → item row of its lcNN table.</param>
+/// <param name="Tan">Sun tan 0..1, drawn with the lines of <paramref name="TanSwimsuitRow"/> (null = the worn swimsuit).</param>
 public sealed record CharacterSpec(int GirlId, int HairIndex = 0, int? SwimsuitRow = null, int? CutOverride = null,
-    IReadOnlyDictionary<int, int>? Accessories = null);
+    IReadOnlyDictionary<int, int>? Accessories = null, double Tan = 0, int? TanSwimsuitRow = null);
 
 /// <summary>An assembled, animatable character.</summary>
 public sealed record Character(GirlInfo Girl, RenderModel Model, CharacterAnimator Animator)
@@ -159,6 +160,10 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         var body = LoadModel(girl.Bodies[cut - 1]);
         var bodyTextures = new Dictionary<string, RgbaImage>(StringComparer.OrdinalIgnoreCase);
         AddTexture(bodyTextures, BodyPlaceholder, girl.SkinTexture);
+        var tanSuit = girl.Swimsuits.FirstOrDefault(s => s.Row == spec.TanSwimsuitRow) ?? swimsuit;
+        if (spec.Tan > 0 && tanSuit?.TanTexture is { } tan && bodyTextures.TryGetValue(BodyPlaceholder, out var skin)
+            && LoadImage(tan) is { } tanned)
+            bodyTextures[BodyPlaceholder] = ApplyTan(skin, tanned, (float)Math.Clamp(spec.Tan, 0, 1));
         // The overlay meshes of the intimate areas carry a "zxNN_MM" placeholder; the girl's texture comes from ld00.
         foreach (var texture in body.Textures.Where(t => t.Name.StartsWith("zx", StringComparison.OrdinalIgnoreCase)))
             AddTexture(bodyTextures, texture.Name, girl.DetailTexture);
@@ -250,6 +255,53 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
     }
 
     XxModel LoadModel(AssetRef asset) => XxReader.Read(fs.ReadReferenced(asset.Archive, asset.File));
+
+    RgbaImage? LoadImage(AssetRef asset)
+    {
+        try { return ImageDecoder.Decode(fs.ReadReferenced(asset.Archive, asset.File), asset.File); }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or NotSupportedException) { return null; }
+    }
+
+    /// <summary>
+    /// The tanned skin: the swimsuit's tan texture (sbNN, the skin's UV layout, transparent where the swimsuit covers it)
+    /// over the girl's skin, by its alpha × <paramref name="amount"/>. The exe blends into a texture of its own
+    /// (sb_SunOilBase, "日焼け前テクスチャ"); its exact blend is not decoded.
+    /// </summary>
+    static RgbaImage ApplyTan(RgbaImage skin, RgbaImage tan, float amount)
+    {
+        var result = new RgbaImage(skin.Width, skin.Height, (byte[])skin.Pixels.Clone());
+        var p = result.Pixels;
+        Span<float> c = stackalloc float[4];
+        for (int y = 0; y < skin.Height; y++)
+        {
+            // Bilinear lookup: the tan textures are smaller (256×256) than most skins.
+            float ty = (y + 0.5f) * tan.Height / skin.Height - 0.5f;
+            for (int x = 0; x < skin.Width; x++)
+            {
+                float tx = (x + 0.5f) * tan.Width / skin.Width - 0.5f;
+                Sample(tan, tx, ty, c);
+                float a = c[3] / 255f * amount;
+                int o = (y * skin.Width + x) * 4;
+                for (int k = 0; k < 3; k++)
+                    p[o + k] = (byte)Math.Clamp(p[o + k] + (c[k] - p[o + k]) * a + 0.5f, 0, 255);
+            }
+        }
+        return result;
+    }
+
+    static void Sample(RgbaImage image, float x, float y, Span<float> color)
+    {
+        int x0 = Math.Clamp((int)MathF.Floor(x), 0, image.Width - 1), y0 = Math.Clamp((int)MathF.Floor(y), 0, image.Height - 1);
+        int x1 = Math.Min(x0 + 1, image.Width - 1), y1 = Math.Min(y0 + 1, image.Height - 1);
+        float fx = Math.Clamp(x - x0, 0, 1), fy = Math.Clamp(y - y0, 0, 1);
+        var px = image.Pixels;
+        for (int k = 0; k < 4; k++)
+        {
+            float a = px[(y0 * image.Width + x0) * 4 + k], b = px[(y0 * image.Width + x1) * 4 + k];
+            float c = px[(y1 * image.Width + x0) * 4 + k], d = px[(y1 * image.Width + x1) * 4 + k];
+            color[k] = (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
+        }
+    }
 
     void AddTexture(Dictionary<string, RgbaImage> map, string placeholder, AssetRef? asset)
     {
