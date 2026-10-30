@@ -286,6 +286,8 @@ public sealed partial class PlayViewModel : ViewModelBase
             // A memory replay starts its date activity at once, without the greeting.
             if (_photoShoot)
                 BeginPhotoShoot();
+            else if (_memoryReplay == 0)
+                startupH = 0;
             else if (_memoryReplay is int replay && girl.Girl.DateActivities.FirstOrDefault(a => a.Number == replay) is { } remembered)
                 StartActivity(remembered);
             else if (AppHost.StartupH is int hPosition)

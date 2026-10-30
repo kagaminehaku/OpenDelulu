@@ -13,7 +13,7 @@ public sealed record MemorySprite(double X, double Y, double Width, double Heigh
 /// The original "Love Memory" screen (56_memories, st09): five columns to choose a memory (Girl, Level, Ecchi
 /// 1st time / usual, Place = stages 1..9, Time), a Date field opening the list of the 21 date activities
 /// (おもいでデート選択, st09_10/st09_11), Playback and Return. A chosen date is played again on its stage without
-/// touching the progress; the H memories wait for the H scenes. Layout from the exe's sprite tables (0x4C3xxx,
+/// touching the progress; an Ecchi choice plays the H scene at the chosen level. Layout from the exe's sprite tables (0x4C3xxx,
 /// st09_00_02 at 0x5C92E4, the date list at 0x5C8A8C).
 /// </summary>
 public sealed partial class PlayViewModel
@@ -25,7 +25,9 @@ public sealed partial class PlayViewModel
 
     readonly int[] _memoryChoice = [-1, -1, -1, -1, -1];
     int _memoryDate = -1;
+    // The memory played again: a date activity 1..21, or 0 for the H scene (at _memoryHLevel).
     int? _memoryReplay;
+    int _memoryHLevel = 2;
 
     [ObservableProperty] public partial bool IsMemoryOpen { get; set; }
     [ObservableProperty] public partial bool IsMemoryDateList { get; set; }
@@ -142,26 +144,26 @@ public sealed partial class PlayViewModel
     }
 
     /// <summary>
-    /// Playback: a chosen date is played again (the girl, stage and time chosen, her activity at once, no greeting);
-    /// the H memories need the H scenes.
+    /// Playback: a chosen date is played again (the girl, stage and time chosen, her activity at once, no greeting), or
+    /// with Ecchi chosen the H scene; its end comes back here.
     /// </summary>
     async void PlayMemory()
     {
         int girlIndex = _memoryChoice[0], place = _memoryChoice[3], time = _memoryChoice[4];
         if (girlIndex < 0 || place < 0 || time < 0 || IsBusy)
             return;
-        if (_memoryDate < 0)
-        {
-            Status = T("play.notYet");
+        if (_memoryDate < 0 && _memoryChoice[2] < 0)
             return;
-        }
         int girlId = MemoryGirls[girlIndex].Girl;
         if (Girls.FirstOrDefault(g => g.Id == girlId) is not { } girl || place >= _stages.Stages.Count)
             return;
         SelectedGirl = girl;
         SelectedStageIndex = place;
         SelectedTimeIndex = time;
-        _memoryReplay = _memoryDate + 1;
+        // A date activity, or (Ecchi: 1st time / usual) the H scene at the chosen level.
+        _memoryReplay = _memoryDate >= 0 ? _memoryDate + 1 : 0;
+        // "1st time" plays her first H (level 2, shy); "usual" the chosen level.
+        _memoryHLevel = _memoryChoice[2] == 0 ? 2 : Math.Clamp(_memoryChoice[1] + 1, 2, 5);
         IsMemoryOpen = false;
         MemorySprites.Clear();
         await EnterAsync();

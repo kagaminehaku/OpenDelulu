@@ -75,7 +75,7 @@ public sealed partial class PlayViewModel
     Task StartHAsync(int position, bool levelUp)
     {
         _hLevelUp |= levelUp;
-        int level = _girl is null ? 1 : Progress.Intimacy;
+        int level = _memoryReplay == 0 ? _memoryHLevel : _girl is null ? 1 : Progress.Intimacy;
         return StartCoupleAsync(girl => HSession.Start(_fs, _assembler, girl, position / 2 + 1, level, _voices, AudioSystem.Shared),
             () => _hPosition = position);
     }
@@ -192,6 +192,12 @@ public sealed partial class PlayViewModel
     {
         if (_couple is null)
             return;
+        if (_memoryReplay == 0)
+        {
+            // An H memory: back to the memory screen.
+            Leave();
+            return;
+        }
         EndCouple();
         UpdateMusic();
         _statusHoldUntil = 0;
