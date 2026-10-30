@@ -112,9 +112,65 @@ public sealed class HSession : CoupleSession
     protected override double SpeedFor(AnimationClipInfo clip) =>
         clip.Name.Contains("ピストン", StringComparison.Ordinal) && !clip.Name.Contains("う！", StringComparison.Ordinal) ? StrokeSpeed : 1;
 
+    // Sound effects: the clip they were last checked in and its time then.
+    AnimationClipInfo? _soundClip;
+    double _soundTime;
+
+    /// <summary>
+    /// The exe's H sounds by clip (sb_HScene 0x4B3E90), fired when the girl's clip time passes a point of the clip: see
+    /// <see cref="SoundEffects"/>.
+    /// </summary>
+    public override void Update(double seconds)
+    {
+        if (Body.Current is not { IsStatic: false } clip)
+            return;
+        double now = Body.Time;
+        double before = ReferenceEquals(clip, _soundClip) && now >= _soundTime ? _soundTime : clip.Start - 1e-3;
+        _soundClip = clip;
+        _soundTime = now;
+        double length = clip.End - clip.Start;
+        bool Passed(double fraction) => clip.Start + length * fraction is var at && at > before && at <= now;
+        bool wet = Excitement >= 0.5;
+        string name = clip.Name;
+        if (name.StartsWith("(×)", StringComparison.Ordinal))
+            return;
+        if (name.Contains("→→(ピストンつく大)", StringComparison.Ordinal) || name.Contains("＿→(ピストンつく小)", StringComparison.Ordinal))
+        {
+            if (Passed(0))
+                RaiseSoundEffect(SoundEffects.Push);
+        }
+        else if (name.Contains("＿←(ピストンひくA)", StringComparison.Ordinal) || name.Contains("淫乱ピストンループ", StringComparison.Ordinal))
+        {
+            if (Passed(0.5))
+                RaiseSoundEffect((wet ? 20 : 17) + Random.Next(3));
+        }
+        else if (name.Contains("ぐちゅぐちゅループ", StringComparison.Ordinal) || name.Contains("グラインドループ", StringComparison.Ordinal)
+                 || name.Contains("オナニーループ", StringComparison.Ordinal))
+        {
+            if (Passed(0.5))
+                RaiseSoundEffect((wet ? 26 : 23) + Random.Next(3));
+        }
+        else if (name.Contains("絶頂(中だし)", StringComparison.Ordinal) || name.EndsWith("淫乱絶頂", StringComparison.Ordinal))
+        {
+            // Every 10 frames, 7.5 % of the clip's length times.
+            int pulses = (int)(length * 0.075);
+            for (int k = 0; k < pulses; k++)
+                if (clip.Start + k * 10 is var at && at > before && at <= now)
+                    RaiseSoundEffect(SoundEffects.Climax);
+        }
+        else if ((name.StartsWith("Z待機→", StringComparison.Ordinal) && name.EndsWith("1待機", StringComparison.Ordinal) | name.EndsWith("2待機", StringComparison.Ordinal))
+                 || (name.Contains('→') && name.EndsWith("う！待機", StringComparison.Ordinal)))
+        {
+            if (Passed(0.75))
+                RaiseSoundEffect(SoundEffects.Push);
+        }
+    }
+
     protected override void OnClip(AnimationClipInfo clip)
     {
         string name = clip.Name;
+        if (name == "F待機")
+            RaiseSoundEffect(SoundEffects.Outside);
         if (name.Length >= 2 && name[0] is 'A' or 'B' && name[1] is '1' or '2')
             Inserted = name[..2];
         else if (name.StartsWith('Z') || name.StartsWith('F'))

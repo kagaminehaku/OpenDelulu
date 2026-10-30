@@ -144,8 +144,12 @@ public sealed partial class DsHud : ObservableObject
         }
     }
 
+    /// <summary>Raised on every press (the screens play their click sound).</summary>
+    public static event Action? AnyPressed;
+
     public void Press(HudQuad quad)
     {
+        AnyPressed?.Invoke();
         if (quad.Key.EndsWith("Min", StringComparison.Ordinal))
         {
             IsMinimized = !IsMinimized;

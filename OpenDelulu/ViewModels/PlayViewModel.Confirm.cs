@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using OpenDelulu.Engine.Audio;
 
 namespace OpenDelulu.ViewModels;
 
@@ -48,6 +49,7 @@ public sealed partial class PlayViewModel
         if (!IsConfirming)
             return;
         IsConfirming = false;
+        Sfx(yes ? SoundEffects.Decide : SoundEffects.Cancel);
         var action = yes ? _confirmYes : _confirmNo;
         _confirmYes = _confirmNo = null;
         action?.Invoke();

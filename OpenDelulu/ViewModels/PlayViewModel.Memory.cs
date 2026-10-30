@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using OpenDelulu.Engine.Audio;
 
 namespace OpenDelulu.ViewModels;
 
@@ -88,6 +89,9 @@ public sealed partial class PlayViewModel
     /// <summary>A click on the memory screens (screen coordinates).</summary>
     public void PressMemory(double x, double y)
     {
+        // Return cancels, Playback decides, the rest picks.
+        Sfx(y >= 688 && y < 736 && x >= 880 && x < 992 ? SoundEffects.Cancel
+            : y >= 688 && y < 736 && x >= 768 && x < 880 ? SoundEffects.Decide : SoundEffects.Pick);
         if (IsMemoryDateList)
         {
             if (x >= 880 && x < 992 && y >= 688 && y < 736)

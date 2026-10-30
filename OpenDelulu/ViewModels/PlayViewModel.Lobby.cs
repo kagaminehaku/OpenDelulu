@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Script;
 
 namespace OpenDelulu.ViewModels;
@@ -86,6 +87,7 @@ public sealed partial class PlayViewModel
     {
         if (IsLobbyTalking || IsBusy || IsConfirming)
             return;
+        Sfx(SoundEffects.Decide);
         switch (button.Key)
         {
             case "Rest":

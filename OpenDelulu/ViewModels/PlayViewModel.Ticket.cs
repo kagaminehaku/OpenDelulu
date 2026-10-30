@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Game;
 
 namespace OpenDelulu.ViewModels;
@@ -118,6 +119,7 @@ public sealed partial class PlayViewModel
             OpenTicket();
             return;
         }
+        Sfx(SoundEffects.Pick);
         SelectedTicket = ticket;
         FillTickets();
     }

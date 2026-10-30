@@ -101,6 +101,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         else
             _ = StartAsync();
         _playClock.Start();
+        HookMenuSounds();
     }
 
     /// <summary>

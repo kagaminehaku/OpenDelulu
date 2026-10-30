@@ -121,6 +121,7 @@ public sealed partial class PlayViewModel
             CreateCoupleHuds();
             started?.Invoke();
             _couple = session;
+            session.SoundEffect += Sfx;
             session.Attach(placement);
             _activity = null;
             _prop = null;
@@ -183,6 +184,7 @@ public sealed partial class PlayViewModel
         _hTimer.Stop();
         CoupleHud?.Hide();
         TouchHandler = null;
+        couple.SoundEffect -= Sfx;
         couple.Detach();
         _couple = null;
     }

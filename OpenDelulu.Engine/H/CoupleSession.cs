@@ -146,6 +146,11 @@ public abstract class CoupleSession
 
     protected void RaiseCame(bool inside) => Came?.Invoke(inside);
 
+    /// <summary>A sound effect to play (se number, see <see cref="Audio.SoundEffects"/>).</summary>
+    public event Action<int>? SoundEffect;
+
+    protected void RaiseSoundEffect(int number) => SoundEffect?.Invoke(number);
+
     /// <summary>
     /// Reads the girl's and the man's animations of ld01 row <paramref name="row"/>, the man, the lh table
     /// <paramref name="events"/> and the lp table <paramref name="voices"/> (can run on a worker thread).
