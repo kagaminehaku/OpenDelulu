@@ -170,6 +170,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         scene.SetLookTarget(eye, Camera.Target(scene.Subject));
         AnimateScene(gl, scene, Camera.CameraToWorld(scene.Subject));
         UploadColors(gl, scene);
+        UploadTextures(gl, scene);
 
 
         gl.UseProgram(_program);
@@ -447,6 +448,26 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         _meshes.Clear();
         _textures.Clear();
         _uploaded = null;
+    }
+
+    readonly Dictionary<int, int> _textureVersions = [];
+
+    /// <summary>Re-uploads the textures the scene replaced (the swimsuit's wet stain).</summary>
+    unsafe void UploadTextures(GlInterface gl, ModelScene scene)
+    {
+        for (int i = 0; i < _textures.Count && i < scene.Textures.Count; i++)
+        {
+            int version = scene.TextureVersion(i);
+            if (_textureVersions.GetValueOrDefault(i) == version || scene.Textures[i] is not { } image || _textures[i] == _whiteTexture)
+                continue;
+            _textureVersions[i] = version;
+            gl.BindTexture(GL_TEXTURE_2D, _textures[i]);
+            fixed (byte* p = image.Pixels)
+                gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.Width, image.Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (IntPtr)p);
+            bool pot = (image.Width & (image.Width - 1)) == 0 && (image.Height & (image.Height - 1)) == 0;
+            if (pot && _ext!.CanGenerateMipmap)
+                _ext!.GenerateMipmap(GL_TEXTURE_2D);
+        }
     }
 
     unsafe int CreateTexture(GlInterface gl, int width, int height, byte[] rgba)

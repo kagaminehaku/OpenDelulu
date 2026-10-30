@@ -22,6 +22,10 @@ public sealed record Character(GirlInfo Girl, RenderModel Model, CharacterAnimat
 {
     /// <summary>1-based body variant the model was built from (follows the swimsuit).</summary>
     public int Cut { get; init; } = 1;
+
+    /// <summary>The swimsuit she wears, and its textures as given to the model (find them in Model.Textures by reference).</summary>
+    public SwimsuitInfo? Swimsuit { get; init; }
+    public IReadOnlyList<RgbaImage> SwimsuitImages { get; init; } = [];
 }
 
 /// <summary>
@@ -43,6 +47,9 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
     /// <summary>The accessory tables (lc00..lc11), read on first use.</summary>
     public AccessoryDatabase Accessories => _accessories ??= AccessoryDatabase.Load(fs);
 
+    // The swimsuit texture of the last BuildModel (one assembler builds one character at a time).
+    [ThreadStatic] static List<RgbaImage>? _lastSwimsuitImages;
+
     /// <summary>Placeholder of the body's pareo meshes, replaced by the chosen lc07 texture.</summary>
     const string PareoPlaceholder = "pareo.tga";
 
@@ -59,7 +66,13 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
             animator.Body = LoadBodyAnimation(model, bodyXa);
         animator.Physics = LoadPhysics(girl, model, spec);
         animator.Neck = NeckGaze.TryCreate(model, LoadNeck());
-        return new Character(girl, model, animator) { Cut = CutFor(girl, spec) };
+        var swimsuit = girl.Swimsuits.FirstOrDefault(s => s.Row == spec.SwimsuitRow) ?? girl.Swimsuits.FirstOrDefault();
+        return new Character(girl, model, animator)
+        {
+            Cut = CutFor(girl, spec),
+            Swimsuit = swimsuit,
+            SwimsuitImages = _lastSwimsuitImages ?? [],
+        };
     }
 
     /// <summary>
@@ -167,8 +180,13 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         // The overlay meshes of the intimate areas carry a "zxNN_MM" placeholder; the girl's texture comes from ld00.
         foreach (var texture in body.Textures.Where(t => t.Name.StartsWith("zx", StringComparison.OrdinalIgnoreCase)))
             AddTexture(bodyTextures, texture.Name, girl.DetailTexture);
+        _lastSwimsuitImages = [];
         foreach (var texture in body.Textures.Where(t => t.Name.StartsWith(SwimsuitPlaceholderPrefix, StringComparison.OrdinalIgnoreCase)))
+        {
             AddTexture(bodyTextures, texture.Name, swimsuit?.Texture);
+            if (bodyTextures.GetValueOrDefault(texture.Name) is { } image)
+                _lastSwimsuitImages.Add(image);
+        }
 
         var parts = new List<RenderPart> { new("body", body, body.Root, bodyTextures) };
 

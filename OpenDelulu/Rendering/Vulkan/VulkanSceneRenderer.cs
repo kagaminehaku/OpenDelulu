@@ -189,6 +189,7 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
                     if (scene.IsVisible(i) && scene.IsDynamic(i))
                         _meshes[i].Vertices.Write<float>(scene.Meshes[i].Vertices);
             UploadColors(scene);
+            UploadTextures(scene);
             animating = scene.IsAnimating;
         }
 
@@ -508,19 +509,56 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         return set;
     }
 
+    readonly Dictionary<int, int> _textureVersions = [];
+
+    /// <summary>Re-uploads the textures the scene replaced (the swimsuit's wet stain) into their images.</summary>
+    void UploadTextures(ModelScene scene)
+    {
+        List<VulkanBuffer>? staging = null;
+        VulkanCommandBufferPool.VulkanCommandBuffer? commands = null;
+        for (int i = 0; i < _textures.Count && i < scene.Textures.Count; i++)
+        {
+            int version = scene.TextureVersion(i);
+            if (_textureVersions.GetValueOrDefault(i) == version || scene.Textures[i] is not { } image || ReferenceEquals(_textures[i], _white))
+                continue;
+            _textureVersions[i] = version;
+            if (commands is null)
+            {
+                staging = [];
+                Api.QueueWaitIdle(_vk.Queue).ThrowOnError();
+                commands = _vk.Pool.CreateCommandBuffer();
+                commands.BeginRecording();
+            }
+            FillTexture(commands.Handle, _textures[i], image, staging!, ImageLayout.ShaderReadOnlyOptimal, AccessFlags.ShaderReadBit);
+        }
+        if (commands is null)
+            return;
+        commands.Submit();
+        Api.QueueWaitIdle(_vk.Queue).ThrowOnError();
+        foreach (var buffer in staging!)
+            buffer.Dispose();
+    }
+
     GpuTexture CreateTexture(CommandBuffer cmd, RgbaImage image, List<VulkanBuffer> staging)
     {
-        var upload = new VulkanBuffer(_vk, (ulong)image.Pixels.Length, BufferUsageFlags.TransferSrcBit);
-        upload.Write<byte>(image.Pixels);
-        staging.Add(upload);
-
         // Full mip chain, generated on the GPU by successive half-size blits (matches the GL backend's mipmaps).
         uint mipLevels = (uint)Math.Floor(Math.Log2(Math.Max(image.Width, image.Height))) + 1;
         var texture = new GpuTexture();
         (texture.Image, texture.Memory, texture.View) = CreateImage(image.Width, image.Height, ColorFormat,
             ImageUsageFlags.TransferSrcBit | ImageUsageFlags.TransferDstBit | ImageUsageFlags.SampledBit, ImageAspectFlags.ColorBit, mipLevels);
+        FillTexture(cmd, texture, image, staging, ImageLayout.Undefined, AccessFlags.None);
+        return texture;
+    }
 
-        VulkanMemory.TransitionLayout(Api, cmd, texture.Image, ImageLayout.Undefined, AccessFlags.None,
+    /// <summary>Copies the pixels into every mip level of the texture (from <paramref name="layout"/>), ready for sampling.</summary>
+    void FillTexture(CommandBuffer cmd, GpuTexture texture, RgbaImage image, List<VulkanBuffer> staging, ImageLayout layout, AccessFlags access)
+    {
+        var upload = new VulkanBuffer(_vk, (ulong)image.Pixels.Length, BufferUsageFlags.TransferSrcBit);
+        upload.Write<byte>(image.Pixels);
+        staging.Add(upload);
+        uint mipLevels = (uint)Math.Floor(Math.Log2(Math.Max(image.Width, image.Height))) + 1;
+
+        VulkanMemory.TransitionLayout(Api, cmd, texture.Image, layout, access,
             ImageLayout.TransferDstOptimal, AccessFlags.TransferWriteBit, mipLevels: mipLevels);
         var copy = new BufferImageCopy
         {
@@ -551,7 +589,6 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
         }
         TransitionMip(cmd, texture.Image, mipLevels - 1, ImageLayout.TransferDstOptimal, AccessFlags.TransferWriteBit,
             ImageLayout.ShaderReadOnlyOptimal, AccessFlags.ShaderReadBit);
-        return texture;
     }
 
     void TransitionMip(CommandBuffer cmd, Image image, uint level, ImageLayout from, AccessFlags fromAccess, ImageLayout to, AccessFlags toAccess)

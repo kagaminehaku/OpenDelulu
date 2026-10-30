@@ -456,6 +456,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         SyncHand();
         ApplyConfigOpacity();
         SyncLiquid();
+        ShowStain();
     }
 
     int _manObject = -1, _liquidObject = -1;
@@ -732,6 +733,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         double seconds = Math.Min(0.1, _oilClock.Elapsed.TotalSeconds);
         _oilClock.Restart();
         oil.Update(seconds);
+        Wet(oil.Coating.Coverage);
         TickOilHud(seconds);
         SyncHand();
         if (Environment.TickCount64 >= _statusHoldUntil)

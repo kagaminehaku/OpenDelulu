@@ -28,8 +28,14 @@ public sealed record PartRef(AssetRef Model, string ParentFrame, string AttachFr
 /// 1..4, 0 without a card.
 /// </param>
 /// <param name="Hearts">Hearts on the card (lbNN column 59, 1..5).</param>
+/// <param name="Stain">Wet stain stamped on the suit (lbNN column 6, sk01), or null.</param>
+/// <param name="StainRows">First lz00 row of the suit's eleven stain areas (lbNN column 10; 21 = rows 21..31), 0 = none.</param>
 public sealed record SwimsuitInfo(int Row, string Name, AssetRef Texture, AssetRef? TanTexture, int Cut, AssetRef? Icon,
-    int Category = 0, int Hearts = 0);
+    int Category = 0, int Hearts = 0)
+{
+    public AssetRef? Stain { get; init; }
+    public int StainRows { get; init; }
+}
 
 /// <summary>
 /// A date activity (ld01 rows 151..171): the girl's animation (dtBB_NN.xa for her body type) and an optional prop
@@ -103,7 +109,9 @@ public sealed class CharacterDatabase
     const int SwimsuitNameColumn = 1;
     const int SwimsuitTextureColumn = 2;
     const int SwimsuitTanColumn = 4;
+    const int SwimsuitStainColumn = 6;
     const int SwimsuitGroupColumn = 8;
+    const int SwimsuitStainRowsColumn = 10;
     const int SwimsuitIconColumn = 61;
     const int SwimsuitHeartsColumn = 59;
 
@@ -259,7 +267,11 @@ public sealed class CharacterDatabase
             list.Add(new SwimsuitInfo(number, Cell(row, SwimsuitNameColumn), texture,
                 AssetRef.FromRow(row, SwimsuitTanColumn), cut, AssetRef.FromRow(row, SwimsuitIconColumn),
                 CardCategory(AssetRef.FromRow(row, SwimsuitIconColumn)),
-                int.TryParse(Cell(row, SwimsuitHeartsColumn), out int hearts) ? hearts : 0));
+                int.TryParse(Cell(row, SwimsuitHeartsColumn), out int hearts) ? hearts : 0)
+            {
+                Stain = AssetRef.FromRow(row, SwimsuitStainColumn),
+                StainRows = int.TryParse(Cell(row, SwimsuitStainRowsColumn), out int stainRows) ? stainRows : 0,
+            });
         }
         return list;
     }

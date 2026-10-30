@@ -207,6 +207,33 @@ public sealed class ModelScene
     public IReadOnlyList<RenderMesh> Meshes => _meshes;
     public IReadOnlyList<RgbaImage?> Textures => _textures;
 
+    readonly Dictionary<int, int> _textureVersion = [];
+
+    /// <summary>Changes whenever <see cref="Textures"/>[index] is replaced (renderers re-upload it).</summary>
+    public int TextureVersion(int index) => _textureVersion.GetValueOrDefault(index);
+
+    /// <summary>
+    /// Replaces the texture of an object that is <paramref name="current"/> (by reference) with <paramref name="image"/>
+    /// of the same size (the swimsuit's wet stain); false when the object has no such texture.
+    /// </summary>
+    public bool ReplaceTexture(int objectIndex, RgbaImage current, RgbaImage image)
+    {
+        var o = _objects[objectIndex];
+        for (int i = 0; i < o.Model.Textures.Count; i++)
+        {
+            if (!ReferenceEquals(o.Model.Textures[i], current))
+                continue;
+            int index = o.TextureOffset + i;
+            if (_textures[index] is not { } old || old.Width != image.Width || old.Height != image.Height)
+                return false;
+            _textures[index] = image;
+            _textureVersion[index] = TextureVersion(index) + 1;
+            Changed?.Invoke();
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>Index into <see cref="Textures"/> for a mesh, or -1.</summary>
     public int TextureIndex(int mesh) =>
         _meshes[mesh].TextureIndex < 0 ? -1 : _meshes[mesh].TextureIndex + _objects[_owner[mesh]].TextureOffset;

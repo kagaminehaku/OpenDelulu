@@ -222,6 +222,8 @@ public sealed partial class PlayViewModel
         double seconds = Math.Min(0.1, _hClock.Elapsed.TotalSeconds);
         _hClock.Restart();
         couple.Update(seconds);
+        if (couple is HSession)
+            Wet(couple.Excitement);
         SyncLiquid();
         CoupleHud?.Tick(seconds);
         if (Environment.TickCount64 < _statusHoldUntil)
