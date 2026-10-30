@@ -385,7 +385,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         var objects = new List<(RenderModel, CharacterAnimator?)> { (_stage.Model, _stage.Animator), (_girl.Model, _girl.Animator) };
         if (_prop is { } prop)
             objects.Add(prop);
-        _manObject = _liquidObject = -1;
+        _manObject = _liquidObject = _dropsObject = -1;
         if (_couple is { } couple)
         {
             _manObject = objects.Count;
@@ -394,6 +394,11 @@ public sealed partial class PlayViewModel : ViewModelBase
             {
                 _liquidObject = objects.Count;
                 objects.Add((liquid.Model, liquid.Animator));
+            }
+            if (couple.Drops is { } drops)
+            {
+                _dropsObject = objects.Count;
+                objects.Add((drops.Model, drops.Animator));
             }
         }
         _propObject = -1;
@@ -473,12 +478,16 @@ public sealed partial class PlayViewModel : ViewModelBase
         ShowStain();
     }
 
-    int _manObject = -1, _liquidObject = -1;
+    int _manObject = -1, _liquidObject = -1, _dropsObject = -1;
 
     /// <summary>Shows the H scene's fluid while the scene wants it.</summary>
     void SyncLiquid()
     {
-        if (Scene is not { } scene || _liquidObject < 0 || _couple is not { } couple)
+        if (Scene is not { } scene || _couple is not { } couple)
+            return;
+        if (_dropsObject >= 0)
+            scene.SetObjectVisible(_dropsObject, couple.DropsVisible);
+        if (_liquidObject < 0)
             return;
         scene.SetObjectVisible(_liquidObject, couple.LiquidVisible);
         if (couple.Liquid is { } liquid)

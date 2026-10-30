@@ -76,18 +76,27 @@ public abstract class CoupleSession
     /// Loads a fluid (ld00 row 34: sb3_0100.pp ek05_%02d_%02d; the Plus ones are in sb3x_1100.pp), or null when it is not
     /// installed.
     /// </summary>
-    protected void LoadLiquid(GameFileSystem fs, string xx, string xa)
+    protected void LoadLiquid(GameFileSystem fs, string xx, string xa) => Liquid = LoadEffect(fs, xx, xa, _liquidFades);
+
+    /// <summary>A second effect model (the H scene's flying drops, ek04), or null.</summary>
+    public Partner? Drops { get; protected set; }
+
+    /// <summary>Whether <see cref="Drops"/> is to be drawn now.</summary>
+    public bool DropsVisible { get; protected set; }
+
+    /// <summary>An effect model (.xx with its .xa animation and morphs) from sb3_0100 / sb3x_1100, or null.</summary>
+    protected static Partner? LoadEffect(GameFileSystem fs, string xx, string xa, Dictionary<string, (int Frame, float Alpha)[]>? fades = null)
     {
         string? Find(string file) => new[] { "sb3_0100.pp", "sb3x_1100.pp" }.FirstOrDefault(a => fs.HasArchive(a) && fs.ExistsReferenced(a, file));
         if (Find(xx) is not { } xxArchive || Find(xa) is not { } xaArchive)
-            return;
+            return null;
         var xxModel = XxReader.Read(fs.ReadReferenced(xxArchive, xx));
         var file = XaReader.Read(fs.ReadReferenced(xaArchive, xa));
         if (file.Animation is not { } animation)
-            return;
+            return null;
         // Materials keyed in the .xa fade the meshes in and out (opacity by timeline frame, see LiquidOpacity); their
         // own alpha (often 0) is replaced by the keys.
-        _liquidFades.Clear();
+        fades?.Clear();
         foreach (var keyed in file.Materials?.Materials ?? [])
         {
             if (keyed.Colors.Count == 0 || xxModel.Materials.FirstOrDefault(m => m.Name == keyed.Name) is not { } material)
@@ -95,7 +104,8 @@ public abstract class CoupleSession
             material.Diffuse = material.Diffuse with { W = 1 };
             var keys = keyed.Colors.Select(c => (Frame: c.Unknown1.Length >= 4 ? BitConverter.ToInt32(c.Unknown1, 0) : 0, Alpha: c.Diffuse.W))
                 .OrderBy(k => k.Frame).ToArray();
-            _liquidFades[keyed.Name] = keys;
+            if (fades is not null)
+                fades[keyed.Name] = keys;
         }
         var model = RenderModel.FromXx(xxModel, xx);
         var animator = new CharacterAnimator(model)
@@ -105,7 +115,7 @@ public abstract class CoupleSession
         };
         if (file.Morphs is { } morphs)
             animator.Morph = new TimelineMorph(model, morphs);
-        Liquid = new Partner(model, animator);
+        return new Partner(model, animator);
     }
 
     readonly Dictionary<string, (int Frame, float Alpha)[]> _liquidFades = new(StringComparer.Ordinal);

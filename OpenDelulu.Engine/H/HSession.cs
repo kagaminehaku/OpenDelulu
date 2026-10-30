@@ -1,3 +1,4 @@
+using System.Numerics;
 using OpenDelulu.Engine.Animation;
 using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
@@ -101,6 +102,10 @@ public sealed class HSession : CoupleSession
         session.LoadLiquid(fs, $"ek05_{file:00}_00_00_00.xx", $"ek05_{file:00}_00_00_00.xa");
         if (session.Liquid?.Animator.Body is { } liquid)
             liquid.HoldAtEnd = true;
+        // Coming outside: ek04 (ld00 row 36), a drop flying (飛びループ) then running down (垂れA..C).
+        session.Drops = LoadEffect(fs, "ek04_00_00_00_00.xx", "ek04_00_00_00_00.xa");
+        if (session.Drops?.Animator.Body is { } drops)
+            drops.FollowNext = true;
         return session;
     }
 
@@ -172,6 +177,18 @@ public sealed class HSession : CoupleSession
         string name = clip.Name;
         if (name == "F待機")
             RaiseSoundEffect(SoundEffects.Outside);
+        if (name.StartsWith("F待機(", StringComparison.Ordinal) && !name.Contains('→') && Drops is { Animator.Body: { } drops } && TargetFrame(name) is int frame)
+        {
+            // The drop lands on the target: its world position, standing up; the exe's placement is not decoded.
+            var at = Girl.Animator.WorldOf(frame).Translation;
+            Drops.Animator.Placement = Matrix4x4.CreateRotationX(-MathF.PI / 2) * Matrix4x4.CreateTranslation(at);
+            Drops.Animator.Invalidate();
+            drops.Play(1);
+            DropsVisible = true;
+            RaiseSoundEffect(36 + Random.Next(3));
+        }
+        else if (DropsVisible && name.StartsWith('Z'))
+            DropsVisible = false;
         if (name.Length >= 2 && name[0] is 'A' or 'B' && name[1] is '1' or '2')
             Inserted = name[..2];
         else if (name.StartsWith('Z') || name.StartsWith('F'))
@@ -191,6 +208,21 @@ public sealed class HSession : CoupleSession
             _queuedStrokes = Math.Max(0, _queuedStrokes - 1);
             Stroke();
         }
+    }
+
+    /// <summary>The girl's frame where he comes outside, by the F待機(…) target.</summary>
+    int? TargetFrame(string clip)
+    {
+        string frame = clip switch
+        {
+            _ when clip.Contains("(胸)", StringComparison.Ordinal) => "o01_N_Mune",
+            _ when clip.Contains("(尻)", StringComparison.Ordinal) => "o01_N_Siri03_L",
+            _ when clip.Contains("(脚)", StringComparison.Ordinal) => "o01_N_Momo_L",
+            _ when clip.Contains("(顔)", StringComparison.Ordinal) => "o01_N_Kuti_A05",
+            _ => "o01_N_Sio",
+        };
+        int index = Girl.Model.Rig.Find(frame);
+        return index >= 0 ? index : null;
     }
 
     /// <summary>From her mood standby: to Z待機 first, then <paramref name="then"/>; false when not in her mood standby.</summary>
