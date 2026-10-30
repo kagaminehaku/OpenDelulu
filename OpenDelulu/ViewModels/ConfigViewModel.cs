@@ -314,16 +314,28 @@ public sealed partial class ConfigViewModel : ObservableObject
     // ------------------------------------------------------------------ test sounds
 
     /// <summary>
-    /// What Test plays per channel. The exe's choice is not decoded; these are the first file of each kind:
-    /// BGM bg01, ambience es01 (both looped), effect se01, and Manami's first date line.
+    /// What Test plays per channel: the system sounds of ld00 row 74 (sb3_0600.pp), which the exe's CONFIG loads
+    /// (sb_ConfigScene, 0x42E510): sm01 music and sm02 ambience (looped), sm03 an effect, sm04_NN a girl's voice (one of
+    /// them at random; sb3x_1600.pp has the Plus girls').
     /// </summary>
     static readonly (string Archive, string File, AudioBus Bus, bool Loop)[] TestSounds =
     [
-        ("sb3_0600.pp", "bg01_00_00_00_00.ogg", AudioBus.Music, true),
-        ("sb3_0600.pp", "es01_00_00_00_00.ogg", AudioBus.Ambient, true),
-        ("sb3_0600.pp", "se01_00_00_00_00.ogg", AudioBus.Effects, false),
-        ("sb3_0601.pp", "pd01_01_01.wav", AudioBus.Voice, false),
+        ("sb3_0600.pp", "sm01_00_00_00_00.ogg", AudioBus.Music, true),
+        ("sb3_0600.pp", "sm02_00_00_00_00.ogg", AudioBus.Ambient, true),
+        ("sb3_0600.pp", "sm03_00_00_00_00.ogg", AudioBus.Effects, false),
+        ("sb3_0600.pp", "sm04_01_00_00_00.ogg", AudioBus.Voice, false),
     ];
+
+    /// <summary>The voice test: one of the installed sm04_01..08 at random.</summary>
+    (string Archive, string File) VoiceTest()
+    {
+        var found = new List<(string, string)>();
+        for (int n = 1; n <= 8; n++)
+            foreach (string archive in new[] { "sb3_0600.pp", "sb3x_1600.pp" })
+                if (_fs.HasArchive(archive) && _fs.ExistsReferenced(archive, $"sm04_{n:00}_00_00_00.ogg"))
+                    found.Add((archive, $"sm04_{n:00}_00_00_00.ogg"));
+        return found.Count > 0 ? found[Random.Shared.Next(found.Count)] : (TestSounds[3].Archive, TestSounds[3].File);
+    }
 
     bool IsTesting(int channel) => _tests[channel] is { IsPlaying: true };
 
@@ -334,6 +346,8 @@ public sealed partial class ConfigViewModel : ObservableObject
         else
         {
             var (archive, file, bus, loop) = TestSounds[channel];
+            if (channel == 3)
+                (archive, file) = VoiceTest();
             try
             {
                 if (_fs.ExistsReferenced(archive, file))
