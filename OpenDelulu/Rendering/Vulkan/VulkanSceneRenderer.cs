@@ -287,9 +287,10 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
             var mesh = _meshes[i];
             if (!scene.IsVisible(i) || scene.IsOverlay(i) != overlay)
                 continue;
+            float opacity = scene.Opacity(i);
             if (overlay)
                 push.LightAndPass.W = 2f;
-            else if (translucent ? !mesh.HasAlpha : mesh.Blend != BlendMode.Normal)
+            else if (translucent ? !mesh.HasAlpha && opacity >= 1 : mesh.Blend != BlendMode.Normal || opacity < 1)
                 continue;
             if (translucent && !overlay)
             {
@@ -300,12 +301,13 @@ internal sealed unsafe class VulkanSceneRenderer : IDisposable
                     Api.CmdBindPipeline(cmd, PipelineBindPoint.Graphics, wanted);
                     bound = wanted;
                 }
-                push.LightAndPass.W = mesh.Blend == BlendMode.Normal ? 1f : 2f;
+                // Pass value 1 keeps only what pass 0 left; a faded mesh was skipped there, so all of it.
+                push.LightAndPass.W = mesh.Blend == BlendMode.Normal && opacity >= 1 ? 1f : 2f;
             }
 
             var set = mesh.Set;
             Api.CmdBindDescriptorSets(cmd, PipelineBindPoint.Graphics, _pipelineLayout, 0, 1, &set, 0, null);
-            var tint = new Vector4(scene.Light(i), 1);
+            var tint = new Vector4(scene.Light(i), opacity);
             push.Diffuse = mesh.Diffuse * tint;
             push.Ambient = mesh.Ambient * tint;
             push.Emissive = mesh.Emissive * tint;

@@ -34,7 +34,7 @@ public enum HState
 /// <item>A1ピストンつく→A1う！待機 when he is about to come; then →A1絶頂(中だし) (inside: climax, 事後 loop, back to
 /// A1待機 by itself) or →F待機 (outside: F待機→F待機(胸 / 尻 / 脚 / 顔 / アソコ), back to Z待機 by itself).</item>
 /// </list>
-/// Expressions and voices per clip: lh02_PP and lp02_LL (ph voices).
+/// Expressions and voices per clip: lh02_PP and lp02_LL (ph voices). Fluid: ek05_PP_00 after coming inside.
 /// </summary>
 public sealed class HSession : CoupleSession
 {
@@ -42,7 +42,7 @@ public sealed class HSession : CoupleSession
     public static readonly string[] OutsideTargets = ["胸", "尻", "脚", "顔", "アソコ"];
 
     readonly string _mood;
-    int _queuedStrokes;
+    int _queuedStrokes, _inside;
 
     HSession(Parts parts, int file, string mood) : base(parts)
     {
@@ -96,7 +96,11 @@ public sealed class HSession : CoupleSession
         var parts = Load(fs, assembler, girl, 120 + file, $"lh02_{file:00}_00_00_00.lst", $"lp02_{Math.Clamp(level, 2, 5):00}_00_00_00.lst", voices, audio);
         // Her mood by level: shy at first, then usual, lewd at the last level. The exe's own rule is not decoded.
         string mood = level <= 2 ? "羞恥待機" : level >= 5 ? "淫乱待機" : "通常待機";
-        return new HSession(parts, file, mood);
+        var session = new HSession(parts, file, mood);
+        session.LoadLiquid(fs, $"ek05_{file:00}_00_00_00.xx", $"ek05_{file:00}_00_00_00.xa");
+        if (session.Liquid?.Animator.Body is { } liquid)
+            liquid.HoldAtEnd = true;
+        return session;
     }
 
     protected override void Begin()
@@ -115,6 +119,16 @@ public sealed class HSession : CoupleSession
             Inserted = name[..2];
         else if (name.StartsWith('Z') || name.StartsWith('F'))
             Inserted = null;
+        // After coming inside, the fluid runs out during the afterglow (ek05_0P: clips 1..3 for position A, 11..13 for
+        // B; little, usual, a lot by how many times he came) and stays until she moves again.
+        if (name.Contains("事後(中だし)ループ", StringComparison.Ordinal) && Liquid?.Animator.Body is { } liquid)
+        {
+            liquid.Play((name[0] == 'B' ? 10 : 0) + Math.Clamp(_inside, 1, 3));
+            PutLiquidUnderCrotch();
+            LiquidVisible = true;
+        }
+        else if (LiquidVisible && (name.Contains("ピストン", StringComparison.Ordinal) || name.StartsWith('Z') || name.Contains("→Z", StringComparison.Ordinal)))
+            LiquidVisible = false;
         if (Inserted is { } p && name == $"{p}待機" && (_queuedStrokes > 0 || Continuous))
         {
             _queuedStrokes = Math.Max(0, _queuedStrokes - 1);
@@ -202,6 +216,7 @@ public sealed class HSession : CoupleSession
         if (State != HState.Ready || Inserted is not { } p || !Play($"{p}う！待機→{p}絶頂(中だし)"))
             return false;
         Excitement = 0;
+        _inside++;
         RaiseCame(true);
         return true;
     }

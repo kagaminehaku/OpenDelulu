@@ -246,6 +246,27 @@ public sealed class ModelScene
         Changed?.Invoke();
     }
 
+    readonly Dictionary<int, float> _opacity = [];
+
+    /// <summary>0..1 opacity of a mesh (CONFIG's see-through man); below 1 it is drawn with the translucent meshes.</summary>
+    public float Opacity(int mesh) => _opacity.TryGetValue(mesh, out float o) ? o : 1f;
+
+    /// <summary>Sets the opacity of the meshes of one object that <paramref name="match"/>.</summary>
+    public void SetObjectOpacity(int objectIndex, Func<RenderMesh, bool> match, float opacity)
+    {
+        var o = _objects[objectIndex];
+        for (int m = o.MeshOffset; m < o.MeshOffset + o.Model.Meshes.Count; m++)
+        {
+            if (!match(_meshes[m]))
+                continue;
+            if (opacity >= 0.999f)
+                _opacity.Remove(m);
+            else
+                _opacity[m] = Math.Clamp(opacity, 0f, 1f);
+        }
+        Changed?.Invoke();
+    }
+
     /// <summary>True when the mesh's vertices change while animating (re-upload after <see cref="Update"/>).</summary>
     public bool IsDynamic(int mesh) =>
         _particles.ContainsKey(_owner[mesh])

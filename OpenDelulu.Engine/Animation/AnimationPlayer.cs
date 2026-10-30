@@ -57,6 +57,9 @@ public sealed class AnimationPlayer
     /// <summary>When false, clips loop on themselves instead of following "next".</summary>
     public bool FollowNext { get; set; } = true;
 
+    /// <summary>When true (and not following "next"), a clip stops on its last frame instead of looping.</summary>
+    public bool HoldAtEnd { get; set; }
+
     public event Action<AnimationClipInfo>? ClipChanged;
 
     public void Play(int clipIndex)
@@ -72,6 +75,11 @@ public sealed class AnimationPlayer
         if (!IsPlaying || Current is not { IsStatic: false } clip)
             return;
         Time += seconds * BaseFramesPerSecond * Math.Max(0.01, clip.Speed) * SpeedScale;
+        if (HoldAtEnd && !FollowNext && Time >= clip.End)
+        {
+            Time = clip.End;
+            return;
+        }
         int guard = 0;
         while (Current is { IsStatic: false } c && Time >= c.End && guard++ < 16)
         {

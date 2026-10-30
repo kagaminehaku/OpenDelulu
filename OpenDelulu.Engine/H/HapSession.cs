@@ -8,7 +8,7 @@ namespace OpenDelulu.Engine.H;
 /// A fetish scene of the Plus edition (10_hap; the H menu's paizuri, footjob and 69): hwBB_00_0N.xa / hm…_00_0N.xa of
 /// ld01 rows 132..134, nine clips in a chain: K待機 → ピストン01(ル) → ピストン02(ル) → 絶頂事後 → 事後(ル) → K待機
 /// ("ル" = loop). The loops hold until the player goes on (a press: the next pace) or he comes (excitement, faster at
-/// the second pace). Expressions and voices: lh04_00_0N, lp04_LL_01.
+/// the second pace). Expressions and voices: lh04_00_0N, lp04_LL_01. Fluid: ek05_00_02 (paizuri) / ek05_00_03 (footjob).
 /// </summary>
 public sealed class HapSession : CoupleSession
 {
@@ -42,7 +42,15 @@ public sealed class HapSession : CoupleSession
         kind = Math.Clamp(kind, 1, 3);
         var parts = Load(fs, assembler, girl, 131 + kind, $"lh04_00_{kind + 1:00}_00_00.lst", $"lp04_{Math.Clamp(level, 4, 5):00}_01_00_00.lst",
             voices, audio);
-        return new HapSession(parts, kind);
+        var session = new HapSession(parts, kind);
+        // The fluid: ek05_00_02 for paizuri (its animation by body type, ek05_00_02_BB), ek05_00_03 for the footjob.
+        if (kind == 1)
+            session.LoadLiquid(fs, "ek05_00_02_00_00.xx", $"ek05_00_02_{BodyTypeOf(girl):00}_00.xa");
+        else if (kind == 2)
+            session.LoadLiquid(fs, "ek05_00_03_00_00.xx", "ek05_00_03_00_00.xa");
+        session.LiquidFollowsClips = true;
+        session.LiquidVisible = session.Liquid is not null;
+        return session;
     }
 
     protected override void Begin() => Play(Standby);

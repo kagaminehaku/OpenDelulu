@@ -95,6 +95,9 @@ public sealed class OilSession
     public IReadOnlyList<(RenderModel Model, CharacterAnimator Animator)> Props => _props.Select(p => (p.Model, p.Animator)).ToList();
     public bool IsPropVisible(int index) => _props[index].Visible;
 
+    /// <summary>How many of <see cref="Props"/> are hands (the first ones).</summary>
+    public int HandCount => (_rightHand is null ? 0 : 1) + (_leftHand is null ? 0 : 1);
+
     /// <summary>The touched area, or null.</summary>
     public OilTouchArea? Area => _touching ? _area : null;
 

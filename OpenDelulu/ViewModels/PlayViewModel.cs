@@ -79,6 +79,9 @@ public sealed partial class PlayViewModel : ViewModelBase
                 scene.EraseObstacles = Services.GameConfig.Current.EraseObstacles;
             else if (e.PropertyName == nameof(Services.GameConfig.Crosshair) && Scene is not null)
                 BuildScene();
+            else if (e.PropertyName is nameof(Services.GameConfig.BodyOpacity) or nameof(Services.GameConfig.DickOpacity)
+                     or nameof(Services.GameConfig.HandOpacity))
+                ApplyConfigOpacity();
         };
         Dialogue = new DialogueViewModel(fs, library)
         {
@@ -368,8 +371,17 @@ public sealed partial class PlayViewModel : ViewModelBase
         var objects = new List<(RenderModel, CharacterAnimator?)> { (_stage.Model, _stage.Animator), (_girl.Model, _girl.Animator) };
         if (_prop is { } prop)
             objects.Add(prop);
+        _manObject = _liquidObject = -1;
         if (_couple is { } couple)
+        {
+            _manObject = objects.Count;
             objects.Add((couple.Man.Model, couple.Man.Animator));
+            if (couple.Liquid is { } liquid)
+            {
+                _liquidObject = objects.Count;
+                objects.Add((liquid.Model, liquid.Animator));
+            }
+        }
         _propObject = -1;
         // The stage's keyframed sprites (.ptcl): sun glow, splashes, steam, lamp glows.
         int particleObject = -1;
@@ -442,6 +454,41 @@ public sealed partial class PlayViewModel : ViewModelBase
         }
         ApplyLook();
         SyncHand();
+        ApplyConfigOpacity();
+        SyncLiquid();
+    }
+
+    int _manObject = -1, _liquidObject = -1;
+
+    /// <summary>Shows the H scene's fluid while the scene wants it.</summary>
+    void SyncLiquid()
+    {
+        if (Scene is not { } scene || _liquidObject < 0 || _couple is not { } couple)
+            return;
+        scene.SetObjectVisible(_liquidObject, couple.LiquidVisible);
+        if (couple.Liquid is { } liquid)
+            foreach (var mesh in liquid.Model.Meshes)
+                scene.SetObjectOpacity(_liquidObject, m => ReferenceEquals(m, mesh), couple.LiquidOpacity(mesh));
+    }
+
+    /// <summary>
+    /// CONFIG's transparencies: the man's body and his member (Ecchi page; the member is mb00's o02_P_…omoza meshes) and
+    /// the oil hands (Game page).
+    /// </summary>
+    void ApplyConfigOpacity()
+    {
+        if (Scene is not { } scene)
+            return;
+        var config = Services.GameConfig.Current;
+        if (_manObject >= 0)
+        {
+            static bool Member(RenderMesh m) => m.FrameName.Contains("omoza", StringComparison.Ordinal);
+            scene.SetObjectOpacity(_manObject, Member, config.DickOpacity / 100f);
+            scene.SetObjectOpacity(_manObject, m => !Member(m), config.BodyOpacity / 100f);
+        }
+        if (_propObject >= 0 && _oil is { } oil)
+            for (int i = 0; i < oil.HandCount; i++)
+                scene.SetObjectOpacity(_propObject + i, _ => true, config.HandOpacity / 100f);
     }
 
     // ------------------------------------------------------------------ sun oil

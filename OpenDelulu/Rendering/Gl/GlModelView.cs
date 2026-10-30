@@ -298,7 +298,8 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         for (int i = 0; i < _meshes.Count; i++)
         {
             var mesh = _meshes[i];
-            if (!scene.IsVisible(i) || scene.IsOverlay(i) || (translucentOnly ? !mesh.HasAlpha : mesh.Blend != BlendMode.Normal))
+            bool faded = scene.Opacity(i) < 1;
+            if (!scene.IsVisible(i) || scene.IsOverlay(i) || (translucentOnly ? !mesh.HasAlpha && !faded : mesh.Blend != BlendMode.Normal || faded))
                 continue;
             if (translucentOnly)
             {
@@ -315,7 +316,8 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
                         break;
                     default:
                         _ext!.BlendFunc(GlExtras.GL_SRC_ALPHA, GlExtras.GL_ONE_MINUS_SRC_ALPHA);
-                        gl.Uniform1f(_uAlphaPass, 1f);
+                        // A faded mesh was skipped by the opaque pass: all of it here.
+                        gl.Uniform1f(_uAlphaPass, faded ? 2f : 1f);
                         break;
                 }
             }
@@ -343,7 +345,7 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         var d = mesh.Diffuse;
         var a = mesh.Ambient * new Vector4(light, 1);
         var e = mesh.Emissive * new Vector4(light, 1);
-        _ext!.Uniform4f(_uDiffuse, d.X * light.X, d.Y * light.Y, d.Z * light.Z, d.W);
+        _ext!.Uniform4f(_uDiffuse, d.X * light.X, d.Y * light.Y, d.Z * light.Z, d.W * scene.Opacity(i));
         _ext.Uniform4f(_uAmbient, a.X, a.Y, a.Z, 0);
         _ext.Uniform4f(_uEmissive, e.X, e.Y, e.Z, 0);
         if (scene.Water(i) is { } water)

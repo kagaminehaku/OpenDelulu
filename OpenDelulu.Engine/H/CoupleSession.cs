@@ -60,6 +60,84 @@ public abstract class CoupleSession
 
     public string Clip => Body.Current?.Name ?? "";
 
+    /// <summary>
+    /// The scene's fluid (ek05_…: o01_P_shiru meshes whose shape is a morph timeline), placed like the girl; null when
+    /// the scene has none.
+    /// </summary>
+    public Partner? Liquid { get; private set; }
+
+    /// <summary>Whether <see cref="Liquid"/> is to be drawn now.</summary>
+    public bool LiquidVisible { get; protected set; }
+
+    /// <summary>The fluid plays the girl's clip index (fera, fetish); otherwise the scene drives it (H).</summary>
+    protected bool LiquidFollowsClips { get; set; }
+
+    /// <summary>
+    /// Loads a fluid (ld00 row 34: sb3_0100.pp ek05_%02d_%02d; the Plus ones are in sb3x_1100.pp), or null when it is not
+    /// installed.
+    /// </summary>
+    protected void LoadLiquid(GameFileSystem fs, string xx, string xa)
+    {
+        string? Find(string file) => new[] { "sb3_0100.pp", "sb3x_1100.pp" }.FirstOrDefault(a => fs.HasArchive(a) && fs.ExistsReferenced(a, file));
+        if (Find(xx) is not { } xxArchive || Find(xa) is not { } xaArchive)
+            return;
+        var xxModel = XxReader.Read(fs.ReadReferenced(xxArchive, xx));
+        var file = XaReader.Read(fs.ReadReferenced(xaArchive, xa));
+        if (file.Animation is not { } animation)
+            return;
+        // Materials keyed in the .xa fade the meshes in and out (opacity by timeline frame, see LiquidOpacity); their
+        // own alpha (often 0) is replaced by the keys.
+        _liquidFades.Clear();
+        foreach (var keyed in file.Materials?.Materials ?? [])
+        {
+            if (keyed.Colors.Count == 0 || xxModel.Materials.FirstOrDefault(m => m.Name == keyed.Name) is not { } material)
+                continue;
+            material.Diffuse = material.Diffuse with { W = 1 };
+            var keys = keyed.Colors.Select(c => (Frame: c.Unknown1.Length >= 4 ? BitConverter.ToInt32(c.Unknown1, 0) : 0, Alpha: c.Diffuse.W))
+                .OrderBy(k => k.Frame).ToArray();
+            _liquidFades[keyed.Name] = keys;
+        }
+        var model = RenderModel.FromXx(xxModel, xx);
+        var animator = new CharacterAnimator(model)
+        {
+            Body = new AnimationPlayer(model.Rig, animation, xa) { FollowNext = false },
+            EyesFollowTarget = false,
+        };
+        if (file.Morphs is { } morphs)
+            animator.Morph = new TimelineMorph(model, morphs);
+        Liquid = new Partner(model, animator);
+    }
+
+    readonly Dictionary<string, (int Frame, float Alpha)[]> _liquidFades = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Opacity of a mesh of <see cref="Liquid"/> now: the .xa's material keys (frame, alpha), linear between keys; 1 for
+    /// materials without keys.
+    /// </summary>
+    public float LiquidOpacity(RenderMesh mesh)
+    {
+        if (!_liquidFades.TryGetValue(mesh.MaterialName, out var keys) || Liquid?.Animator.Body is not { } body)
+            return 1;
+        double t = body.Time;
+        if (t <= keys[0].Frame)
+            return keys[0].Alpha;
+        for (int i = 1; i < keys.Length; i++)
+            if (t <= keys[i].Frame)
+            {
+                var (f0, a0) = keys[i - 1];
+                var (f1, a1) = keys[i];
+                return (float)(a0 + (a1 - a0) * (t - f0) / Math.Max(1, f1 - f0));
+            }
+        return keys[^1].Alpha;
+    }
+
+    /// <summary>The girl's body type 1..3, from her idle animation (kiBB): the files of some scenes depend on it.</summary>
+    protected static int BodyTypeOf(Character girl)
+    {
+        string idle = girl.Girl.BodyAnimations.FirstOrDefault().File ?? "";
+        return idle.Length >= 4 && int.TryParse(idle.AsSpan(2, 2), out int t) && t is >= 1 and <= 3 ? t : 1;
+    }
+
     /// <summary>0..1: how close he is to coming.</summary>
     public double Excitement { get; protected set; }
 
@@ -135,11 +213,40 @@ public abstract class CoupleSession
     /// <summary>Puts both on <paramref name="placement"/> and starts the scene (on the thread that renders).</summary>
     public void Attach(Matrix4x4 placement)
     {
+        Placement = placement;
         Girl.Animator.Body = Body;
         Girl.Animator.Placement = placement;
         Man.Animator.Placement = placement;
+        if (Liquid is { } liquid)
+            liquid.Animator.Placement = placement;
         Girl.Animator.Physics?.Reset();
         Begin();
+    }
+
+    /// <summary>Where the scene stands (the H point).</summary>
+    public Matrix4x4 Placement { get; private set; }
+
+    /// <summary>
+    /// Moves the fluid sideways so that its root (o01_N_shiru, at the current clip's start) is under the girl's crotch
+    /// locator o01_N_Sio. The data puts it at a fixed spot of the scene, which does not meet her crotch with the H points'
+    /// placement here (the exe's own placement of the effect is not decoded).
+    /// </summary>
+    protected void PutLiquidUnderCrotch()
+    {
+        if (Liquid is not { } liquid || liquid.Animator.Body is not { } body)
+            return;
+        var rig = liquid.Model.Rig;
+        int root = rig.Find("o01_N_shiru"), crotch = Girl.Model.Rig.Find("o01_N_Sio");
+        if (root < 0 || crotch < 0)
+            return;
+        var local = new Matrix4x4[rig.Count];
+        body.Evaluate(local);
+        var world = new Matrix4x4[rig.Count];
+        rig.ComputeWorld(local, world);
+        var from = Vector3.Transform(world[root].Translation, Placement);
+        var to = Girl.Animator.WorldOf(crotch).Translation;
+        liquid.Animator.Placement = Placement * Matrix4x4.CreateTranslation(to.X - from.X, 0, to.Z - from.Z);
+        liquid.Animator.Invalidate();
     }
 
     /// <summary>The first clip.</summary>
@@ -180,6 +287,11 @@ public abstract class CoupleSession
         if (ManBody.Current?.Index != clip.Index)
             ManBody.Play(clip.Index);
         Body.SpeedScale = ManBody.SpeedScale = SpeedFor(clip);
+        if (LiquidFollowsClips && Liquid?.Animator.Body is { } liquid)
+        {
+            liquid.Play(clip.Index);
+            liquid.SpeedScale = Body.SpeedScale;
+        }
         if (_events.TryGetValue(clip.Index, out var e))
         {
             Girl.Animator.Face?.SetExpression(e.Expression, e.Expression);

@@ -97,7 +97,12 @@ public sealed class FeraSession : CoupleSession
         VoiceLibrary? voices = null, AudioSystem? audio = null)
     {
         var parts = Load(fs, assembler, girl, 131, "lh04_00_01_00_00.lst", $"lp04_{Math.Clamp(level, 4, 5):00}_01_00_00.lst", voices, audio);
-        return new FeraSession(parts, level >= 5 ? "フェラ前淫乱" : "フェラ前羞恥");
+        var session = new FeraSession(parts, level >= 5 ? "フェラ前淫乱" : "フェラ前羞恥");
+        // The fluid of the finish (ek05_00_01), with the same clips as the scene.
+        session.LoadLiquid(fs, "ek05_00_01_00_00.xx", "ek05_00_01_00_00.xa");
+        session.LiquidFollowsClips = true;
+        session.LiquidVisible = session.Liquid is not null;
+        return session;
     }
 
     protected override void Begin()
