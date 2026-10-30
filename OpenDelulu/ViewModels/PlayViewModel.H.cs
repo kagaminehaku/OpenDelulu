@@ -486,6 +486,8 @@ public sealed partial class PlayViewModel
                 case HSession { State: HState.Ready }:
                     owner.FinishH();
                     return true;
+                case HSession { State: HState.Standby } standby:
+                    return standby.TouchAt(ray);
                 case FeraSession { Working: true } fera:
                     fera.Strong = true;
                     return true;

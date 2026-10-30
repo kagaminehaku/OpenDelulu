@@ -1,4 +1,5 @@
 using OpenDelulu.Engine.Animation;
+using OpenDelulu.Engine.Assets;
 using OpenDelulu.Engine.Audio;
 using OpenDelulu.Engine.Characters;
 
@@ -289,6 +290,47 @@ public sealed class HSession : CoupleSession
             After = ("F待機", $"F待機→F待機({target})");
         RaiseCame(false);
         return true;
+    }
+
+    /// <summary>
+    /// A press on her at standby, by the hidden touch area hit (the o01_A_* meshes listed in la02 like the oil scene's
+    /// la01): face or head キス, breasts 乳もみ (a nipple while kneading: ブラずらし), crotch front 股間いじり(前),
+    /// buttocks, hips or crotch back パンツずらし. Pressing the touch going on gives a small (sometimes big) reaction.
+    /// The exe's own choice from la02 is not decoded. Returns false when nothing happened.
+    /// </summary>
+    public bool TouchAt(in Ray ray)
+    {
+        if (State != HState.Standby)
+            return false;
+        (string Frame, float Distance)? best = null;
+        foreach (var mesh in Girl.Model.Meshes)
+        {
+            if (mesh.PartName != "body" || !mesh.FrameName.StartsWith("o01_A_", StringComparison.Ordinal))
+                continue;
+            if (MeshPicking.Raycast(ray, mesh, Girl.Animator.WorldOf(mesh.FrameIndex)) is { } hit && (best is null || hit.Distance < best.Value.Distance))
+                best = (mesh.FrameName, hit.Distance);
+        }
+        if (best is not { Frame: var frame })
+            return false;
+        string? touch = frame.Contains("Kao", StringComparison.Ordinal) || frame.Contains("Atama", StringComparison.Ordinal) ? "キス"
+            : frame.Contains("Titi", StringComparison.Ordinal) && Clip.StartsWith("乳もみ", StringComparison.Ordinal) ? "ブラずらし"
+            : frame.Contains("Titi", StringComparison.Ordinal) || frame.Contains("Mune", StringComparison.Ordinal) ? "乳もみ"
+            : frame.Contains("KokanF", StringComparison.Ordinal) ? "股間いじり(前)"
+            : frame.Contains("KokanB", StringComparison.Ordinal) || frame.Contains("Siri", StringComparison.Ordinal) || frame.Contains("Kosi", StringComparison.Ordinal) ? "パンツずらし"
+            : null;
+        if (touch is null)
+            return false;
+        string c = Clip;
+        if (c == $"{touch}ループ")
+            return Play($"{touch}{(Random.Next(4) == 0 ? "大" : "小")}反応");
+        if (c.EndsWith("ループ", StringComparison.Ordinal) && c != "Z待機")
+        {
+            // Another touch going on: back to standby first.
+            string current = c[..^3];
+            After = ("Z待機", $"Z待機→{touch}");
+            return Play($"{current}→Z待機");
+        }
+        return Touch(touch);
     }
 
     /// <summary>A touch from standby (キス, 乳もみ, ブラずらし, 股間いじり(前), パンツずらし, オナニー); again stops it.</summary>
