@@ -593,10 +593,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         _oilTimer.Stop();
         CancelOilActions();
         if (_memoryReplay is null)
-        {
-            GainLove(15);
             UnlockRandomAccessories();
-        }
         HideOilHud();
         TouchHandler = null;
         oil.SoundEffect -= Sfx;
@@ -841,8 +838,6 @@ public sealed partial class PlayViewModel : ViewModelBase
             Status = F("date.loadError", ex.Message);
             return;
         }
-        if (_memoryReplay is null)
-            GainLove(25);
         var points = _stage.PointGroup("Date");
         int index = points.ToList().FindIndex(p => p.Name == $"o01_N_Point_Date{DatePoint(activity.Number):00}");
         _point = index >= 0 ? index : activity.Number - 1;
@@ -1170,7 +1165,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         int girl = _girl.Girl.Id;
         var options = new List<(string, Action)>
         {
-            (T("play.talk"), () => { GainLove(5); RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu); }),
+            (T("play.talk"), () => RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu)),
             (T("play.date"), ShowActivities),
         };
         // The original date menu (ds01_03) has clothes, oil, H and goodbye; the text menu keeps the rest.
@@ -1202,7 +1197,10 @@ public sealed partial class PlayViewModel : ViewModelBase
                 return false;
             int girl = _girl.Girl.Id;
             int maxLevel = GameEvents.Levels(_library, girl).DefaultIfEmpty(1).Max();
-            return Progress.Intimacy < maxLevel && GameEvents.Find(_library, girl, Progress.Intimacy, EventKind.LeadIn) is not null;
+            // Her love has to be full first (it starts again from 0 at each level, as the original saves show); games
+            // from before the unlocks keep the old free lead-in.
+            bool loveFull = _progress.Swimsuits is null || Progress.Love >= 255;
+            return loveFull && Progress.Intimacy < maxLevel && GameEvents.Find(_library, girl, Progress.Intimacy, EventKind.LeadIn) is not null;
         }
     }
 
@@ -1224,5 +1222,5 @@ public sealed partial class PlayViewModel : ViewModelBase
         });
     }
 
-    void Goodbye() => Confirm(QuestionEndDate, "confirm.endDate", () => RunEvent(EventKind.Parting, Leave), ShowMenu);
+    void Goodbye() => Confirm(QuestionEndDate, "confirm.endDate", () => RunEvent(EventKind.Parting, () => { DateDone(); SaveProgress(); Leave(); }), ShowMenu);
 }

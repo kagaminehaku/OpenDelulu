@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using OpenDelulu.Engine.Game;
 
@@ -6,7 +7,7 @@ namespace OpenDelulu.ViewModels;
 /// <summary>
 /// The exe's unlocks during play (<see cref="Unlocks"/>): a girl's first pick opens her reward, love from dates, oil
 /// and H raises the unlock rank, level 5 with full love completes her, and the end of an oil or H scene opens three
-/// random accessories. The love amounts are not decoded: talking 5, a date activity 25, oil 15, H 30.
+/// random accessories. Love comes from the date's end, by level (lg00, see <see cref="Unlocks.DateLove"/>).
 /// </summary>
 public sealed partial class PlayViewModel
 {
@@ -17,6 +18,17 @@ public sealed partial class PlayViewModel
         if (Unlocks.Meet(_progress, girlId))
             AnnounceUnlocks(suits, accessories);
         ApplyRank();
+    }
+
+    int[]? _dateLove;
+
+    /// <summary>The date is over (she said goodbye): her love grows by her level's amount.</summary>
+    void DateDone()
+    {
+        if (_girl is null || _memoryReplay is not null || _photoShoot)
+            return;
+        _dateLove ??= Unlocks.DateLove(_fs, _assembler.Database.TableArchive);
+        GainLove(_dateLove[Math.Clamp(Progress.Intimacy, 1, 5) - 1]);
     }
 
     void GainLove(int points)

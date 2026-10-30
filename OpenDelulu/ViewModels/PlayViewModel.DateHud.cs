@@ -77,6 +77,8 @@ public sealed partial class PlayViewModel
                     HideDateHud();
                     _ = StartHAsync(0, levelUp: false);
                 }
+                else if (_progress.Swimsuits is not null && Progress.Love < 255)
+                    ShowStatus(F("play.loveNotFull", Progress.Love), seconds: 3);
                 else
                     ShowStatus(T("play.noLeadIn"), seconds: 3);
                 break;

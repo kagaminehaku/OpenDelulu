@@ -200,7 +200,6 @@ public sealed partial class PlayViewModel
             Leave();
             return;
         }
-        GainLove(30);
         UnlockRandomAccessories();
         EndCouple();
         UpdateMusic();

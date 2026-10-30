@@ -162,6 +162,31 @@ public static class Unlocks
         return opened;
     }
 
-    /// <summary>Love points of an event (the exe's amounts are not decoded): capped at 255.</summary>
+    /// <summary>Love points: capped at 255.</summary>
     public static void AddLove(GirlProgress girl, int points) => girl.Love = Math.Clamp(girl.Love + points, 0, 255);
+
+    /// <summary>
+    /// Love gained by a completed date at each level 1..5 (exe 0x4C8750: love += settings[level − 1], the settings
+    /// being lg00 row 1 columns 36..40): 85, 51, 37, 26, 17, so 3, 5, 7, 10 and 15 dates fill her love.
+    /// </summary>
+    public static readonly int[] DefaultDateLove = [85, 51, 37, 26, 17];
+
+    /// <summary>The date love of lg00 (row 1, columns 36..40), or <see cref="DefaultDateLove"/>.</summary>
+    public static int[] DateLove(GameFileSystem fs, string tableArchive)
+    {
+        try
+        {
+            var row = fs.ReadTable(tableArchive, "lg00_00_00_00_00.lst").Rows.FirstOrDefault(r => r.Length > 40 && r[0] == "1");
+            if (row is not null)
+            {
+                var values = Enumerable.Range(36, 5).Select(c => int.TryParse(row[c], out int v) ? v : 0).ToArray();
+                if (values.All(v => v > 0))
+                    return values;
+            }
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
+        {
+        }
+        return DefaultDateLove;
+    }
 }

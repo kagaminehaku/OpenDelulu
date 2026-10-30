@@ -137,6 +137,7 @@
   "play.leave": "Rời đi",
   "play.loadError": "Không tải được: {0}",
   "play.loading": "Đang tải sân khấu…",
+  "play.loveNotFull": "Tình cảm của cô ấy chưa đầy ({0}/255): hẹn hò thêm đã.",
   "play.menu": "{0} · thân mật {1}. Làm gì tiếp?",
   "play.move": "Đi chỗ khác",
   "play.nextLevel": "Tiến tới thân mật {0}",

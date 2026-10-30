@@ -137,6 +137,7 @@
   "play.leave": "Leave",
   "play.loadError": "Could not load: {0}",
   "play.loading": "Loading the stage…",
+  "play.loveNotFull": "Her love is not full yet ({0}/255): more dates first.",
   "play.menu": "{0} · intimacy {1}. What next?",
   "play.move": "Go somewhere else",
   "play.nextLevel": "Go further (intimacy {0})",
