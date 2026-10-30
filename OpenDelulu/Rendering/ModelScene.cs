@@ -366,6 +366,12 @@ public sealed class ModelScene
     }
 
     /// <summary>Call after changing an animator (clip, expression, play state, placement).</summary>
+    /// <summary>
+    /// A screenshot asked for: the backend that draws the scene next calls it with that frame (RGBA rows from the top,
+    /// width, height) and clears it.
+    /// </summary>
+    public Action<byte[], int, int>? CaptureRequest { get; set; }
+
     public void NotifyChanged()
     {
         foreach (var o in _objects)

@@ -125,6 +125,8 @@
   "oil.status": "Dầu đã phủ {0}% da",
   "picker.title": "Chọn thư mục chứa SexyBeach3",
   "play.album": "Album CG",
+  "play.captureError": "Không lưu được ảnh chụp: {0}",
+  "play.captured": "Đã lưu ảnh chụp: {0}",
   "play.changeSwimsuit": "Thay đồ bơi…",
   "play.date": "Hẹn hò…",
   "play.enter": "Vào game",

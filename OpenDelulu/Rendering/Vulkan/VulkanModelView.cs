@@ -122,6 +122,11 @@ internal sealed class VulkanModelView : Control, IModelViewBackend
             bool animating;
             using (_swapchain.BeginDraw(size, out var image))
                 animating = _renderer.Render(image, Scene, Camera, _clock.Tick());
+            if (Scene?.CaptureRequest is { } capture)
+            {
+                Scene.CaptureRequest = null;
+                capture(_renderer.ReadPixels(), size.Width, size.Height);
+            }
             if (animating)
                 RequestFrame();
             else

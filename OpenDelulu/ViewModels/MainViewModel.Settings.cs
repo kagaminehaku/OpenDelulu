@@ -104,6 +104,9 @@ public partial class MainViewModel
             case Key.M:
                 IsMuted = !IsMuted;
                 return true;
+            case Key.F12 or Key.PrintScreen when SelectedTab == 0 && Play is { } shooter:
+                shooter.Capture();
+                return true;
         }
 
         if (SelectedTab == 0 && Play is { IsConfirming: true } asking && key is Key.Y or Key.Enter or Key.N)
