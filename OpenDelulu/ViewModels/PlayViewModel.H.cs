@@ -237,7 +237,8 @@ public sealed partial class PlayViewModel
         CoupleHud?.Tick(seconds);
         if (Environment.TickCount64 < _statusHoldUntil)
             return;
-        string hint = couple switch
+        // CONFIG's Help: the hints of what to press (the exe's help labels the touch actions in these scenes).
+        string hint = !Services.GameConfig.Current.ShowHelp ? "" : couple switch
         {
             HSession { State: HState.Standby } => T("h.hintStandby"),
             HSession { State: HState.Inserted or HState.Moving } => T("h.hintInserted"),
@@ -247,7 +248,7 @@ public sealed partial class PlayViewModel
             HapSession { Pace: < 2 } => T("h.hintHap"),
             _ => "",
         };
-        Status = F("h.status", (int)Math.Round(couple.Excitement * 100), hint);
+        Status = F("h.status", (int)Math.Round(couple.Excitement * 100), hint).TrimEnd(' ', '—');
     }
 
     // ------------------------------------------------------------------ menus
