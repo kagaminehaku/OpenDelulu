@@ -12,6 +12,13 @@ public sealed partial class PlayViewModel
 {
     public IReadOnlyList<MemorySprite> StatusSprites { get; private set; } = [];
 
+    /// <summary>The system menu's Sinmitu button shows and hides the panel.</summary>
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+    [CommunityToolkit.Mvvm.ComponentModel.NotifyPropertyChangedFor(nameof(ShowStatusPanel))]
+    public partial bool IsStatusPanelShown { get; set; } = true;
+
+    public bool ShowStatusPanel => InGame && IsStatusPanelShown;
+
     void RefreshStatus()
     {
         var sprites = new List<MemorySprite>();
@@ -25,7 +32,7 @@ public sealed partial class PlayViewModel
             Add(8, 104, 80, 80, $"st00_06_02_{(int)stage.Variant.Time:00}_00.tga");
             var progress = _progress.For(girl.Girl.Id);
             Add(0, 184, 64, 56, $"st00_06_04_{Math.Clamp(progress.Intimacy, 1, 5):00}_00.tga");
-            if (progress.AlbumPictures.Contains(5))
+            if (progress.Completed || progress.AlbumPictures.Contains(5))
                 Add(0, 232, 64, 56, "st00_06_04_06_00.tga");
         }
         StatusSprites = sprites;

@@ -199,7 +199,7 @@
                     </StackPanel>
                     <Grid Grid.Column="1" Margin="8">
                         <r:ModelViewer Scene="{Binding Scene}" DefaultZoom="0.6" TouchHandler="{Binding TouchHandler}" />
-                        <v:StatusView IsVisible="{Binding InGame}" />
+                        <v:StatusView IsVisible="{Binding ShowStatusPanel}" />
                         <v:PhotoView IsVisible="{Binding IsPhotoMenuVisible}" />
                         <v:LobbyView IsVisible="{Binding IsLobbyVisible}" />
                         <ContentControl Content="{Binding Dialogue}" VerticalAlignment="Bottom" />

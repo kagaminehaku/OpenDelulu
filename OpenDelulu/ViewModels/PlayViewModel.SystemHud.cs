@@ -113,10 +113,16 @@ public sealed partial class PlayViewModel
                 CloseSystemDrop();
                 ConfigRequested?.Invoke(key switch { "Sistem" => 0, "Game" => 1, _ => 2 });
                 return;
-            case "Sinmitu" or "Item":
-                // 57_status and the item list are not built yet.
+            case "Sinmitu":
+                // The intimacy status panel (57_status) on and off.
                 CloseSystemDrop();
-                ShowStatus(T("play.notYet"), seconds: 3);
+                IsStatusPanelShown = !IsStatusPanelShown;
+                return;
+            case "Item":
+                // The exe switches to a scene whose contents are not decoded: the unlocked items are told instead.
+                CloseSystemDrop();
+                ShowStatus(F("play.items", _progress.Swimsuits?.Count ?? _girl?.Girl.Swimsuits.Count ?? 0,
+                    _progress.Accessories?.Count ?? 0), seconds: 4);
                 return;
             case "Title" or "Ticket":
                 // No ticket counter yet: it goes back to choosing a girl.

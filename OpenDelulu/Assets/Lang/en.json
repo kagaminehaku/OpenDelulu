@@ -131,6 +131,7 @@
   "play.girl": "Girl",
   "play.girlChoice": "{0} · intimacy {1}",
   "play.goodbye": "Say goodbye",
+  "play.items": "Unlocked: {0} swimsuits, {1} accessories",
   "play.leave": "Leave",
   "play.loadError": "Could not load: {0}",
   "play.loading": "Loading the stage…",

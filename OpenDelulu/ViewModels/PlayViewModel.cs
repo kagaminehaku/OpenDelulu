@@ -125,7 +125,9 @@ public sealed partial class PlayViewModel : ViewModelBase
     [ObservableProperty] public partial int SelectedTimeIndex { get; set; } = 1;
     [ObservableProperty] public partial ModelScene? Scene { get; set; }
     [ObservableProperty] public partial bool IsBusy { get; set; }
-    [ObservableProperty] public partial bool InGame { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowStatusPanel))]
+    public partial bool InGame { get; set; }
     [ObservableProperty] public partial string Status { get; set; } = T("play.prompt");
 
     // ------------------------------------------------------------------ movies
