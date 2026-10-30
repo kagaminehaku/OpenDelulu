@@ -9,8 +9,8 @@ namespace OpenDelulu.ViewModels;
 
 /// <summary>
 /// Screenshots like the exe (GameMainCtrl 0x4036B0, asked by the scenes' flag +0xA18D with the shutter se07): the 3D view
-/// saved as data/cap/YYYY_MMDD_HHMM_SSmmm.bmp of the edition whose saves are used (F12 or Print Screen). Only the Vulkan
-/// view can read its frame back.
+/// saved as data/cap/YYYY_MMDD_HHMM_SSmmm.bmp of the edition whose saves are used (F12 or Print Screen). Both views
+/// read back the frame they draw next.
 /// </summary>
 public sealed partial class PlayViewModel
 {

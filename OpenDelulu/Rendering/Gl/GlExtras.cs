@@ -1,3 +1,4 @@
+using System;
 using Avalonia.OpenGL;
 
 namespace OpenDelulu.Rendering.Gl;
@@ -19,6 +20,7 @@ internal sealed unsafe class GlExtras
     readonly delegate* unmanaged[Stdcall]<byte, byte, byte, byte, void> _colorMask;
     readonly delegate* unmanaged[Stdcall]<int, void> _disableVertexAttribArray;
     readonly delegate* unmanaged[Stdcall]<int, float, float, float, float, void> _vertexAttrib4f;
+    readonly delegate* unmanaged[Stdcall]<int, int, int, int, int, int, void*, void> _readPixels;
 
     public GlExtras(GlInterface gl)
     {
@@ -29,6 +31,7 @@ internal sealed unsafe class GlExtras
         _colorMask = (delegate* unmanaged[Stdcall]<byte, byte, byte, byte, void>)gl.GetProcAddress("glColorMask");
         _disableVertexAttribArray = (delegate* unmanaged[Stdcall]<int, void>)gl.GetProcAddress("glDisableVertexAttribArray");
         _vertexAttrib4f = (delegate* unmanaged[Stdcall]<int, float, float, float, float, void>)gl.GetProcAddress("glVertexAttrib4f");
+        _readPixels = (delegate* unmanaged[Stdcall]<int, int, int, int, int, int, void*, void>)gl.GetProcAddress("glReadPixels");
         if (_uniform4f == null || _uniform3f == null || _blendFunc == null || _colorMask == null || _disableVertexAttribArray == null
             || _vertexAttrib4f == null)
             throw new System.NotSupportedException("Required GL functions are missing.");
@@ -41,6 +44,18 @@ internal sealed unsafe class GlExtras
     public void Uniform3f(int location, float x, float y, float z) => _uniform3f(location, x, y, z);
 
     public void BlendFunc(int src, int dst) => _blendFunc(src, dst);
+
+    /// <summary>The bound framebuffer's pixels as RGBA rows from the top (screenshots).</summary>
+    public byte[] ReadPixels(int width, int height)
+    {
+        var bottomUp = new byte[width * height * 4];
+        fixed (byte* p = bottomUp)
+            _readPixels(0, 0, width, height, 0x1908 /* GL_RGBA */, 0x1401 /* GL_UNSIGNED_BYTE */, p);
+        var rows = new byte[bottomUp.Length];
+        for (int y = 0; y < height; y++)
+            bottomUp.AsSpan((height - 1 - y) * width * 4, width * 4).CopyTo(rows.AsSpan(y * width * 4));
+        return rows;
+    }
 
     public void DisableVertexAttribArray(int index) => _disableVertexAttribArray(index);
 

@@ -233,6 +233,11 @@ internal sealed class GlModelView : OpenGlControlBase, IModelViewBackend
         gl.Disable(GL_DEPTH_TEST);
         if (_vao != 0) gl.BindVertexArray(0);
         gl.UseProgram(0);
+        if (scene.CaptureRequest is { } capture)
+        {
+            scene.CaptureRequest = null;
+            capture(_ext!.ReadPixels(width, height), width, height);
+        }
     }
 
     /// <summary>Uploads the vertex colours the scene recomputed (Direct3D 9 fixed-function lighting).</summary>
