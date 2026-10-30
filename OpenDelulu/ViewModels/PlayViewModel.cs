@@ -524,6 +524,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             session.Attach();
             session.Refused += _ => ShowStatus(F("oil.refused", CharacterDatabase.NameOf(girl.Girl.Id)), seconds: 3);
             session.ActionsOffered += OfferActions;
+            session.SoundEffect += Sfx;
             _oil = session;
             UpdateMusic();
             _activity = null;
@@ -563,6 +564,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         }
         HideOilHud();
         TouchHandler = null;
+        oil.SoundEffect -= Sfx;
         oil.End();
         oil.Detach();
         _oil = null;

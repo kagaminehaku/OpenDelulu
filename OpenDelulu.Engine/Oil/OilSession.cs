@@ -113,6 +113,14 @@ public sealed class OilSession
     /// </summary>
     public event Action<OilTouchArea, IReadOnlyList<OilAction>>? ActionsOffered;
 
+    /// <summary>
+    /// A sound effect (se number): oil landing on her skin, se10..12 at random (exe 0x4A7F23, when the drip's hit test
+    /// meets the body), here twice a second while pouring.
+    /// </summary>
+    public event Action<int>? SoundEffect;
+
+    double _nextSplash;
+
     OilSession(Character girl, OilPose pose, AnimationPlayer body, OilTables tables, int level, VoiceLibrary? voices, AudioSystem? audio,
         Prop? rightHand, Prop? leftHand, IEnumerable<Prop> drips)
     {
@@ -600,7 +608,14 @@ public sealed class OilSession
         }
 
         if (_pouring)
+        {
+            if ((_nextSplash -= seconds) <= 0)
+            {
+                SoundEffect?.Invoke(10 + _random.Next(3));
+                _nextSplash = 0.5;
+            }
             return Coating.Paint(_point, BrushRadius * 1.2f, (float)seconds * 2.5f);
+        }
 
         if (!_touching || _state is not { } state)
             return false;
