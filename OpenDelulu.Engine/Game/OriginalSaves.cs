@@ -10,7 +10,8 @@ namespace OpenDelulu.Engine.Game;
 /// <list type="bullet">
 /// <item>saveN000 (tickets): +0x00 seconds, +0x04 hours, +0x08 minutes, +0x0C milliseconds of play, +0x14 days, +0x18
 /// time of day, +0x1C one "clear" byte and +0x30 one level byte per girl (by <see cref="Unlocks.Girls"/>).</item>
-/// <item>saveN001 (item list): the same play time, then day / time of day, the album flags (20 bytes per girl id from
+/// <item>saveN001 (item list): the same play time, then day / time of day, the stages visited per time of day (45
+/// bytes), the album flags (20 bytes per girl id from
 /// +0x18), the best unlock rank +0x1CC, the swimsuits +0x3E6 (one byte per lbNN row) and accessories +0xDE0 (128 per lc
 /// table), 0 = locked.</item>
 /// <item>saveNCC0 (one per girl, CC = 1.. in the order of <see cref="PersonalGirls"/>): +0x04 level, +0x05 love, +0x06
@@ -173,6 +174,10 @@ public static class OriginalSaves
             for (int key = 0; key < accessories.Length; key++)
                 if (accessories[key] != 0)
                     progress.Accessories[key] = accessories[key];
+            var seen = items.Fields[9].Data;
+            for (int i = 0; i < seen.Length; i++)
+                if (seen[i] != 0)
+                    progress.StagesSeen.Add(i);
             foreach (var (id, pictures) in Pictures(items))
                 progress.For(id).AlbumPictures = [.. pictures.Order()];
         }
@@ -244,6 +249,11 @@ public static class OriginalSaves
         items.Set(items.Fields[5].Name, progress.Day);
         items.Set(items.Fields[6].Name, progress.TimeOfDay);
         items.Set("+0x1CC", Math.Clamp(progress.Rank, 0, 15));
+        var stages = (byte[])items.Fields[9].Data.Clone();
+        foreach (int i in progress.StagesSeen)
+            if (i >= 0 && i < stages.Length)
+                stages[i] = 1;
+        items.Set(items.Fields[9].Name, stages);
         if (progress.Swimsuits is { } suits)
         {
             var bytes = new byte[256];
@@ -309,11 +319,12 @@ public static class OriginalSaves
     /// <summary>An item list for a slot without one: everything locked, the flags the exe sets for a game set.</summary>
     static SaveFile NewItemList(bool plus)
     {
+        // As the exe's new game (0x4034F0): day 1, time 1, +0xBA8 1, the girls' and stages' flags clear.
         var items = SaveFile.Empty(SaveKind.ItemList, plus);
         items.Set(items.Fields[0].Name, 1);
+        items.Set(items.Fields[5].Name, 1);
+        items.Set(items.Fields[6].Name, 1);
         items.Set(items.Fields[7].Name, 1);
-        items.Set(items.Fields[8].Name, Enumerable.Repeat((byte)1, 7).ToArray());
-        items.Set(items.Fields[9].Name, Enumerable.Repeat((byte)1, 45).ToArray());
         items.Set(plus ? "+0x13AC" : "+0x13AA", Enumerable.Repeat((byte)1, 7).ToArray());
         items.Set(plus ? "+0x13B8" : "+0x13B6", 0x01010101);
         return items;

@@ -123,6 +123,12 @@ public sealed class GameProgress
     /// <summary>Unlocked accessories: lc table index (0 = lc01) × 128 + row → state (item list save +0xDE0).</summary>
     public Dictionary<int, int>? Accessories { get; set; }
 
+    /// <summary>
+    /// Stages visited per time of day: (stage − 1) × 5 + time index (0..4), the item list save's 45 bytes at +0xBDE; the
+    /// stage introduction movie plays on the first visit only.
+    /// </summary>
+    public List<int> StagesSeen { get; set; } = [];
+
     /// <summary>The highest unlock rank reached, 0..15 (item list save +0x1CC).</summary>
     public int Rank { get; set; }
 

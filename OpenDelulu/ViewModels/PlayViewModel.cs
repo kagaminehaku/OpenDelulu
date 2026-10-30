@@ -144,6 +144,7 @@ public sealed partial class PlayViewModel : ViewModelBase
     /// <summary>
     /// The stage introduction of the original's date scene (05_date): sb3_0011..0025.mpg, three per stage 1..5 for day,
     /// evening and night (the exe's table lists morning/noon, evening, night/late night per stage). Null for other stages.
+    /// Like the exe it plays the first time the stage is visited at a time of day.
     /// </summary>
     static string? StageMovie(int stage, StageTime time)
     {
@@ -261,8 +262,14 @@ public sealed partial class PlayViewModel : ViewModelBase
             int? swimsuit = _progress.For(choice.Id).SwimsuitRow;
             // The stage loads while its introduction movie plays (as the original's date scene does).
             var loading = Task.Run(() => (Stage.Load(_fs, variant, stageInfo.Obstacles), _assembler.Build(SpecFor(choice.Id, swimsuit))));
-            if (StageMovie(stageInfo.Id, Time) is { } movie)
-                await PlayMovieAsync(movie);
+            // Only on the first visit of the stage at that time of day (item list save +0xBDE, 9 stages × 5 times).
+            int seen = (stageInfo.Id - 1) * 5 + SelectedTimeIndex;
+            if (!_progress.StagesSeen.Contains(seen) && _memoryReplay is null && !_photoShoot)
+            {
+                _progress.StagesSeen.Add(seen);
+                if (StageMovie(stageInfo.Id, Time) is { } movie)
+                    await PlayMovieAsync(movie);
+            }
             var (stage, girl) = await loading;
             _stage = stage;
             _girl = girl;
