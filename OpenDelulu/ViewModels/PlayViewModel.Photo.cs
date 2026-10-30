@@ -30,7 +30,7 @@ public sealed partial class PlayViewModel
     // Which pose set (1 Gravure pa0B_01, 2 the smaller pa0B_02) and the Item / Auto Camera buttons.
     int _photoSet;
     string? _photoArchive;
-    bool _photoItem, _photoAutoCamera;
+    bool _photoItem, _photoAutoCamera, _photoWhiten;
 
     [ObservableProperty] public partial bool IsPhotoMenuVisible { get; set; }
     [ObservableProperty] public partial bool IsPhotoMenuFolded { get; set; }
@@ -189,7 +189,10 @@ public sealed partial class PlayViewModel
             string skin = Math.Clamp(_photoSkin, 0, 100).ToString("000");
             for (int i = 0; i < 3; i++)
                 Add(919 + 19 * i, 433, 32, 32, Digit(skin[i] - '0'));
-            Add(863, 466, 64, 24, "st11_04_00_00_00.tga");
+            if (_photoWhiten)
+                Add(937, 466, 64, 24, "st11_05_00_00_00.tga");
+            else
+                Add(863, 466, 64, 24, "st11_04_00_00_00.tga");
             if (_photoItem)
                 Add(856, 561, 152, 24, "st11_06_00_00_00.tga");
             if (_photoAutoCamera)
@@ -221,6 +224,14 @@ public sealed partial class PlayViewModel
                 ApplyPhoto();
                 return true;
             }
+        if (y is >= 466 and < 490 && (x is >= 863 and < 927 || x is >= 937 and < 1001))
+        {
+            // Suntan or Whiten: what the Skin percentage does.
+            _photoWhiten = x >= 937;
+            FillPhotoMenu();
+            _ = ApplyPhotoSkinAsync();
+            return true;
+        }
         if ((y is >= 495 and < 519 || y is >= 525 and < 549) && (left || right))
         {
             int step = (y >= 525 ? 10 : 1) * (right ? 1 : -1);
@@ -267,7 +278,7 @@ public sealed partial class PlayViewModel
         await Task.Delay(300);
         if (wanted != _photoSkin || _girl is not { } current || IsBusy)
             return;
-        var spec = SpecFor(current.Girl.Id, Progress.SwimsuitRow) with { Tan = wanted / 100.0 };
+        var spec = SpecFor(current.Girl.Id, Progress.SwimsuitRow) with { Tan = (_photoWhiten ? -wanted : wanted) / 100.0 };
         IsBusy = true;
         try
         {
@@ -289,7 +300,7 @@ public sealed partial class PlayViewModel
         OnPropertyChanged(nameof(PhotoSprites));
         _photoShoot = false;
         _photoPoses = null;
-        _photoItem = _photoAutoCamera = false;
+        _photoItem = _photoAutoCamera = _photoWhiten = false;
         _prop = null;
         _photoReturn = toSelect;
         Leave();
