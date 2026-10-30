@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OpenDelulu.Engine.Audio;
+using OpenDelulu.Engine.Game;
 using OpenDelulu.Engine.Script;
 
 namespace OpenDelulu.ViewModels;
@@ -58,9 +60,32 @@ public sealed partial class PlayViewModel
             RunLobbyScript("c99_00_00");
         }
         else if (backFromIsland)
-            RunLobbyScript("c99_00_01");
+            RunLobbyScript("c99_00_01", TellUnlocks);
         else
             Dialogue.Hide();
+    }
+
+    /// <summary>
+    /// Back from the island: what was unlocked there (s00..s14, sb_LobbyScene 0x4E35D0: script = suit + 2 accessory + 4 oil
+    /// + 8 hairstyle − 1), then once every girl is completed the "limitations removed" message (e99).
+    /// </summary>
+    void TellUnlocks()
+    {
+        int bits = _progress.PendingUnlocks & 15;
+        _progress.PendingUnlocks = 0;
+        void Clear()
+        {
+            bool all = Unlocks.Girls.Take(7).All(id => _progress.Girls.TryGetValue(id, out var g) && g.Completed);
+            if (all && !_progress.ClearMessageShown)
+            {
+                _progress.ClearMessageShown = true;
+                RunLobbyScript("e99_00_00");
+            }
+        }
+        if (bits > 0)
+            RunLobbyScript($"s{bits - 1:00}_00_00", Clear);
+        else
+            Clear();
     }
 
     void RunLobbyScript(string name, Action? then = null, Func<int, int>? query = null)

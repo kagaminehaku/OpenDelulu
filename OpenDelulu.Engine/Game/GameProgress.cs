@@ -132,6 +132,15 @@ public sealed class GameProgress
     /// <summary>The highest unlock rank reached, 0..15 (item list save +0x1CC).</summary>
     public int Rank { get; set; }
 
+    /// <summary>
+    /// What was unlocked on the island since the last lobby visit, told there by the front desk (s00..s14, script =
+    /// bits − 1): 1 swimsuit, 2 accessory, 4 oil, 8 hairstyle.
+    /// </summary>
+    public int PendingUnlocks { get; set; }
+
+    /// <summary>The "all limitations removed" message (e99) after every girl was completed has been shown.</summary>
+    public bool ClearMessageShown { get; set; }
+
     /// <summary>The original save slot this progress came from or goes to (data/save/saveN…), 0 = none.</summary>
     public int OriginalSlot { get; set; }
 

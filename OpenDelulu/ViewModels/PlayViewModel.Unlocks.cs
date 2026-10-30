@@ -57,5 +57,7 @@ public sealed partial class PlayViewModel
             parts.Add(F("play.unlockedAccessories", accessories));
         if (parts.Count > 0)
             ShowStatus(F("play.unlocked", string.Join(", ", parts)), seconds: 4);
+        // The front desk tells it again back in the lobby, like the exe.
+        _progress.PendingUnlocks |= (suits > 0 ? 1 : 0) | (accessories > 0 ? 2 : 0);
     }
 }
