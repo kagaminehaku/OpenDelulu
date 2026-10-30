@@ -385,7 +385,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         var objects = new List<(RenderModel, CharacterAnimator?)> { (_stage.Model, _stage.Animator), (_girl.Model, _girl.Animator) };
         if (_prop is { } prop)
             objects.Add(prop);
-        _manObject = _liquidObject = _dropsObject = -1;
+        _manObject = _liquidObject = _dropsObject = _squirtObject = -1;
         if (_couple is { } couple)
         {
             _manObject = objects.Count;
@@ -399,6 +399,12 @@ public sealed partial class PlayViewModel : ViewModelBase
             {
                 _dropsObject = objects.Count;
                 objects.Add((drops.Model, drops.Animator));
+            }
+            if (couple is HSession { Squirt: { } squirt } && SquirtParticles() is { } spray)
+            {
+                _squirtObject = objects.Count;
+                objects.Add((squirt.Model, squirt.Animator));
+                objects.Add((spray.Model, null));
             }
         }
         _propObject = -1;
@@ -429,6 +435,12 @@ public sealed partial class PlayViewModel : ViewModelBase
         scene.SetObstacles(ObstaclesFor(_stage));
         RefreshStatus();
         scene.EraseObstacles = Services.GameConfig.Current.EraseObstacles;
+        if (_squirtObject >= 0 && _couple is HSession { Squirt: { } squirtFrames } && SquirtParticles() is { } spraySprites)
+        {
+            // The spray hangs on ek06's animated frame, placed at her crotch when her climax starts.
+            scene.SetObjectParticles(_squirtObject + 1, spraySprites, name =>
+                squirtFrames.Model.Rig.Find(name) is var frame and >= 0 ? squirtFrames.Animator.WorldOf(frame) : null);
+        }
         if (particleObject >= 0 && StageParticlesFor(_stage) is { } sprites)
         {
             var stage = _stage;
@@ -478,7 +490,20 @@ public sealed partial class PlayViewModel : ViewModelBase
         ShowStain();
     }
 
-    int _manObject = -1, _liquidObject = -1, _dropsObject = -1;
+    int _manObject = -1, _liquidObject = -1, _dropsObject = -1, _squirtObject = -1;
+
+    /// <summary>The H climax spray's particles (ld00 row 35: ek06 .ptcl), read once.</summary>
+    StageParticles? SquirtParticles()
+    {
+        const string key = "sb3_0100.pp/ek06_00_00_00_00.ptcl";
+        if (!_particleFiles.TryGetValue(key, out var particles))
+        {
+            try { particles = StageParticles.Load(OpenDelulu.Formats.Scene.PtclFile.Read(_fs.ReadReferenced("sb3_0100.pp", "ek06_00_00_00_00.ptcl")), "ek06_00_00_00_00.ptcl"); }
+            catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or EndOfStreamException) { particles = null; }
+            _particleFiles[key] = particles;
+        }
+        return particles;
+    }
 
     /// <summary>Shows the H scene's fluid while the scene wants it.</summary>
     void SyncLiquid()
@@ -487,6 +512,8 @@ public sealed partial class PlayViewModel : ViewModelBase
             return;
         if (_dropsObject >= 0)
             scene.SetObjectVisible(_dropsObject, couple.DropsVisible);
+        if (_squirtObject >= 0 && couple is HSession h)
+            scene.SetObjectVisible(_squirtObject + 1, h.SquirtVisible);
         if (_liquidObject < 0)
             return;
         scene.SetObjectVisible(_liquidObject, couple.LiquidVisible);

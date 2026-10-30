@@ -102,6 +102,8 @@ public sealed class HSession : CoupleSession
         session.LoadLiquid(fs, $"ek05_{file:00}_00_00_00.xx", $"ek05_{file:00}_00_00_00.xa");
         if (session.Liquid?.Animator.Body is { } liquid)
             liquid.HoldAtEnd = true;
+        // Her climax: ek06 (ld00 row 35), the frame p01_N_shiohuki its .ptcl spray hangs on (潮吹き, clip 1).
+        session.Squirt = LoadEffect(fs, "ek06_00_00_00_00.xx", "ek06_00_00_00_00.xa");
         // Coming outside: ek04 (ld00 row 36), a drop flying (飛びループ) then running down (垂れA..C).
         session.Drops = LoadEffect(fs, "ek04_00_00_00_00.xx", "ek04_00_00_00_00.xa");
         if (session.Drops?.Animator.Body is { } drops)
@@ -128,6 +130,12 @@ public sealed class HSession : CoupleSession
     /// </summary>
     public override void Update(double seconds)
     {
+        // The spray follows her crotch while it plays.
+        if (SquirtVisible && Squirt is { } squirt && Girl.Model.Rig.Find("o01_N_Sio") is int sio and >= 0)
+        {
+            squirt.Animator.Placement = Girl.Animator.WorldOf(sio);
+            squirt.Animator.Invalidate();
+        }
         if (Body.Current is not { IsStatic: false } clip)
             return;
         double now = Body.Time;
@@ -177,6 +185,15 @@ public sealed class HSession : CoupleSession
         string name = clip.Name;
         if (name == "F待機")
             RaiseSoundEffect(SoundEffects.Outside);
+        bool climax = name.Contains("アクション絶頂", StringComparison.Ordinal) || name.Contains("絶頂(中だし)", StringComparison.Ordinal)
+            || name.EndsWith("淫乱絶頂", StringComparison.Ordinal);
+        if (climax && !SquirtVisible && Squirt is { Animator.Body: { } spray } && Girl.Model.Rig.Find("o01_N_Sio") is int sio and >= 0)
+        {
+            Squirt.Animator.Placement = Girl.Animator.WorldOf(sio);
+            Squirt.Animator.Invalidate();
+            spray.Play(1);
+        }
+        SquirtVisible = climax;
         if (name.StartsWith("F待機(", StringComparison.Ordinal) && !name.Contains('→') && Drops is { Animator.Body: { } drops } && TargetFrame(name) is int frame)
         {
             // The drop lands on the target: its world position, standing up; the exe's placement is not decoded.
@@ -209,6 +226,12 @@ public sealed class HSession : CoupleSession
             Stroke();
         }
     }
+
+    /// <summary>The spray of her climax (ek06: a frame and its particles, see the .ptcl beside it), or null.</summary>
+    public Partner? Squirt { get; private set; }
+
+    /// <summary>Whether the spray plays now: during her climaxes (アクション絶頂, 絶頂(中だし), 淫乱絶頂).</summary>
+    public bool SquirtVisible { get; private set; }
 
     /// <summary>The girl's frame where he comes outside, by the F待機(…) target.</summary>
     int? TargetFrame(string clip)
