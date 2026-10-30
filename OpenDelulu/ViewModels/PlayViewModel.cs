@@ -80,7 +80,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             else if (e.PropertyName == nameof(Services.GameConfig.Crosshair) && Scene is not null)
                 BuildScene();
             else if (e.PropertyName is nameof(Services.GameConfig.BodyOpacity) or nameof(Services.GameConfig.DickOpacity)
-                     or nameof(Services.GameConfig.HandOpacity))
+                     or nameof(Services.GameConfig.HandOpacity) or nameof(Services.GameConfig.Clothes))
                 ApplyConfigOpacity();
         };
         Dialogue = new DialogueViewModel(fs, library)
@@ -513,6 +513,23 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (_propObject >= 0 && _oil is { } oil)
             for (int i = 0; i < oil.HandCount; i++)
                 scene.SetObjectOpacity(_propObject + i, _ => true, config.HandOpacity / 100f);
+        ApplyClothes();
+    }
+
+    /// <summary>
+    /// CONFIG's Ecchi "Clothes": off, the swimsuit's meshes (those with her suit texture) are hidden in the H, fera and
+    /// fetish scenes; the body under them is whole.
+    /// </summary>
+    void ApplyClothes()
+    {
+        if (Scene is not { } scene || _girl is not { } girl)
+            return;
+        bool hide = _couple is not null && !Services.GameConfig.Current.Clothes;
+        var suitTextures = girl.SwimsuitImages.Select(image => girl.Model.Textures.ToList().IndexOf(image)).Where(i => i >= 0).ToHashSet();
+        var meshes = scene.Meshes;
+        for (int m = 0; m < meshes.Count; m++)
+            if (girl.Model.Meshes.Contains(meshes[m]) && suitTextures.Contains(meshes[m].TextureIndex))
+                scene.SetVisible(m, !hide && meshes[m].Visible);
     }
 
     // ------------------------------------------------------------------ sun oil
