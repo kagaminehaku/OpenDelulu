@@ -13,6 +13,18 @@ public sealed class GirlProgress
     /// <summary>The first-meeting script of the current level was seen.</summary>
     public bool MetAtLevel { get; set; }
 
+    /// <summary>
+    /// 0..255, the exe's love points at her level (personal save +0x05): date activities, oil and H raise them; they start
+    /// again from 0 at the next level. With level they make the unlock rank (see <see cref="Unlocks"/>).
+    /// </summary>
+    public int Love { get; set; }
+
+    /// <summary>Picked once on the island map (the exe unlocks her first-meeting reward then).</summary>
+    public bool Met { get; set; }
+
+    /// <summary>Level 5 with full love: "Clear" on the ticket, her completion reward unlocked (personal save +0x06).</summary>
+    public bool Completed { get; set; }
+
     /// <summary>Row of the swimsuit she wears (lbNN table), or null for her first one.</summary>
     public int? SwimsuitRow { get; set; }
 
@@ -41,6 +53,7 @@ public sealed class GirlProgress
             AlbumPictures.Add(Intimacy);
         Intimacy++;
         MetAtLevel = false;
+        Love = 0;
     }
 }
 
@@ -82,8 +95,8 @@ public sealed class FavoriteSet
 }
 
 /// <summary>
-/// Open Delulu's own save (JSON): per-girl intimacy. The original save files are read-only for now
-/// (see <see cref="Formats.Save.SaveFile"/>); most of their fields are not understood yet.
+/// Open Delulu's own save (JSON): per-girl intimacy, love and looks, unlocks, time. It is also written into the original
+/// game's save files of the same ticket (see <see cref="OriginalSaves"/>).
 /// </summary>
 public sealed class GameProgress
 {
@@ -100,6 +113,21 @@ public sealed class GameProgress
 
     /// <summary>Time of day (1 morning .. 5 late night) the game was left at.</summary>
     public int TimeOfDay { get; set; } = 2;
+
+    /// <summary>
+    /// Unlocked swimsuits: lbNN row → the exe's state (1 new, 3 seen; item list save +0x3E6, one byte per row). Null for
+    /// progress saved before unlocks existed: then everything is open.
+    /// </summary>
+    public Dictionary<int, int>? Swimsuits { get; set; }
+
+    /// <summary>Unlocked accessories: lc table index (0 = lc01) × 128 + row → state (item list save +0xDE0).</summary>
+    public Dictionary<int, int>? Accessories { get; set; }
+
+    /// <summary>The highest unlock rank reached, 0..15 (item list save +0x1CC).</summary>
+    public int Rank { get; set; }
+
+    /// <summary>The original save slot this progress came from or goes to (data/save/saveN…), 0 = none.</summary>
+    public int OriginalSlot { get; set; }
 
     public GirlProgress For(int girlId)
     {

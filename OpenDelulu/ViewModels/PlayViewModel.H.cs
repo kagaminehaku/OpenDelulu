@@ -198,6 +198,8 @@ public sealed partial class PlayViewModel
             Leave();
             return;
         }
+        GainLove(30);
+        UnlockRandomAccessories();
         EndCouple();
         UpdateMusic();
         _statusHoldUntil = 0;
@@ -214,6 +216,7 @@ public sealed partial class PlayViewModel
         {
             _hLevelUp = false;
             Progress.LevelUp();
+            ApplyRank();
             SaveProgress();
             Meet();
         }

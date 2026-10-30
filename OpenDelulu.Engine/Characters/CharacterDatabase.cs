@@ -35,6 +35,12 @@ public sealed record SwimsuitInfo(int Row, string Name, AssetRef Texture, AssetR
 {
     public AssetRef? Stain { get; init; }
     public int StainRows { get; init; }
+
+    /// <summary>
+    /// Unlock rank 1..15 that opens the suit (lbNN column 60; rank = (level − 1) × 3 + love tier 1..3, see Unlocks); 0 =
+    /// only as a girl's reward.
+    /// </summary>
+    public int Requirement { get; init; }
 }
 
 /// <summary>
@@ -114,6 +120,7 @@ public sealed class CharacterDatabase
     const int SwimsuitStainRowsColumn = 10;
     const int SwimsuitIconColumn = 61;
     const int SwimsuitHeartsColumn = 59;
+    const int SwimsuitRequirementColumn = 60;
 
     public string TableArchive { get; }
     public IReadOnlyList<GirlInfo> Girls { get; }
@@ -271,6 +278,7 @@ public sealed class CharacterDatabase
             {
                 Stain = AssetRef.FromRow(row, SwimsuitStainColumn),
                 StainRows = int.TryParse(Cell(row, SwimsuitStainRowsColumn), out int stainRows) ? stainRows : 0,
+                Requirement = int.TryParse(Cell(row, SwimsuitRequirementColumn), out int requirement) ? requirement : 0,
             });
         }
         return list;

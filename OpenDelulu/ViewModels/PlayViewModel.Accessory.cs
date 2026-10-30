@@ -1,3 +1,4 @@
+using OpenDelulu.Engine.Game;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -53,7 +54,8 @@ public sealed partial class PlayViewModel
     public bool IsPairedPageAccessory => IsAccessoryPage && IsPairedAccessory;
 
     /// <summary>The items that get a card: the named rows (the unnamed ones are colour variants of the row above).</summary>
-    IReadOnlyList<AccessoryItem> AccessoryChoices => _assembler.Accessories.Items(AccessoryTab + 1).Where(i => i.Name.Length > 0).ToList();
+    IReadOnlyList<AccessoryItem> AccessoryChoices =>
+        _assembler.Accessories.Items(AccessoryTab + 1).Where(i => i.Name.Length > 0 && VariantsOf(i).Count > 0).ToList();
 
     void FillAccessoryCards()
     {
@@ -158,7 +160,9 @@ public sealed partial class PlayViewModel
         var rows = _assembler.Accessories.Items(item.Table);
         var list = new List<AccessoryItem> { item };
         list.AddRange(rows.SkipWhile(i => i.Row <= item.Row).TakeWhile(i => i.Name.Length == 0 && i.Group == item.Group));
-        return list;
+        // Only the rows unlocked (and the ones she wears).
+        IEnumerable<int> worn = _girl is null ? [] : Progress.Look.Accessories.Values;
+        return list.Where(i => Unlocks.HasAccessory(_progress, i.Table, i.Row) || worn.Contains(i.Row)).ToList();
     }
 
     /// <summary>The named item whose card stands for a worn row (itself, or the item a colour variant belongs to).</summary>

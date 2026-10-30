@@ -24,6 +24,9 @@ public enum SaveKind
 /// </summary>
 public sealed record SaveField(string Name, byte[] Data)
 {
+    /// <summary>Where the field starts in the file (-1 for fields that are not stored as is).</summary>
+    public int Offset { get; init; } = -1;
+
     public int Int32 => BinaryPrimitives.ReadInt32LittleEndian(Data);
     public float Single => BitConverter.Int32BitsToSingle(Int32);
 
@@ -62,6 +65,55 @@ public sealed class SaveFile
     public IReadOnlyList<SaveField> PlusExtension { get; init; } = [];
 
     public SaveField? this[string name] => Fields.FirstOrDefault(f => f.Name == name);
+
+    /// <summary>The file as read (fields changed with <see cref="Set(string, byte[])"/> are written into it).</summary>
+    public byte[] Raw { get; private init; } = [];
+
+    /// <summary>
+    /// Replaces a field's bytes (same length) in <see cref="Fields"/> and <see cref="Raw"/>; the rest of the file (pictures,
+    /// fillers, unknown fields) is kept byte for byte. Throws for an unknown field or another length.
+    /// </summary>
+    public void Set(string name, byte[] data)
+    {
+        var list = (List<SaveField>)Fields;
+        int index = list.FindIndex(f => f.Name == name);
+        if (index < 0)
+            throw new ArgumentException($"No field {name} in this {Kind} save.");
+        var field = list[index];
+        if (field.Data.Length != data.Length || field.Offset < 0)
+            throw new ArgumentException($"Field {name}: {data.Length} bytes for {field.Data.Length}.");
+        data.CopyTo(Raw, field.Offset);
+        list[index] = field with { Data = (byte[])data.Clone() };
+    }
+
+    public void Set(string name, int value)
+    {
+        int size = this[name]?.Data.Length ?? throw new ArgumentException($"No field {name} in this {Kind} save.");
+        var bytes = new byte[size];
+        if (size >= 4)
+            BinaryPrimitives.WriteInt32LittleEndian(bytes, value);
+        else if (size == 2)
+            BinaryPrimitives.WriteUInt16LittleEndian(bytes, (ushort)value);
+        else
+            bytes[0] = (byte)value;
+        Set(name, bytes);
+    }
+
+    /// <summary>The bytes to write back.</summary>
+    public byte[] ToBytes() => (byte[])Raw.Clone();
+
+    /// <summary>A fixed-layout save (config, tickets, item list) of zeros.</summary>
+    public static SaveFile Empty(SaveKind kind, bool plus)
+    {
+        var layout = kind switch
+        {
+            SaveKind.Config => plus ? ConfigPlus : ConfigBase,
+            SaveKind.Tickets => Tickets,
+            SaveKind.ItemList => plus ? ItemListPlus : ItemListBase,
+            _ => throw new ArgumentException($"No empty {kind} save."),
+        };
+        return ReadFixed(kind, new byte[layout.Sum(f => f.Item2)], layout);
+    }
 
     /// <summary>
     /// Item list only: byte <paramref name="index"/> of a girl's 20-byte record at member +0x18 + 20 × (girl − 1), inside
@@ -166,6 +218,7 @@ public sealed class SaveFile
             Kind = kind,
             Plus = layout == ConfigPlus || layout == ItemListPlus,
             Fields = Take(data, ref at, layout),
+            Raw = (byte[])data.Clone(),
         };
     }
 
@@ -174,7 +227,7 @@ public sealed class SaveFile
         var fields = new List<SaveField>(layout.Length);
         foreach (var (name, size) in layout)
         {
-            fields.Add(new SaveField(name, data.AsSpan(at, size).ToArray()));
+            fields.Add(new SaveField(name, data.AsSpan(at, size).ToArray()) { Offset = at });
             at += size;
         }
         return fields;
@@ -232,7 +285,11 @@ public sealed class SaveFile
         if (at != data.Length)
             throw new InvalidDataException($"Personal save: {data.Length - at} unparsed bytes.");
 
-        return new SaveFile { Kind = SaveKind.Personal, Plus = plus, Fields = fields, History = history, Pictures = pictures, PlusExtension = extension };
+        return new SaveFile
+        {
+            Kind = SaveKind.Personal, Plus = plus, Fields = fields, History = history, Pictures = pictures, PlusExtension = extension,
+            Raw = (byte[])data.Clone(),
+        };
     }
 
     /// <summary>Decodes one of <see cref="Pictures"/>.</summary>

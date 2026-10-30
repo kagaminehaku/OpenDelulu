@@ -70,14 +70,12 @@ public sealed partial class PlayViewModel
         for (int t = 0; t < TicketCount; t++)
         {
             double top = 192 * t;
-            string path = TicketPath(t);
-            if (!File.Exists(path))
+            if (LoadTicket(t) is not { } game)
             {
                 TicketSprites.Add(new TicketSprite(64, TicketTop + top, 896, 192, Ui.Get("st04_05_00_00_00.tga")));
             }
             else
             {
-                var game = GameProgress.Load(path);
                 int minutes = (int)(game.PlaySeconds / 60);
                 AddDigits(Math.Min(minutes / 60, 999), 3, [328, 352, 376], 104 + top);
                 AddDigits(minutes % 60, 2, [408, 432], 104 + top);
@@ -93,7 +91,7 @@ public sealed partial class PlayViewModel
                     else
                         for (int i = 0; i < level - 1; i++)
                             TicketSprites.Add(new TicketSprite(x + 16 * i, 152 + top, 16, 24, Ui.Get("st04_04_01_00_00.tga")));
-                    if (progress?.AlbumPictures.Contains(5) == true)
+                    if (progress?.Completed == true || progress?.AlbumPictures.Contains(5) == true)
                         TicketSprites.Add(new TicketSprite(x, 248 + top, 56, 24, Ui.Get("st04_08_00_00_00.tga")));
                 }
             }
@@ -138,7 +136,12 @@ public sealed partial class PlayViewModel
     {
         SavePlayTime();
         ProgressPath = TicketPath(SelectedTicket);
-        LoadProgress(GameProgress.Load(ProgressPath));
+        var progress = LoadTicket(SelectedTicket) ?? new GameProgress();
+        // A new game starts with everything locked, like the exe; older Open Delulu games keep everything open.
+        if (!File.Exists(ProgressPath) && progress.OriginalSlot == 0)
+            Unlocks.Start(progress);
+        progress.OriginalSlot = SelectedTicket + 1;
+        LoadProgress(progress);
         IsTicketVisible = false;
         TicketSprites.Clear();
         ShowTitle();
@@ -147,16 +150,46 @@ public sealed partial class PlayViewModel
     /// <summary>Delete: asks, then throws the chosen ticket's game away.</summary>
     public void DeleteTicket()
     {
-        if (SelectedTicket < 0 || !File.Exists(TicketPath(SelectedTicket)))
+        if (SelectedTicket < 0 || LoadTicket(SelectedTicket) is null)
             return;
         int ticket = SelectedTicket;
         Confirm(QuestionIsThisOk, "confirm.deleteTicket", () =>
         {
             try { File.Delete(TicketPath(ticket)); }
             catch (IOException) { }
+            // The original game's files of that ticket go too (the save folder is backed up first).
+            if (WritesOriginalSaves)
+            {
+                try { OriginalSaves.Delete(_fs.Install, ticket + 1); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Status = F("play.originalSaveError", ex.Message); }
+            }
             FillTickets();
         });
     }
+
+    /// <summary>
+    /// The game of a ticket: Open Delulu's own file, or else the original game's save of the same ticket (imported), or
+    /// null for an empty ticket.
+    /// </summary>
+    GameProgress? LoadTicket(int ticket)
+    {
+        string path = TicketPath(ticket);
+        if (File.Exists(path))
+            return GameProgress.Load(path);
+        return WritesOriginalSaves ? OriginalSaves.Import(_fs.Install, ticket + 1) : null;
+    }
+
+    /// <summary>The default progress folder (AppData): tests point <see cref="ProgressPath"/> elsewhere.</summary>
+    static readonly string DefaultProgressFolder =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenDelulu");
+
+    /// <summary>
+    /// Tickets are read from and written to the original game's data/save as well; never for tests (their progress is
+    /// elsewhere) unless they give their own save folder.
+    /// </summary>
+    static bool WritesOriginalSaves =>
+        OriginalSaves.FolderOverride is not null
+        || string.Equals(Path.GetDirectoryName(ProgressPath), DefaultProgressFolder, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Quit: asks, then closes the game.</summary>
     public void QuitFromTicket() => Confirm(QuestionEndGame, "confirm.endGame", () => ExitRequested?.Invoke());
@@ -175,6 +208,14 @@ public sealed partial class PlayViewModel
     {
         SavePlayTime();
         _progress.Save(ProgressPath);
+        if (WritesOriginalSaves && _progress.OriginalSlot is int slot and >= 1 and <= TicketCount)
+        {
+            try { OriginalSaves.Export(_fs.Install, slot, _progress); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Status = F("play.originalSaveError", ex.Message);
+            }
+        }
     }
 
     void SavePlayTime()

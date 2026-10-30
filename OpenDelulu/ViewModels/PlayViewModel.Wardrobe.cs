@@ -1,3 +1,4 @@
+using OpenDelulu.Engine.Game;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -48,7 +49,8 @@ public sealed partial class PlayViewModel
     public double SelectedCategoryTop => CategoryTabs[Math.Clamp(WardrobeCategory, 1, 4) - 1].Top - 9;
 
     IReadOnlyList<SwimsuitInfo> CategorySwimsuits =>
-        _girl?.Girl.Swimsuits.Where(s => s.Category == WardrobeCategory || (WardrobeCategory == 4 && s.Category is < 1 or > 4)).ToList() ?? [];
+        _girl?.Girl.Swimsuits.Where(s => s.Category == WardrobeCategory || (WardrobeCategory == 4 && s.Category is < 1 or > 4))
+            .Where(s => Unlocks.HasSwimsuit(_progress, s.Row) || s.Row == Progress.SwimsuitRow).ToList() ?? [];
 
     void OpenWardrobe()
     {

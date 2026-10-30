@@ -266,6 +266,8 @@ public sealed partial class PlayViewModel : ViewModelBase
             _stage = stage;
             _girl = girl;
             _point = 0;
+            if (_memoryReplay is null && !_photoShoot)
+                MeetGirl(choice.Id);
             _prop = null;
             _activity = null;
             PlaceGirl();
@@ -553,6 +555,11 @@ public sealed partial class PlayViewModel : ViewModelBase
             return;
         _oilTimer.Stop();
         CancelOilActions();
+        if (_memoryReplay is null)
+        {
+            GainLove(15);
+            UnlockRandomAccessories();
+        }
         HideOilHud();
         TouchHandler = null;
         oil.End();
@@ -796,6 +803,8 @@ public sealed partial class PlayViewModel : ViewModelBase
             Status = F("date.loadError", ex.Message);
             return;
         }
+        if (_memoryReplay is null)
+            GainLove(25);
         var points = _stage.PointGroup("Date");
         int index = points.ToList().FindIndex(p => p.Name == $"o01_N_Point_Date{DatePoint(activity.Number):00}");
         _point = index >= 0 ? index : activity.Number - 1;
@@ -1123,7 +1132,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         int girl = _girl.Girl.Id;
         var options = new List<(string, Action)>
         {
-            (T("play.talk"), () => RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu)),
+            (T("play.talk"), () => { GainLove(5); RunEvent(IsNight ? EventKind.GreetingNight : EventKind.Greeting, ShowMenu); }),
             (T("play.date"), ShowActivities),
         };
         // The original date menu (ds01_03) has clothes, oil, H and goodbye; the text menu keeps the rest.
@@ -1171,6 +1180,7 @@ public sealed partial class PlayViewModel : ViewModelBase
                 return;
             }
             progress.LevelUp();
+            ApplyRank();
             SaveProgress();
             Meet();
         });
