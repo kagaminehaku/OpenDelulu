@@ -322,7 +322,17 @@ public sealed class HSession : CoupleSession
             return false;
         string c = Clip;
         if (c == $"{touch}ループ")
+        {
+            // Each reaction raises her; full, the touches that have one end in her climax (→アクション絶頂, then
+            // アクション事後 back to Z待機 by themselves).
+            Excitement = Math.Min(1, Excitement + StrokeExcitement * 2);
+            if (Excitement >= 1 && Play($"{touch}→アクション絶頂"))
+            {
+                Excitement = 0;
+                return true;
+            }
             return Play($"{touch}{(Random.Next(4) == 0 ? "大" : "小")}反応");
+        }
         if (c.EndsWith("ループ", StringComparison.Ordinal) && c != "Z待機")
         {
             // Another touch going on: back to standby first.
