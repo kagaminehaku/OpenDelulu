@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -12,7 +13,8 @@ namespace OpenDelulu.ViewModels;
 /// The Gravure photo mode (81_photosel, 82_photo; data in sb3g_0001 / sb3f_0001): the shoot is chosen on the memory
 /// screen's columns (girl, place, time), then she holds poses on the stage while the st11 menu on the right sets
 /// Location (her standing point), Pose (paBB_01.xa, 30 still poses per body type), Expression, Gaze (eyes on the
-/// camera or ahead), Head (follows the camera or not), Gloss (oil shine 0..10) and Skin (tan %). Layout from the exe's
+/// camera or ahead), Head (follows the camera or not), Gloss (oil shine 0..10) and Skin (tan %), Item (the pose's prop) and
+/// Auto Camera. Layout from the exe's
 /// sprite table (0x4CF9xx): panel (844, 4), rows every 66 px from y 38, arrows at x 858 / 932.
 /// </summary>
 public sealed partial class PlayViewModel
@@ -25,6 +27,10 @@ public sealed partial class PlayViewModel
     readonly int[] _photoValue = new int[PhotoRows]; // location, pose, expression, gaze, head, gloss (0-based)
     int _photoSkin;
     AnimationPlayer? _photoPoses;
+    // Which pose set (1 Gravure pa0B_01, 2 the smaller pa0B_02) and the Item / Auto Camera buttons.
+    int _photoSet;
+    string? _photoArchive;
+    bool _photoItem, _photoAutoCamera;
 
     [ObservableProperty] public partial bool IsPhotoMenuVisible { get; set; }
     [ObservableProperty] public partial bool IsPhotoMenuFolded { get; set; }
@@ -85,7 +91,11 @@ public sealed partial class PlayViewModel
         {
             string file = $"pa{type:00}_{set:00}_00_00_00.xa";
             if (_fs.HasArchive(archive) && _fs.ExistsReferenced(archive, file))
+            {
+                _photoSet = set;
+                _photoArchive = archive;
                 return _assembler.LoadBodyAnimation(girl.Model, new AssetRef(archive, file));
+            }
         }
         return null;
     }
@@ -123,8 +133,37 @@ public sealed partial class PlayViewModel
             Array.Fill(mesh.Gloss, gloss);
         }
         animator.Invalidate();
+        ApplyPhotoItem();
         PlaceGirl();
         FillPhotoMenu();
+    }
+
+    /// <summary>
+    /// Item: the pose's prop (ld01 rows 181/182: pi00_%02d.xx, numbered like the poses of both sets, 1..30 Gravure and
+    /// 31..35 the smaller set; only some poses have one, e.g. 21 an umbrella), standing where she stands.
+    /// </summary>
+    void ApplyPhotoItem()
+    {
+        int number = _photoValue[1] + 1 + (_photoSet == 2 ? 30 : 0);
+        string file = $"pi00_{number:00}_00_00_00.xx";
+        bool wanted = _photoItem && _photoArchive is { } archive && _fs.ExistsReferenced(archive, file);
+        string? current = _prop?.Model.Name;
+        if (wanted && current == file || !wanted && current is null)
+            return;
+        _prop = null;
+        if (wanted)
+        {
+            try
+            {
+                var xx = OpenDelulu.Formats.Xx.XxReader.Read(_fs.ReadReferenced(_photoArchive!, file));
+                var model = Engine.Assets.RenderModel.FromXx(xx, file);
+                _prop = (model, new CharacterAnimator(model) { EyesFollowTarget = false });
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or EndOfStreamException)
+            {
+            }
+        }
+        BuildScene();
     }
 
     void FillPhotoMenu()
@@ -151,6 +190,10 @@ public sealed partial class PlayViewModel
             for (int i = 0; i < 3; i++)
                 Add(919 + 19 * i, 433, 32, 32, Digit(skin[i] - '0'));
             Add(863, 466, 64, 24, "st11_04_00_00_00.tga");
+            if (_photoItem)
+                Add(856, 561, 152, 24, "st11_06_00_00_00.tga");
+            if (_photoAutoCamera)
+                Add(856, 589, 152, 24, "st11_07_00_00_00.tga");
         }
         PhotoSprites = sprites;
         OnPropertyChanged(nameof(PhotoSprites));
@@ -188,8 +231,24 @@ public sealed partial class PlayViewModel
         }
         if (x >= 856 && x < 1008)
         {
-            if (y is >= 617 and < 641)
+            if (y is >= 561 and < 585)
+            {
+                _photoItem = !_photoItem;
+                ApplyPhoto();
+            }
+            else if (y is >= 589 and < 613)
+            {
+                // Auto Camera: the camera frames her pose by itself (a fixed view in front of her) until moved.
+                _photoAutoCamera = !_photoAutoCamera;
+                Scene?.RequestCamera(_photoAutoCamera ? new Rendering.CameraView(Pitch: 0.12f, Zoom: 1.1f) : null);
+                FillPhotoMenu();
+            }
+            else if (y is >= 617 and < 641)
+            {
+                _photoAutoCamera = false;
                 Scene?.RequestCamera(null);
+                FillPhotoMenu();
+            }
             else if (y is >= 654 and < 678)
                 OpenWardrobe();
             else if (y is >= 682 and < 706)
@@ -230,6 +289,8 @@ public sealed partial class PlayViewModel
         OnPropertyChanged(nameof(PhotoSprites));
         _photoShoot = false;
         _photoPoses = null;
+        _photoItem = _photoAutoCamera = false;
+        _prop = null;
         _photoReturn = toSelect;
         Leave();
     }
