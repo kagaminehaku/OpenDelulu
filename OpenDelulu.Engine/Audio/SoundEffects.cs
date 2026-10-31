@@ -15,7 +15,7 @@ namespace OpenDelulu.Engine.Audio;
 /// </summary>
 public static class SoundEffects
 {
-    public const int Pick = 1, Decide = 3, Open = 4, DateMenu = 5, Cancel = 6;
+    public const int Pick = 1, Decide = 3, Open = 4, DateMenu = 5, Cancel = 6, MapEvent = 8;
     public const int Push = 13, Climax = 14, Outside = 15, Squirt = 16;
 
     public static string File(int number) => $"se{number:00}_00_00_00_00.ogg";

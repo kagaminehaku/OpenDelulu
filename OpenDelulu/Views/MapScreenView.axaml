@@ -61,6 +61,8 @@
             </ItemsControl>
             <Image Source="{Binding HoveredStage.Thumbnail}" Canvas.Left="728" Canvas.Top="544" Width="280" Height="208"
                    IsVisible="{Binding IsChoosingStage}" IsHitTestVisible="False" />
+            <Image Source="{Binding MapEventMarker}" Canvas.Left="560" Canvas.Top="360" Width="80" Height="80"
+                   IsVisible="{Binding MapEventMarker, Converter={x:Static ObjectConverters.IsNotNull}}" IsHitTestVisible="False" />
             <Image Source="{Binding MapCancel}" Canvas.Left="16" Canvas.Top="704" Width="112" Height="48" Cursor="Hand"
                    IsVisible="{Binding IsChoosingStage}" PointerPressed="OnCancelPressed" />
 

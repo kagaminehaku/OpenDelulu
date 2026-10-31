@@ -73,7 +73,24 @@ public sealed partial class PlayViewModel
     /// <summary>False: choosing a girl; true: choosing where to go with her.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MapBackground))]
+    [NotifyPropertyChangedFor(nameof(MapEventMarker))]
     public partial bool IsChoosingStage { get; set; }
+
+    /// <summary>
+    /// The heart (st05_04_01) the exe puts on the map while choosing her place when her lead-in waits there at this
+    /// time of day (exe 0x47A6E0: flag +0xFF5, se08 once; centred on the table's 600, 400, near stage 1).
+    /// </summary>
+    public Bitmap? MapEventMarker => IsChoosingStage && MapLeadInWaits ? Ui.Get("st05_04_01_00_00.tga") : null;
+
+    bool MapLeadInWaits =>
+        SelectedGirl is { } girl && _progress.Swimsuits is not null && _progress.For(girl.Id) is { Love: >= 255 } progress
+        && LeadInPlace(progress.Intimacy) is { } place && SelectedTimeIndex + 1 is var time && (time == place.TimeA || time == place.TimeB);
+
+    partial void OnIsChoosingStageChanged(bool value)
+    {
+        if (MapEventMarker is not null)
+            Sfx(Engine.Audio.SoundEffects.MapEvent);
+    }
 
     [ObservableProperty] public partial MapGirl? HoveredGirl { get; set; }
     [ObservableProperty] public partial MapStage? HoveredStage { get; set; }
@@ -146,6 +163,7 @@ public sealed partial class PlayViewModel
     partial void OnSelectedTimeIndexChanged(int value)
     {
         OnPropertyChanged(nameof(MapBackground));
+        OnPropertyChanged(nameof(MapEventMarker));
         _mapStages = null;
         HoveredStage = null;
         OnPropertyChanged(nameof(MapStages));
