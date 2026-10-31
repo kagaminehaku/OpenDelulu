@@ -962,9 +962,20 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (_girl is null)
             return;
         HideDateHud();
-        var options = _girl.Girl.DateActivities
+        // Like the exe, only the activities her level allows on this stage; "her choice" draws one the exe's way.
+        var pool = _stage is { } stage ? Unlocks.DateActivityPool(stage.Variant.Stage, Progress.Intimacy) : null;
+        var allowed = _girl.Girl.DateActivities.Where(a => pool is null || pool.Contains(a.Number)).ToList();
+        var options = allowed
             .Select(a => (ActivityName(a.Number), (Action)(() => { StartActivity(a); ShowMenu(); })))
             .ToList();
+        if (pool is { Count: > 0 } && allowed.Count > 0)
+            options.Insert(0, (T("date.herChoice"), () =>
+            {
+                var picks = pool.Where(n => allowed.Any(a => a.Number == n)).ToList();
+                int number = picks[Random.Shared.Next(picks.Count)];
+                StartActivity(allowed.First(a => a.Number == number));
+                ShowMenu();
+            }));
         options.Add((T("date.back"), ShowMenu));
         Dialogue.ShowMenu(F("date.choose", CharacterDatabase.NameOf(_girl.Girl.Id)), options);
     }

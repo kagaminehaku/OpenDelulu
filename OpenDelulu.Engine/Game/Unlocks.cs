@@ -162,6 +162,27 @@ public static class Unlocks
         return opened;
     }
 
+    /// <summary>
+    /// The date activities that can happen per stage (1..9) and level (1..5), from the exe's date scene (0x47EA00): she
+    /// picks one of the list at random, the repeated ones being likelier.
+    /// </summary>
+    static readonly int[][][] DateActivities =
+    [
+        [[1, 5, 5, 10, 10], [1, 2, 5, 6, 6, 8, 8, 10, 10, 11, 11], [1, 2, 3, 5, 6, 7, 8, 9, 10, 11], [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13], [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17]],
+        [[4], [4], [4], [4], [4, 18]],
+        [[1, 5, 5, 10, 10], [1, 2, 5, 6, 6, 8, 8, 10, 10, 11, 11], [1, 2, 3, 5, 6, 7, 8, 9, 10, 11], [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13], [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17]],
+        [[1, 5, 5, 10, 10], [1, 2, 5, 8, 8, 10, 10, 11, 11], [1, 2, 3, 5, 7, 8, 9, 10, 11], [1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13], [1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17]],
+        [[1, 5, 5, 10, 10], [1, 2, 5, 8, 8, 10, 10, 11, 11], [1, 2, 3, 5, 7, 8, 9, 10, 11], [1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13], [1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 20]],
+        [[1, 5, 5, 10, 10], [1, 2, 5, 8, 8, 10, 10, 11, 11], [1, 2, 3, 5, 7, 8, 9, 10, 11], [1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13], [1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]],
+        [[1, 5], [1, 2, 5], [1, 2, 3, 5], [1, 2, 3, 5, 12], [1, 2, 3, 5, 12]],
+        [[1, 2], [1, 2], [1, 2], [1, 2], [1, 2, 19]],
+        [[1, 5], [1, 2, 5], [1, 2, 3, 5], [1, 2, 3, 5, 12], [1, 2, 3, 5, 12, 21]],
+    ];
+
+    /// <summary>The activity pool of a stage and level (with repeats), or null for a stage outside the table.</summary>
+    public static IReadOnlyList<int>? DateActivityPool(int stage, int level) =>
+        stage is >= 1 and <= 9 ? DateActivities[stage - 1][Math.Clamp(level, 1, 5) - 1] : null;
+
     /// <summary>Love points: capped at 255.</summary>
     public static void AddLove(GirlProgress girl, int points) => girl.Love = Math.Clamp(girl.Love + points, 0, 255);
 

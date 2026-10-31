@@ -76,6 +76,7 @@
   "date.activityN": "Activity {0}",
   "date.back": "Back",
   "date.choose": "What should {0} do?",
+  "date.herChoice": "Let her choose",
   "date.loadError": "Could not start the activity: {0}",
   "dialogue.end": "— The End —",
   "dialogue.next": "Next ▶",
