@@ -15,9 +15,31 @@ public sealed partial class PlayViewModel
     Character? _stainGirl;
     float _wetness, _wetnessShown;
 
-    /// <summary>Raises the crotch's wetness to <paramref name="level"/> (it never dries here) and updates the texture.</summary>
+    /// <summary>
+    /// Out of the oil and H scenes the stain dries (exe 0x413430: wetness = max(target, wetness − time × rate); the rate's
+    /// value is not decoded: here a full stain dries in about two minutes).
+    /// </summary>
+    readonly Avalonia.Threading.DispatcherTimer _dryTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    bool _dryHooked;
+
+    void Dry()
+    {
+        if (_oil is not null || _couple is not null || _wetness <= 0)
+            return;
+        _wetness = Math.Max(0, _wetness - 1f / 120);
+        if (Math.Abs(_wetness - _wetnessShown) >= 0.05f || _wetness == 0 && _wetnessShown > 0)
+            ShowStain();
+    }
+
+    /// <summary>Raises the crotch's wetness to <paramref name="level"/> (it dries later) and updates the texture.</summary>
     void Wet(double level)
     {
+        if (!_dryHooked)
+        {
+            _dryHooked = true;
+            _dryTimer.Tick += (_, _) => Dry();
+            _dryTimer.Start();
+        }
         float wanted = Math.Max(_wetness, (float)Math.Clamp(level, 0, 1));
         if (!ReferenceEquals(_stainGirl, _girl))
         {
@@ -37,12 +59,13 @@ public sealed partial class PlayViewModel
     {
         if (_stain is null || _girl is not { } girl || Scene is not { } scene || !ReferenceEquals(_stainGirl, girl))
             return;
+        bool wasWet = _wetnessShown > 0;
         _stain[SwimsuitStain.Crotch] = _wetness;
         _wetnessShown = _wetness;
-        if (_wetness <= 0)
+        if (_wetness <= 0 && !wasWet)
             return;
         foreach (var image in girl.SwimsuitImages)
-            scene.ReplaceTexture(1, image, _stain.Apply(image));
+            scene.ReplaceTexture(1, image, _wetness <= 0 ? image : _stain.Apply(image));
         if (_stain.IsSeeThrough)
         {
             // See-through areas: the suit's meshes go with the blended ones (drawn over her skin, alpha from the texture).
