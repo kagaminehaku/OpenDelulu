@@ -8,8 +8,8 @@ namespace OpenDelulu.ViewModels;
 /// The swimsuit's wet stain (exe: sb_SukeBase): the oil and H scenes raise the crotch area with her arousal, and the
 /// stain sk01 is stamped on the suit texture there (<see cref="SwimsuitStain"/>). It stays while she wears the suit.
 /// The exe's target is her arousal gauge (character +0xD4: min(counter +0x54, max) / max; the counter grows by frame time
-/// × lg00 row 21 column 5 or 6 during H actions); its maximum is not decoded: here the H scene's excitement and the oil's
-/// coverage.
+/// × lg00 row 21 column 5 or 6 during H actions, full at column 0 × column 1: <see cref="Engine.H.HSession.Arousal"/>);
+/// in the oil scene the oil's coverage stands for it (what the oil scene adds to the counter is not decoded).
 /// </summary>
 public sealed partial class PlayViewModel
 {

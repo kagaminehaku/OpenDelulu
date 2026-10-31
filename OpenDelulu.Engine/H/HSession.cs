@@ -108,7 +108,8 @@ public sealed class HSession : CoupleSession
         session.Drops = LoadEffect(fs, "ek04_00_00_00_00.xx", "ek04_00_00_00_00.xa");
         if (session.Drops?.Animator.Body is { } drops)
             drops.FollowNext = true;
-        session.SquirtAfter = SquirtThreshold(fs, assembler.Database.TableArchive);
+        session._params = HParams.Load(fs, assembler.Database.TableArchive);
+        session.SquirtAfter = session._params.SquirtAfter;
         return session;
     }
 
@@ -131,6 +132,10 @@ public sealed class HSession : CoupleSession
     /// </summary>
     public override void Update(double seconds)
     {
+        // Her arousal counter (character +0x54, added to by 0x423B40 from the action code 0x4AB850…): ms × lg00 row 21
+        // column 5 while she is in an action; full at column 0 × column 1 (10000 × 20). It drives the wet stain.
+        if (Clip.Length > 0 && !Clip.EndsWith("待機", StringComparison.Ordinal) && Clip != "初期状態")
+            Arousal = Math.Min(1, Arousal + seconds * 1000 * _params.ArousalRate / Math.Max(1, _params.ArousalFull));
         // The spray follows her crotch while it plays.
         if (SquirtVisible && Squirt is { } squirt && Girl.Model.Rig.Find("o01_N_Sio") is int sio and >= 0)
         {
@@ -249,16 +254,31 @@ public sealed class HSession : CoupleSession
     /// <summary>The climax she first squirts at: lg00 row 21 column 2 (3).</summary>
     public int SquirtAfter { get; private set; } = 3;
 
-    static int SquirtThreshold(GameFileSystem fs, string tableArchive)
+    /// <summary>Her arousal 0..1 (the exe's counter over its full value): it only grows during the scene.</summary>
+    public double Arousal { get; private set; }
+
+    HParams _params = HParams.Default;
+
+    /// <summary>The H scene's parameters, lg00 row 21 (0x44ABF0: columns 0..2 integers, then floats).</summary>
+    sealed record HParams(int ArousalFull, int SquirtAfter, double ArousalRate)
     {
-        try
+        public static readonly HParams Default = new(10000 * 20, 3, 20);
+
+        public static HParams Load(GameFileSystem fs, string tableArchive)
         {
-            var row = fs.ReadTable(tableArchive, "lg00_00_00_00_00.lst").Rows.FirstOrDefault(r => r.Length > 3 && r[0] == "21");
-            return row is not null && int.TryParse(row[3], out int n) && n > 0 ? n : 3;
-        }
-        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
-        {
-            return 3;
+            try
+            {
+                var row = fs.ReadTable(tableArchive, "lg00_00_00_00_00.lst").Rows.FirstOrDefault(r => r.Length > 6 && r[0] == "21");
+                if (row is null)
+                    return Default;
+                double Cell(int column, double fallback) =>
+                    double.TryParse(row[column + 1], System.Globalization.CultureInfo.InvariantCulture, out double v) && v > 0 ? v : fallback;
+                return new((int)(Cell(0, 10000) * Cell(1, 20)), (int)Cell(2, 3), Cell(5, 20));
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
+            {
+                return Default;
+            }
         }
     }
 
