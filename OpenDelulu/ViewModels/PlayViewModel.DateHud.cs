@@ -79,6 +79,9 @@ public sealed partial class PlayViewModel
                 }
                 else if (_progress.Swimsuits is not null && Progress.Love < 255)
                     ShowStatus(F("play.loveNotFull", Progress.Love), seconds: 3);
+                else if (_progress.Swimsuits is not null && !IsLeadInPlace && LeadInPlace(Progress.Intimacy) is { } place)
+                    ShowStatus(F("play.leadInPlace", StageNames[Math.Clamp(place.Stage - 1, 0, StageNames.Count - 1)],
+                        Times[place.TimeA - 1], Times[place.TimeB - 1]), seconds: 4);
                 else
                     ShowStatus(T("play.noLeadIn"), seconds: 3);
                 break;

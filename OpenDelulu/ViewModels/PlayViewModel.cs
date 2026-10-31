@@ -1273,9 +1273,26 @@ public sealed partial class PlayViewModel : ViewModelBase
             // Her love has to be full first (it starts again from 0 at each level, as the original saves show); games
             // from before the unlocks keep the old free lead-in.
             bool loveFull = _progress.Swimsuits is null || Progress.Love >= 255;
-            return loveFull && Progress.Intimacy < maxLevel && GameEvents.Find(_library, girl, Progress.Intimacy, EventKind.LeadIn) is not null;
+            return loveFull && (_progress.Swimsuits is null || IsLeadInPlace)
+                && Progress.Intimacy < maxLevel && GameEvents.Find(_library, girl, Progress.Intimacy, EventKind.LeadIn) is not null;
         }
     }
+
+    /// <summary>
+    /// Where and when the lead-in waits for her at levels 1, 3 and 4 once her love is full (exe 0x47A6E0, table 0x5FD110 by
+    /// girl and level: two time slots, the stage and the marker's place on the map; the same for every girl): stage 1
+    /// in the morning or at noon (levels 1 and 4), at night or late at night (level 3). Levels 2 and 5 have no place.
+    /// </summary>
+    static (int Stage, int TimeA, int TimeB)? LeadInPlace(int level) => level switch
+    {
+        1 or 4 => (1, 1, 2),
+        3 => (1, 4, 5),
+        _ => null,
+    };
+
+    bool IsLeadInPlace =>
+        LeadInPlace(Progress.Intimacy) is not { } place
+        || _stage?.Variant.Stage == place.Stage && SelectedTimeIndex + 1 is var time && (time == place.TimeA || time == place.TimeB);
 
     void LeadIn()
     {
