@@ -10,13 +10,13 @@ namespace OpenDelulu.Engine.Audio;
 /// <item>H (sb_HScene 0x4B3E90, by the girl's clip): insert and the way to う！待機 se13 at three quarters of the clip; a
 /// push stroke se13 when it starts; the pull back se17–19 (wet: se20–22) at its middle; ぐちゅぐちゅ / グラインド loops
 /// se23–25 (wet: se26–28) at their middle; the climax inside se14 every 10 frames for 7.5 % of the clip; coming outside
-/// se15. Which flag makes it "wet" is not decoded (here: excitement past half).</item>
+/// se15; her squirt (0x4B2EF0, from her third own climax of the scene) se16. Which flag makes it "wet" is not decoded (here: excitement past half).</item>
 /// </list>
 /// </summary>
 public static class SoundEffects
 {
     public const int Pick = 1, Decide = 3, Open = 4, DateMenu = 5, Cancel = 6;
-    public const int Push = 13, Climax = 14, Outside = 15;
+    public const int Push = 13, Climax = 14, Outside = 15, Squirt = 16;
 
     public static string File(int number) => $"se{number:00}_00_00_00_00.ogg";
 

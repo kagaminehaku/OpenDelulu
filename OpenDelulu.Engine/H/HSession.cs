@@ -44,7 +44,7 @@ public sealed class HSession : CoupleSession
     public static readonly string[] OutsideTargets = ["胸", "尻", "脚", "顔", "アソコ"];
 
     readonly string _mood;
-    int _queuedStrokes, _inside;
+    int _queuedStrokes, _inside, _climaxes;
 
     HSession(Parts parts, int file, string mood) : base(parts)
     {
@@ -108,6 +108,7 @@ public sealed class HSession : CoupleSession
         session.Drops = LoadEffect(fs, "ek04_00_00_00_00.xx", "ek04_00_00_00_00.xa");
         if (session.Drops?.Animator.Body is { } drops)
             drops.FollowNext = true;
+        session.SquirtAfter = SquirtThreshold(fs, assembler.Database.TableArchive);
         return session;
     }
 
@@ -185,15 +186,23 @@ public sealed class HSession : CoupleSession
         string name = clip.Name;
         if (name == "F待機")
             RaiseSoundEffect(SoundEffects.Outside);
-        bool climax = name.Contains("アクション絶頂", StringComparison.Ordinal) || name.Contains("絶頂(中だし)", StringComparison.Ordinal)
-            || name.EndsWith("淫乱絶頂", StringComparison.Ordinal);
-        if (climax && !SquirtVisible && Squirt is { Animator.Body: { } spray } && Girl.Model.Rig.Find("o01_N_Sio") is int sio and >= 0)
+        // The exe (0x4B2EF0) counts her own climaxes, オナニー→オナニー絶頂 (clip 14) and アクション絶頂→アクション事後 (19);
+        // from the SquirtAfter-th one on she squirts with se16, the spray staying until she is back at Z待機 (clip 7).
+        if (clip.Index is 14 or 19)
         {
-            Squirt.Animator.Placement = Girl.Animator.WorldOf(sio);
-            Squirt.Animator.Invalidate();
-            spray.Play(1);
+            Climaxes++;
+            if (Climaxes >= SquirtAfter && Squirt is { Animator.Body: { } spray } && Girl.Model.Rig.Find("o01_N_Sio") is int sio and >= 0)
+            {
+                Squirt.Animator.Placement = Girl.Animator.WorldOf(sio);
+                Squirt.Animator.Invalidate();
+                spray.Play(1);
+                SquirtVisible = true;
+                Squirts++;
+                RaiseSoundEffect(SoundEffects.Squirt);
+            }
         }
-        SquirtVisible = climax;
+        else if (clip.Index == 7)
+            SquirtVisible = false;
         if (name.StartsWith("F待機(", StringComparison.Ordinal) && !name.Contains('→') && Drops is { Animator.Body: { } drops } && TargetFrame(name) is int frame)
         {
             // The drop lands on the target: its world position, standing up; the exe's placement is not decoded.
@@ -230,8 +239,28 @@ public sealed class HSession : CoupleSession
     /// <summary>The spray of her climax (ek06: a frame and its particles, see the .ptcl beside it), or null.</summary>
     public Partner? Squirt { get; private set; }
 
-    /// <summary>Whether the spray plays now: during her climaxes (アクション絶頂, 絶頂(中だし), 淫乱絶頂).</summary>
+    /// <summary>Whether the spray plays now: from her climax to Z待機.</summary>
     public bool SquirtVisible { get; private set; }
+
+    /// <summary>Her climaxes of this scene (masturbating or touched), and how many of them made her squirt.</summary>
+    public int Climaxes { get; private set; }
+    public int Squirts { get; private set; }
+
+    /// <summary>The climax she first squirts at: lg00 row 21 column 2 (3).</summary>
+    public int SquirtAfter { get; private set; } = 3;
+
+    static int SquirtThreshold(GameFileSystem fs, string tableArchive)
+    {
+        try
+        {
+            var row = fs.ReadTable(tableArchive, "lg00_00_00_00_00.lst").Rows.FirstOrDefault(r => r.Length > 3 && r[0] == "21");
+            return row is not null && int.TryParse(row[3], out int n) && n > 0 ? n : 3;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
+        {
+            return 3;
+        }
+    }
 
     /// <summary>The girl's frame where he comes outside, by the F待機(…) target.</summary>
     int? TargetFrame(string clip)
