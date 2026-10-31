@@ -914,31 +914,17 @@ public sealed partial class PlayViewModel : ViewModelBase
             Status = F("date.loadError", ex.Message);
             return;
         }
-        var points = _stage.PointGroup("Date");
-        int index = points.ToList().FindIndex(p => p.Name == $"o01_N_Point_Date{DatePoint(activity.Number):00}");
-        _point = index >= 0 ? index : activity.Number - 1;
+        // One of the points the exe allows for the activity, at random (those the stage really has).
+        var names = _stage.PointGroup("Date").Select(p => p.Name).ToList();
+        var candidates = Unlocks.DatePointsOf(_stage.Variant.Stage, activity.Number)
+            .Select(n => names.IndexOf($"o01_N_Point_Date{n:00}")).Where(i => i >= 0).ToList();
+        _point = candidates.Count > 0 ? candidates[Random.Shared.Next(candidates.Count)] : activity.Number - 1;
         _activity = activity;
         _girl.Animator.Physics?.Reset();
         PlaceGirl();
         BuildScene();
     }
 
-    /// <summary>
-    /// Stage point for a date activity. The exe picks points with an algorithm not decoded yet; the data shows that
-    /// points 08..10 lie under water on every stage with a sea (negative heights), so the water activities
-    /// (4 swimming, 7 float ring, 18 kicking) go there and trade places with activities 8..10; the rest keep their
-    /// own number (3 sunbathing on the raised deck at point 03, 13 boat ride at the jetty point 13, …).
-    /// </summary>
-    static int DatePoint(int activity) => activity switch
-    {
-        4 => 8,
-        7 => 9,
-        18 => 10,
-        8 => 4,
-        9 => 7,
-        10 => 18,
-        _ => activity,
-    };
 
     void ShowSwimsuits()
     {

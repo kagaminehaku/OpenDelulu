@@ -179,6 +179,21 @@ public static class Unlocks
         [[1, 5], [1, 2, 5], [1, 2, 3, 5], [1, 2, 3, 5, 12], [1, 2, 3, 5, 12, 21]],
     ];
 
+    /// <summary>
+    /// Where each date activity (1..21) can happen: o01_N_Point_DateNN numbers, one picked at random (exe 0x480520, called
+    /// after the activity is drawn). Stage 5 has activities 5, 8 and 9 at points 1..3 only.
+    /// </summary>
+    static readonly int[][] DatePoints =
+    [
+        [1, 2, 3, 4, 5], [1, 2, 3, 4, 5], [1], [6], [1, 2, 3, 4, 5], [7], [8, 9, 10], [1, 2, 3, 4, 5], [1, 2, 3, 4, 5],
+        [11, 12], [11, 12], [13], [11, 12], [1, 2, 3, 4, 5], [14], [11, 12], [8, 9, 10], [6], [15], [16, 17, 18], [19],
+    ];
+
+    /// <summary>The points (DateNN numbers) a date activity can take place at on a stage.</summary>
+    public static IReadOnlyList<int> DatePointsOf(int stage, int activity) =>
+        stage == 5 && activity is 5 or 8 or 9 ? [1, 2, 3]
+        : activity is >= 1 and <= 21 ? DatePoints[activity - 1] : [activity];
+
     /// <summary>The activity pool of a stage and level (with repeats), or null for a stage outside the table.</summary>
     public static IReadOnlyList<int>? DateActivityPool(int stage, int level) =>
         stage is >= 1 and <= 9 ? DateActivities[stage - 1][Math.Clamp(level, 1, 5) - 1] : null;
