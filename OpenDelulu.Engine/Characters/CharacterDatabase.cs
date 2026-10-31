@@ -41,6 +41,12 @@ public sealed record SwimsuitInfo(int Row, string Name, AssetRef Texture, AssetR
     /// only as a girl's reward.
     /// </summary>
     public int Requirement { get; init; }
+
+    /// <summary>
+    /// How each of the eleven stain areas shows wetness (lbNN columns 27..37, copied by the exe's SukeBase into +0x64): 1 a
+    /// darker stain (SimiShader), 2 see-through (SukeShader), 0 nothing.
+    /// </summary>
+    public IReadOnlyList<int> StainModes { get; init; } = [];
 }
 
 /// <summary>
@@ -279,6 +285,7 @@ public sealed class CharacterDatabase
                 Stain = AssetRef.FromRow(row, SwimsuitStainColumn),
                 StainRows = int.TryParse(Cell(row, SwimsuitStainRowsColumn), out int stainRows) ? stainRows : 0,
                 Requirement = int.TryParse(Cell(row, SwimsuitRequirementColumn), out int requirement) ? requirement : 0,
+                StainModes = Enumerable.Range(27, 11).Select(c => int.TryParse(Cell(row, c), out int m) ? m : 1).ToArray(),
             });
         }
         return list;

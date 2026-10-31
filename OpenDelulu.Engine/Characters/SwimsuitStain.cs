@@ -4,7 +4,8 @@ using OpenDelulu.Formats.Imaging;
 namespace OpenDelulu.Engine.Characters;
 
 /// <summary>
-/// The wet stain of the swimsuit (exe: sb_SukeBase, "SimiShader": colour = suit − g_fLerp × stain). Eleven areas per
+/// The wet stain of the swimsuit (exe: sb_SukeBase, "SimiShader": colour = suit − g_fLerp × stain, or for the areas the
+/// suit marks see-through, "SukeShader": the cloth turns thin). Eleven areas per
 /// suit, rows of lz00 starting at lbNN column 10 (21 = rows 21..31: breasts, belly, sides, crotch front and back, hips…),
 /// each a rectangle of the 512×512 suit texture (columns 1..4: width, height, x, y) where the stain sk01 (lbNN column 6,
 /// 128×128 grey with alpha) is stamped, scaled to it. The oil and H scenes raise area 6 (the crotch, lz00 row first + 5)
@@ -17,14 +18,21 @@ public sealed class SwimsuitStain
 
     readonly RgbaImage _stain;
     readonly (int W, int H, int X, int Y)[] _areas;
+    readonly int[] _modes;
     readonly float[] _levels;
 
-    SwimsuitStain(RgbaImage stain, (int, int, int, int)[] areas)
+    SwimsuitStain(RgbaImage stain, (int, int, int, int)[] areas, int[] modes)
     {
         _stain = stain;
         _areas = areas;
+        _modes = modes;
         _levels = new float[areas.Length];
     }
+
+    /// <summary>Some wet area turns see-through (mode 2): the suit then has to be drawn blended over her skin.</summary>
+    public bool IsSeeThrough => Enumerable.Range(0, _areas.Length).Any(a => _levels[a] > 0.001f && Mode(a) == 2);
+
+    int Mode(int area) => area < _modes.Length ? _modes[area] : 1;
 
     /// <summary>The stain of a character's swimsuit, or null when the suit has none.</summary>
     public static SwimsuitStain? Load(GameFileSystem fs, string tableArchive, Character girl)
@@ -45,7 +53,7 @@ public sealed class SwimsuitStain
                     areas[i] = (Int(1), Int(2), Int(3), Int(4));
                 }
             }
-            return new SwimsuitStain(stain, areas);
+            return new SwimsuitStain(stain, areas, [.. suit.StainModes]);
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or NotSupportedException)
         {
@@ -71,7 +79,8 @@ public sealed class SwimsuitStain
         {
             var (w, h, x, y) = _areas[a];
             float level = _levels[a];
-            if (level <= 0.001f || w <= 0 || h <= 0)
+            int mode = Mode(a);
+            if (level <= 0.001f || w <= 0 || h <= 0 || mode == 0)
                 continue;
             int x0 = (int)(x * scaleX), y0 = (int)(y * scaleY), pw = Math.Max(1, (int)(w * scaleX)), ph = Math.Max(1, (int)(h * scaleY));
             for (int py = 0; py < ph; py++)
@@ -87,6 +96,14 @@ public sealed class SwimsuitStain
                         continue;
                     int sx = Math.Min(_stain.Width - 1, px * _stain.Width / pw);
                     int s = (sy * _stain.Width + sx) * 4, t = (ty * suit.Width + tx) * 4;
+                    if (mode == 2)
+                    {
+                        // SukeShader: the wet cloth turns thin, her skin shows through (the exe's blend is not decoded:
+                        // here the stain's alpha takes the suit's opacity down, to a quarter at most).
+                        float clear = Math.Min(0.75f, level * _stain.Pixels[s + 3] / 255f * 1.5f);
+                        result.Pixels[t + 3] = (byte)(result.Pixels[t + 3] * (1 - clear));
+                        continue;
+                    }
                     for (int c = 0; c < 3; c++)
                         result.Pixels[t + c] = (byte)Math.Max(0, result.Pixels[t + c] - level * _stain.Pixels[s + c]);
                 }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using OpenDelulu.Engine.Characters;
 
 namespace OpenDelulu.ViewModels;
@@ -42,5 +43,11 @@ public sealed partial class PlayViewModel
             return;
         foreach (var image in girl.SwimsuitImages)
             scene.ReplaceTexture(1, image, _stain.Apply(image));
+        if (_stain.IsSeeThrough)
+        {
+            // See-through areas: the suit's meshes go with the blended ones (drawn over her skin, alpha from the texture).
+            var suitTextures = girl.SwimsuitImages.Select(image => girl.Model.Textures.ToList().IndexOf(image)).ToHashSet();
+            scene.SetObjectOpacity(1, m => suitTextures.Contains(m.TextureIndex), 0.999f);
+        }
     }
 }
