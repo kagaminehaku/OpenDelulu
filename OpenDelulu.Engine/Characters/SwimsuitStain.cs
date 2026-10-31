@@ -5,7 +5,8 @@ namespace OpenDelulu.Engine.Characters;
 
 /// <summary>
 /// The wet stain of the swimsuit (exe: sb_SukeBase, "SimiShader": colour = suit − g_fLerp × stain, or for the areas the
-/// suit marks see-through, "SukeShader": the cloth turns thin). Eleven areas per
+/// suit marks see-through, "SukeShader": colour and opacity = suit − g_fLerp × stain; the effect's ps_1_1 code is in
+/// the exe's resources at file offset 0x2101D4 / 0x210324). Eleven areas per
 /// suit, rows of lz00 starting at lbNN column 10 (21 = rows 21..31: breasts, belly, sides, crotch front and back, hips…),
 /// each a rectangle of the 512×512 suit texture (columns 1..4: width, height, x, y) where the stain sk01 (lbNN column 6,
 /// 128×128 grey with alpha) is stamped, scaled to it. The oil and H scenes raise area 6 (0-based: the crotch panel, lz00
@@ -96,15 +97,10 @@ public sealed class SwimsuitStain
                         continue;
                     int sx = Math.Min(_stain.Width - 1, px * _stain.Width / pw);
                     int s = (sy * _stain.Width + sx) * 4, t = (ty * suit.Width + tx) * 4;
-                    if (mode == 2)
-                    {
-                        // SukeShader: the wet cloth turns thin, her skin shows through (the exe's blend is not decoded:
-                        // here the stain's alpha takes the suit's opacity down, to a quarter at most).
-                        float clear = Math.Min(0.75f, level * _stain.Pixels[s + 3] / 255f * 1.5f);
-                        result.Pixels[t + 3] = (byte)(result.Pixels[t + 3] * (1 - clear));
-                        continue;
-                    }
-                    for (int c = 0; c < 3; c++)
+                    // The exe's ps_1_1 shaders: SimiShader rgb = suit − g_fLerp × stain (alpha kept); SukeShader does the
+                    // same to all four channels, so the wet cloth also loses opacity (sk01's alpha is 133 at most).
+                    int channels = mode == 2 ? 4 : 3;
+                    for (int c = 0; c < channels; c++)
                         result.Pixels[t + c] = (byte)Math.Max(0, result.Pixels[t + c] - level * _stain.Pixels[s + c]);
                 }
             }
