@@ -5,7 +5,7 @@ namespace OpenDelulu.Formats.Xa;
 
 /// <summary>
 /// Parser for .xa files. Sections are each prefixed by a presence byte (0 = absent).
-/// Layout cross-checked against the community SB3Utility/SB3UGS tools; see docs/formats.md.
+/// Layout cross-checked against the community SB3Utility/SB3UGS tools.
 /// </summary>
 public sealed class XaReader
 {

@@ -1,7 +1,5 @@
 # Open Delulu
 
-**English** · [Tiếng Việt](README.vi.md)
-
 A reimplementation of the **Sexy Beach 3** player (Illusion, 2006) in C# + Avalonia UI.
 It reads the data of a game the user has installed, **does not need the original executable**, and
 **does not contain or distribute any game assets**.
@@ -95,8 +93,6 @@ dotnet run --project tools/OpenDelulu.ShaderCompiler -- OpenDelulu/Rendering/Vul
    stage animation (waves), particles and glare, swimsuit choice in game, an in-game UI like the original.
 4. **Saves**: the structure of `data/save/*.sav` is read (`delulu saves`); field meanings and writing remain.
 5. **Video**: the `.mpg` files (MPEG-1) with a cross-platform decoder.
-
-File formats: [docs/formats.md](docs/formats.md) (written in Vietnamese; an English version is welcome).
 
 ## License
 

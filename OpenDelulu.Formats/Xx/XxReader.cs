@@ -5,7 +5,7 @@ using OpenDelulu.Formats.IO;
 namespace OpenDelulu.Formats.Xx;
 
 /// <summary>
-/// Parser for .xx models. Layout documented in docs/formats.md; cross-checked against the
+/// Parser for .xx models. Layout cross-checked against the
 /// community SB3Utility/SB3UGS tools.
 /// </summary>
 public sealed class XxReader
