@@ -271,14 +271,19 @@ public sealed partial class PlayViewModel
         return true;
     }
 
-    /// <summary>Skin: the tan of the shoot (rebuilds her once the value settles), not saved to the game.</summary>
+    /// <summary>
+    /// Skin: the tan of the shoot (rebuilds her once the value settles), not saved to the game. Suntan shows that much
+    /// tan; Whiten is the exe's sun-oil mode 2 (sb_SunOilBase: blended back toward her own skin texture), so it takes
+    /// that share of her saved tan away and never makes her paler than her own skin.
+    /// </summary>
     async Task ApplyPhotoSkinAsync()
     {
         int wanted = _photoSkin;
         await Task.Delay(300);
         if (wanted != _photoSkin || _girl is not { } current || IsBusy)
             return;
-        var spec = SpecFor(current.Girl.Id, Progress.SwimsuitRow) with { Tan = (_photoWhiten ? -wanted : wanted) / 100.0 };
+        double tan = _photoWhiten ? Progress.Tan * (1 - wanted / 100.0) : wanted / 100.0;
+        var spec = SpecFor(current.Girl.Id, Progress.SwimsuitRow) with { Tan = tan };
         IsBusy = true;
         try
         {

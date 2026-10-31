@@ -177,8 +177,6 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         if (spec.Tan > 0 && tanSuit?.TanTexture is { } tan && bodyTextures.TryGetValue(BodyPlaceholder, out var skin)
             && LoadImage(tan) is { } tanned)
             bodyTextures[BodyPlaceholder] = ApplyTan(skin, tanned, (float)Math.Clamp(spec.Tan, 0, 1));
-        else if (spec.Tan < 0 && bodyTextures.TryGetValue(BodyPlaceholder, out var pale))
-            bodyTextures[BodyPlaceholder] = Whiten(pale, (float)Math.Clamp(-spec.Tan, 0, 1));
         // The overlay meshes of the intimate areas carry a "zxNN_MM" placeholder; the girl's texture comes from ld00.
         foreach (var texture in body.Textures.Where(t => t.Name.StartsWith("zx", StringComparison.OrdinalIgnoreCase)))
             AddTexture(bodyTextures, texture.Name, girl.DetailTexture);
@@ -287,19 +285,6 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
     /// over the girl's skin, by its alpha × <paramref name="amount"/>. The exe blends into a texture of its own
     /// (sb_SunOilBase, "日焼け前テクスチャ"); its exact blend is not decoded.
     /// </summary>
-    /// <summary>
-    /// The photo mode's Whiten: the skin lighter by <paramref name="amount"/> (0..1, up to 40 % of the way to white). The
-    /// exe's own whitening is not decoded.
-    /// </summary>
-    static RgbaImage Whiten(RgbaImage skin, float amount)
-    {
-        var result = new RgbaImage(skin.Width, skin.Height, (byte[])skin.Pixels.Clone());
-        var p = result.Pixels;
-        for (int i = 0; i < p.Length; i += 4)
-            for (int c = 0; c < 3; c++)
-                p[i + c] = (byte)(p[i + c] + (255 - p[i + c]) * 0.4f * amount);
-        return result;
-    }
 
     static RgbaImage ApplyTan(RgbaImage skin, RgbaImage tan, float amount)
     {
