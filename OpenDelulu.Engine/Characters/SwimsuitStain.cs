@@ -8,13 +8,13 @@ namespace OpenDelulu.Engine.Characters;
 /// suit marks see-through, "SukeShader": the cloth turns thin). Eleven areas per
 /// suit, rows of lz00 starting at lbNN column 10 (21 = rows 21..31: breasts, belly, sides, crotch front and back, hips…),
 /// each a rectangle of the 512×512 suit texture (columns 1..4: width, height, x, y) where the stain sk01 (lbNN column 6,
-/// 128×128 grey with alpha) is stamped, scaled to it. The oil and H scenes raise area 6 (the crotch, lz00 row first + 5)
-/// with the girl's arousal; other areas are not driven here.
+/// 128×128 grey with alpha) is stamped, scaled to it. The oil and H scenes raise area 6 (0-based: the crotch panel, lz00
+/// row first + 6; exe 0x4A5989 / 0x4B1DC5) with the girl's arousal; other areas are not driven by the exe either.
 /// </summary>
 public sealed class SwimsuitStain
 {
-    /// <summary>The crotch area (0-based 5 = the sixth row).</summary>
-    public const int Crotch = 5;
+    /// <summary>The crotch area (0-based 6 = the seventh row: the panel between her legs on the suit texture).</summary>
+    public const int Crotch = 6;
 
     readonly RgbaImage _stain;
     readonly (int W, int H, int X, int Y)[] _areas;

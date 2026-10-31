@@ -7,7 +7,9 @@ namespace OpenDelulu.ViewModels;
 /// <summary>
 /// The swimsuit's wet stain (exe: sb_SukeBase): the oil and H scenes raise the crotch area with her arousal, and the
 /// stain sk01 is stamped on the suit texture there (<see cref="SwimsuitStain"/>). It stays while she wears the suit.
-/// What the exe's arousal counter adds up is not decoded: here the H scene's excitement and the oil's coverage.
+/// The exe's target is her arousal gauge (character +0xD4: min(counter +0x54, max) / max; the counter grows by frame time
+/// × lg00 row 21 column 5 or 6 during H actions); its maximum is not decoded: here the H scene's excitement and the oil's
+/// coverage.
 /// </summary>
 public sealed partial class PlayViewModel
 {
@@ -16,17 +18,21 @@ public sealed partial class PlayViewModel
     float _wetness, _wetnessShown;
 
     /// <summary>
-    /// Out of the oil and H scenes the stain dries (exe 0x413430: wetness = max(target, wetness − time × rate); the rate's
-    /// value is not decoded: here a full stain dries in about two minutes).
+    /// The stain dries (exe 0x413430: wetness = max(target, wetness − ms × rate), the rate set by 0x4A9B20 to lg00 row 21
+    /// column 17 × 0.00001 in H (0.4: a full stain dries in 250 s) and row 11 column 20 × 0.00001 in the oil scene (0.0075:
+    /// it hardly dries there). The exe keeps the stain inside those scenes; here it dries out of them at the H rate.
     /// </summary>
     readonly Avalonia.Threading.DispatcherTimer _dryTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     bool _dryHooked;
+
+    /// <summary>lg00 row 21 column 17 (0.4) × 0.00001 per ms.</summary>
+    const float DryPerSecond = 0.4f * 0.00001f * 1000;
 
     void Dry()
     {
         if (_oil is not null || _couple is not null || _wetness <= 0)
             return;
-        _wetness = Math.Max(0, _wetness - 1f / 120);
+        _wetness = Math.Max(0, _wetness - DryPerSecond);
         if (Math.Abs(_wetness - _wetnessShown) >= 0.05f || _wetness == 0 && _wetnessShown > 0)
             ShowStain();
     }
