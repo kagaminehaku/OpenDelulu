@@ -176,7 +176,7 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         var tanSuit = girl.Swimsuits.FirstOrDefault(s => s.Row == spec.TanSwimsuitRow) ?? swimsuit;
         if (spec.Tan > 0 && tanSuit?.TanTexture is { } tan && bodyTextures.TryGetValue(BodyPlaceholder, out var skin)
             && LoadImage(tan) is { } tanned)
-            bodyTextures[BodyPlaceholder] = ApplyTan(skin, tanned, (float)Math.Clamp(spec.Tan, 0, 1));
+            bodyTextures[BodyPlaceholder] = ApplyTan(skin, tanned, (float)Math.Clamp(spec.Tan, 0, 1) * TanStrength);
         // The overlay meshes of the intimate areas carry a "zxNN_MM" placeholder; the girl's texture comes from ld00.
         foreach (var texture in body.Textures.Where(t => t.Name.StartsWith("zx", StringComparison.OrdinalIgnoreCase)))
             AddTexture(bodyTextures, texture.Name, girl.DetailTexture);
@@ -280,12 +280,14 @@ public sealed class CharacterAssembler(GameFileSystem fs, CharacterDatabase data
         catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException or NotSupportedException) { return null; }
     }
 
+    /// <summary>A full tan shows the tan texture at this strength: the exe's mode 1 scale (+0x3C), lg00 row 11 column 1.</summary>
+    const float TanStrength = 0.5f;
+
     /// <summary>
     /// The tanned skin: the swimsuit's tan texture (sbNN, the skin's UV layout, transparent where the swimsuit covers it)
     /// over the girl's skin, by its alpha × <paramref name="amount"/>. The exe blends into a texture of its own
     /// (sb_SunOilBase, "日焼け前テクスチャ"); its exact blend is not decoded.
     /// </summary>
-
     static RgbaImage ApplyTan(RgbaImage skin, RgbaImage tan, float amount)
     {
         var result = new RgbaImage(skin.Width, skin.Height, (byte[])skin.Pixels.Clone());
