@@ -119,8 +119,12 @@ public sealed partial class PlayViewModel
                 IsStatusPanelShown = !IsStatusPanelShown;
                 return;
             case "Item":
-                // The exe switches to a scene whose contents are not decoded: the unlocked items are told instead.
+                // A toggle hit (type 0x10, id 32000) like Sinmitu: the date item she holds shown or hidden; the counts of
+                // what is unlocked are told too.
                 CloseSystemDrop();
+                IsItemShown = !IsItemShown;
+                if (Scene is { } scene && _propIndex >= 0)
+                    scene.SetObjectVisible(_propIndex, IsItemShown);
                 ShowStatus(F("play.items", _progress.Swimsuits?.Count ?? _girl?.Girl.Swimsuits.Count ?? 0,
                     _progress.Accessories?.Count ?? 0), seconds: 4);
                 return;

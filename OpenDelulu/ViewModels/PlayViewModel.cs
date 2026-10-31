@@ -383,8 +383,12 @@ public sealed partial class PlayViewModel : ViewModelBase
         if (_stage is null || _girl is null)
             return;
         var objects = new List<(RenderModel, CharacterAnimator?)> { (_stage.Model, _stage.Animator), (_girl.Model, _girl.Animator) };
+        _propIndex = -1;
         if (_prop is { } prop)
+        {
+            _propIndex = objects.Count;
             objects.Add(prop);
+        }
         _manObject = _liquidObject = _dropsObject = _squirtObject = -1;
         if (_couple is { } couple)
         {
@@ -488,7 +492,14 @@ public sealed partial class PlayViewModel : ViewModelBase
         ApplyConfigOpacity();
         SyncLiquid();
         ShowStain();
+        if (_propIndex >= 0 && !IsItemShown)
+            Scene.SetObjectVisible(_propIndex, false);
     }
+
+    /// <summary>The date item's scene object (-1 none); the system menu's Item button shows / hides it.</summary>
+    int _propIndex = -1;
+
+    public bool IsItemShown { get; private set; } = true;
 
     int _manObject = -1, _liquidObject = -1, _dropsObject = -1, _squirtObject = -1;
 
