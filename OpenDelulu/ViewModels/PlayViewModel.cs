@@ -606,6 +606,7 @@ public sealed partial class PlayViewModel : ViewModelBase
             BuildScene();
             TouchHandler = _oilTouch;
             _oilClock.Restart();
+            _tanGain = 0;
             _oilTimer.Start();
             ShowStatus(F("oil.status", 0), seconds: 0);
         }
@@ -654,19 +655,55 @@ public sealed partial class PlayViewModel : ViewModelBase
             _ = RebuildGirlAsync();
     }
 
-    /// <summary>Tan per oil of the oil menu (sun block, three tan oils, three whitening creams), times the coverage.</summary>
-    static readonly double[] OilTan = [0, 0.2, 0.35, 0.5, -0.2, -0.35, -0.5];
+    /// <summary>The tan the oil scene has added (the whitening creams: taken off) so far.</summary>
+    double _tanGain;
 
     /// <summary>
-    /// After an oil scene: the tan oils tan her (with the lines of the swimsuit she wears), the whitening creams undo it,
-    /// in proportion to how much of her skin was oiled. The exe's own rates (sb_SunOilBase) are not decoded.
+    /// The tan gauge of the exe (sb_SunOilBase, 0x41F950): while the oil scene runs it gains ms × the oil's rate (lg00
+    /// row 11 columns 2..8: sun block 0, the tan oils 0.5 / 1 / 2, the whitening creams 0.5 / 1 / 2) up to column 0
+    /// (120000); out of the scene it is kept as 0..100. The exe tans (or whitens back to her own skin) where the oil is
+    /// painted; the tan here being one level, it goes with how much of her skin is oiled.
+    /// </summary>
+    void Tan(Engine.Oil.OilSession oil, double seconds)
+    {
+        int kind = OilHud is not null ? _oilHudOil : oil.OilKind switch { 2 => 2, 1 => 5, _ => 0 };
+        var (rates, max) = TanRates();
+        if (kind <= 0 || kind >= rates.Length || max <= 0)
+            return;
+        double gain = seconds * 1000 * rates[kind] / max * oil.Coating.Coverage;
+        _tanGain += kind <= 3 ? gain : -gain;
+    }
+
+    (double[] Rates, double Max)? _tanRates;
+
+    (double[] Rates, double Max) TanRates()
+    {
+        if (_tanRates is { } known)
+            return known;
+        (double[], double) rates = ([0, 0.5, 1, 2, 0.5, 1, 2], 120000);
+        try
+        {
+            var row = _fs.ReadTable(_assembler.Database.TableArchive, "lg00_00_00_00_00.lst").Rows.FirstOrDefault(r => r.Length > 9 && r[0] == "11");
+            if (row is not null && double.TryParse(row[1], System.Globalization.CultureInfo.InvariantCulture, out double max))
+                rates = (Enumerable.Range(3, 7).Select(c => double.TryParse(row[c], System.Globalization.CultureInfo.InvariantCulture, out double v) ? v : 0).ToArray(), max);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidDataException)
+        {
+        }
+        _tanRates = rates;
+        return rates;
+    }
+
+    /// <summary>
+    /// After an oil scene: the tan it gave (<see cref="Tan(Engine.Oil.OilSession, double)"/>) is kept, with the lines of
+    /// the swimsuit she wears.
     /// </summary>
     bool ApplyTan(Engine.Oil.OilSession oil)
     {
         if (_girl is null)
             return false;
-        int kind = OilHud is not null ? _oilHudOil : oil.OilKind switch { 2 => 2, 1 => 5, _ => 0 };
-        double change = OilTan[Math.Clamp(kind, 0, OilTan.Length - 1)] * oil.Coating.Coverage;
+        double change = _tanGain;
+        _tanGain = 0;
         var progress = Progress;
         double tan = Math.Clamp(progress.Tan + change, 0, 1);
         if (Math.Abs(tan - progress.Tan) < 0.01)
@@ -816,6 +853,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         _oilClock.Restart();
         oil.Update(seconds);
         Wet(oil.Coating.Coverage);
+        Tan(oil, seconds);
         TickOilHud(seconds);
         SyncHand();
         if (Environment.TickCount64 >= _statusHoldUntil)

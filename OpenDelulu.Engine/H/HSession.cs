@@ -44,7 +44,7 @@ public sealed class HSession : CoupleSession
     public static readonly string[] OutsideTargets = ["胸", "尻", "脚", "顔", "アソコ"];
 
     readonly string _mood;
-    int _queuedStrokes, _inside, _climaxes;
+    int _queuedStrokes, _inside;
 
     HSession(Parts parts, int file, string mood) : base(parts)
     {
