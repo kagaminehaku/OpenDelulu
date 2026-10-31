@@ -144,7 +144,12 @@ public sealed class OilTables
 /// belong to la01's special index N; their variants differ by body type (A/B/C体型) and what she wears
 /// (ブラあり with the top, ブラなし without, 全裸 nude). Column 26 is the action's button, st00_01_(N+1)
 /// (0 Stroke Gently, 1 Tug Bra, 2 Finger Nipple, 3 Under Suit, 5 Expose Tits, 9 Massage Ass, 10 Pull Outward…).
-/// Columns 4..20 and 23..24 are not understood yet.
+/// The exe (sb_LoadList 0x459130) reads the row into a record: row[4]/row[5] bytes +0x48/+0x49, row[6] a count (+0x4C)
+/// with four slots row[7..10] (+0x50: 0..2 left top, 3..5 right, 6..8 both, 9..12 bottom, 13..16 taking the bottom off,
+/// 17..19 the special variants), row[11] (+0x60) with five slots row[12..16] (+0x64: 230..250 / 560..580 for the "under
+/// the suit" actions), row[17] (+0x78), row[18] the shift flag (+0x7C, set for ずらし), row[19] the suit part (+0x7D:
+/// 1 top, 2 bottom), row[20] (+0x80: 70 / 80 / 105 for the shifts), then the clips (+0x84, +0x88), row[23] (+0x8C), the
+/// hand (+0x91) and the button (+0x94). What the slots and row[20] drive is not decoded yet.
 /// </summary>
 public sealed record OilAction(int Row, string Name, string Locator, string LeftLocator, int HandClip, int GirlClip, int Hand, int Button = -1)
 {
