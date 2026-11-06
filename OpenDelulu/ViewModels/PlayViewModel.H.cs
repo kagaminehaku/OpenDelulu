@@ -479,6 +479,7 @@ public sealed partial class PlayViewModel
             switch (owner._couple)
             {
                 case HSession { State: HState.Inserted or HState.Moving } h:
+                    h.Auto = false;
                     h.Continuous = true;
                     h.Stroke();
                     return true;
@@ -511,9 +512,9 @@ public sealed partial class PlayViewModel
             if (owner._couple is not HSession { State: HState.Inserted or HState.Moving } h)
                 return false;
             h.StrokeSpeed = Math.Clamp(h.StrokeSpeed + notches * 120 * 0.0001, 0.5, 2);
-            if (!h.Continuous)
+            if (!h.Auto)
             {
-                h.Continuous = true;
+                h.Auto = h.Continuous = true;
                 h.Stroke();
             }
             return true;

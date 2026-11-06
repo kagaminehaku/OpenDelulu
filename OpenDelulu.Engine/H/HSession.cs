@@ -244,12 +244,51 @@ public sealed class HSession : CoupleSession
         }
         else if (LiquidVisible && (name.Contains("ピストン", StringComparison.Ordinal) || name.StartsWith('Z') || name.Contains("→Z", StringComparison.Ordinal)))
             LiquidVisible = false;
-        if (Inserted is { } p && name == $"{p}待機" && (_queuedStrokes > 0 || Continuous))
+        if (Inserted is { } p && name == $"{p}待機" && Auto && AutoStep(p))
+            return;
+        if (Inserted is { } q && name == $"{q}待機" && (_queuedStrokes > 0 || Continuous || Auto))
         {
             _queuedStrokes = Math.Max(0, _queuedStrokes - 1);
             Stroke();
         }
     }
+
+    /// <summary>
+    /// The exe's choice at an inserted standby while she strokes by herself (sb_HScene 0x4AB850, the wheel's auto flag):
+    /// in the vagina (X1) she strokes until half excited, then moves to the anus (X2); in the anus she goes back to X1
+    /// while below half (at her lewd level that arms the lewd piston), strokes when above, and once armed by a trip
+    /// back and forth takes over with 淫乱ピストン. False when nothing applies (the usual stroke then).
+    /// </summary>
+    bool AutoStep(string p)
+    {
+        char letter = p[0];
+        if (p[1] == '1')
+        {
+            if (Excitement < 0.5)
+                return false;
+            if (_lewdArmed == 1)
+                _lewdArmed = 2;
+            return Play($"{p}待機→{letter}2待機");
+        }
+        if (_lewdArmed == 2 && _mood == "淫乱待機" && Play($"{p}待機→{p}淫乱ピストン1"))
+        {
+            _lewd = p;
+            _lewdArmed = 0;
+            _queuedStrokes = 0;
+            return true;
+        }
+        if (Excitement >= 0.5)
+            return false;
+        if (_mood == "淫乱待機")
+            _lewdArmed = 1;
+        return Play($"{p}待機→{letter}1待機");
+    }
+
+    /// <summary>The exe's +0x26: 1 after she went back from the anus at her lewd level, 2 once she came back to it.</summary>
+    int _lewdArmed;
+
+    /// <summary>She strokes by herself (the mouse wheel); a press of the player's ends it.</summary>
+    public bool Auto { get; set; }
 
     /// <summary>The spray of her climax (ek06: a frame and its particles, see the .ptcl beside it), or null.</summary>
     public Partner? Squirt { get; private set; }
@@ -365,7 +404,7 @@ public sealed class HSession : CoupleSession
     public bool PullOut()
     {
         _queuedStrokes = 0;
-        Continuous = false;
+        Continuous = Auto = false;
         return State == HState.Inserted && Inserted is { } now && Play($"{now}待機→Z待機");
     }
 
@@ -377,15 +416,6 @@ public sealed class HSession : CoupleSession
     {
         if (Inserted is not { } p)
             return false;
-        // At her lewd level, held in the anus (A2 / B2) once she is half excited, she takes over (exe 0x4AB850: from
-        // A2待機 / B2待機 to 淫乱ピストン, loops 1..3 as she gets excited, then 淫乱絶頂 and back to A1 / B1).
-        if (_mood == "淫乱待機" && p is "A2" or "B2" && Continuous && State == HState.Inserted && Excitement >= 0.5
-            && Play($"{p}待機→{p}淫乱ピストン1"))
-        {
-            _lewd = p;
-            _queuedStrokes = 0;
-            return true;
-        }
         if (State == HState.Moving)
         {
             _queuedStrokes = Math.Min(_queuedStrokes + 1, 2);
