@@ -11,6 +11,12 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <!-- Linux builds: minimal systems (WSL's Ubuntu) have no libicu and .NET stops at startup without it. The UI language
+       comes from the app's own settings, so culture data is only used for number formats. -->
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" />
   </ItemGroup>
