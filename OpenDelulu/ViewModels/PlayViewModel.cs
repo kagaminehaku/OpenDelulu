@@ -661,8 +661,8 @@ public sealed partial class PlayViewModel : ViewModelBase
     /// <summary>
     /// The tan gauge of the exe (sb_SunOilBase, 0x41F950): while the oil scene runs it gains ms × the oil's rate (lg00
     /// row 11 columns 2..8: sun block 0, the tan oils 0.5 / 1 / 2, the whitening creams 0.5 / 1 / 2) up to column 0
-    /// (120000); out of the scene it is kept as 0..100. The exe tans (or whitens back to her own skin) where the oil is
-    /// painted; the tan here being one level, it goes with how much of her skin is oiled.
+    /// (120000); out of the scene it is kept as 0..100. The exe draws the tan texture over her whole skin at that level
+    /// (0x41F950 → 0x515720: one sprite, alpha = the gauge), not only where the oil is.
     /// </summary>
     void Tan(Engine.Oil.OilSession oil, double seconds)
     {
@@ -670,7 +670,7 @@ public sealed partial class PlayViewModel : ViewModelBase
         var (rates, max) = TanRates();
         if (kind <= 0 || kind >= rates.Length || max <= 0)
             return;
-        double gain = seconds * 1000 * rates[kind] / max * oil.Coating.Coverage;
+        double gain = seconds * 1000 * rates[kind] / max;
         _tanGain += kind <= 3 ? gain : -gain;
     }
 
