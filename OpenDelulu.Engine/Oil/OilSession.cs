@@ -349,9 +349,17 @@ public sealed class OilSession
         _lastPoint = _point;
     }
 
-    /// <summary>The actions of an lf01 group that fit her body type and what she wears, one per button.</summary>
+    /// <summary>
+    /// The action of a special area: the lf01 row her swimsuit names for it (<see cref="SwimsuitInfo.OilActions"/>);
+    /// without that list, the rows of the lf01 group with the same number that fit her body type, one per button.
+    /// </summary>
     public IReadOnlyList<OilAction> ActionsFor(int group)
     {
+        // The suit names the one action of each special area (lbNN columns 8..26), as the exe does.
+        if (Girl.Swimsuit?.OilActions is { Count: > 0 } suitActions)
+            return group >= 0 && group < suitActions.Count && suitActions[group] is int row and > 0
+                ? _tables.Actions.Where(a => a.Row == row && a.HandClip > 0 && a.GirlClip > 0).Take(1).ToList()
+                : [];
         var rows = _tables.Actions.Where(a => a.Group == group && a.HandClip > 0 && a.GirlClip > 0).ToList();
         string type = $"{BodyType}体型";
         if (rows.Any(a => a.Name.Contains("体型")))

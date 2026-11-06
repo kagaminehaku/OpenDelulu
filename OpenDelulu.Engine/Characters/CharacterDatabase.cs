@@ -47,6 +47,13 @@ public sealed record SwimsuitInfo(int Row, string Name, AssetRef Texture, AssetR
     /// darker stain (SimiShader), 2 see-through (SukeShader), 0 nothing.
     /// </summary>
     public IReadOnlyList<int> StainModes { get; init; } = [];
+
+    /// <summary>
+    /// The lf01 row of each oil special area (la01 special index 0..18) in this suit, 0 for none: lbNN columns 8..26,
+    /// read by the exe (sb_LoadList 0x44C450, 19 integers after the name and files) and used by the oil scene. The rows
+    /// already fit the girl's body type and what the suit allows (no bra to take off on a one-piece…).
+    /// </summary>
+    public IReadOnlyList<int> OilActions { get; init; } = [];
 }
 
 /// <summary>
@@ -286,6 +293,7 @@ public sealed class CharacterDatabase
                 StainRows = int.TryParse(Cell(row, SwimsuitStainRowsColumn), out int stainRows) ? stainRows : 0,
                 Requirement = int.TryParse(Cell(row, SwimsuitRequirementColumn), out int requirement) ? requirement : 0,
                 StainModes = Enumerable.Range(27, 11).Select(c => int.TryParse(Cell(row, c), out int m) ? m : 1).ToArray(),
+                OilActions = Enumerable.Range(8, 19).Select(c => int.TryParse(Cell(row, c), out int a) ? a : 0).ToArray(),
             });
         }
         return list;
