@@ -18,10 +18,12 @@ public sealed record AnimationClipInfo(int Index, string Name, float Start, floa
 public sealed class AnimationPlayer
 {
     /// <summary>
-    /// Timeline frames per second at clip speed 1. Not stored in the data; 10 makes the idle loops
-    /// (10-20 frames at speed 1.2-1.5) last about one breath. Adjust with <see cref="SpeedScale"/>.
+    /// Timeline frames per second of a clip: its "speed" is in fact how many seconds it lasts (exe 0x53EB18: frames
+    /// += (end − start) × ms / (speed × 1000) × the object's speed factor), so a 24-frame wave at 8 takes 8 s and a
+    /// stroke's 20 frames at 0.5 half a second. 0 for a clip that does not move.
     /// </summary>
-    public const double BaseFramesPerSecond = 10;
+    public static double FramesPerSecond(AnimationClipInfo clip) =>
+        clip.Speed > 0 && clip.End > clip.Start ? (clip.End - clip.Start) / clip.Speed : 0;
 
     readonly XaAnimationTrack[] _tracks;
     readonly int[] _trackFrame;
@@ -74,7 +76,7 @@ public sealed class AnimationPlayer
     {
         if (!IsPlaying || Current is not { IsStatic: false } clip)
             return;
-        Time += seconds * BaseFramesPerSecond * Math.Max(0.01, clip.Speed) * SpeedScale;
+        Time += seconds * FramesPerSecond(clip) * SpeedScale;
         if (HoldAtEnd && !FollowNext && Time >= clip.End)
         {
             Time = clip.End;

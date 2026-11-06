@@ -62,10 +62,10 @@ public sealed class HSession : CoupleSession
     public bool Continuous { get; set; }
 
     /// <summary>
-    /// Speed of the stroke clips (ピストン…): their own speeds (×0.125..×0.5) make a stroke last 8 s at the characters'
-    /// rate, so the exe must scale them by the player's stroke speed (not decoded); 4 gives about two strokes a second.
+    /// Speed of the stroke clips (ピストン…), the exe's speed factor of the girl (character +0xEC: 1 at first, the mouse
+    /// wheel moves it by 0.0001 per unit between lg00 row 21 columns 8 and 9, 0.5..2). At 1 a stroke lasts a second.
     /// </summary>
-    public double StrokeSpeed { get; set; } = 4;
+    public double StrokeSpeed { get; set; } = 1;
 
     /// <summary>How much one stroke adds to <see cref="CoupleSession.Excitement"/>.</summary>
     public double StrokeExcitement { get; set; } = 0.06;

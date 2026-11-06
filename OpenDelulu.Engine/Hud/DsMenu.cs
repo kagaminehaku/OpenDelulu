@@ -112,7 +112,7 @@ public sealed class DsMenu
         IsLooping = loop && !clip.IsStatic;
         _player.Play(clip.Index);
         if (instant)
-            _player.Advance((clip.End - clip.Start) / AnimationPlayer.BaseFramesPerSecond / Math.Max(0.01, clip.Speed) - 1e-6);
+            _player.Advance(Math.Max(0, clip.Speed - 1e-6));
         Evaluate();
         return true;
     }
@@ -125,14 +125,16 @@ public sealed class DsMenu
         if (IsLooping)
         {
             // Wrap inside the clip instead of following its "next" link.
-            double frames = seconds * AnimationPlayer.BaseFramesPerSecond * Math.Max(0.01, clip.Speed);
-            double time = clip.Start + ((_player.Time - clip.Start + frames) % Math.Max(1e-3, clip.End - clip.Start));
+            double rate = AnimationPlayer.FramesPerSecond(clip);
+            if (rate <= 0)
+                return;
+            double time = clip.Start + ((_player.Time - clip.Start + seconds * rate) % Math.Max(1e-3, clip.End - clip.Start));
             _player.Play(clip.Index);
-            _player.Advance((time - clip.Start) / AnimationPlayer.BaseFramesPerSecond / Math.Max(0.01, clip.Speed));
+            _player.Advance((time - clip.Start) / rate);
             Evaluate();
             return;
         }
-        double remaining = (clip.End - 1e-4 - _player.Time) / AnimationPlayer.BaseFramesPerSecond / Math.Max(0.01, clip.Speed);
+        double remaining = AnimationPlayer.FramesPerSecond(clip) is var fps and > 0 ? (clip.End - 1e-4 - _player.Time) / fps : 0;
         _player.Advance(Math.Clamp(seconds, 0, Math.Max(0, remaining)));
         Evaluate();
     }
