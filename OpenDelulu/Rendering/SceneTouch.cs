@@ -16,4 +16,7 @@ public interface ISceneTouchHandler
     void Move(Ray ray, Vector3 up);
 
     void End();
+
+    /// <summary>The mouse wheel turned (notches, up positive); return false to let it zoom the camera.</summary>
+    bool Wheel(double notches) => false;
 }

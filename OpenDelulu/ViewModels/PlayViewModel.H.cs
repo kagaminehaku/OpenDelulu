@@ -501,6 +501,24 @@ public sealed partial class PlayViewModel
         {
         }
 
+        /// <summary>
+        /// Inserted, the wheel strokes by itself like the exe's (sb_HScene 0x4ABB0B: any wheel turn sets the auto flag,
+        /// a click ends it) and changes the stroke speed by 0.0001 per wheel unit (120 a notch) between lg00 row 21
+        /// columns 8 and 9 (0.5..2). Elsewhere it zooms the camera.
+        /// </summary>
+        public bool Wheel(double notches)
+        {
+            if (owner._couple is not HSession { State: HState.Inserted or HState.Moving } h)
+                return false;
+            h.StrokeSpeed = Math.Clamp(h.StrokeSpeed + notches * 120 * 0.0001, 0.5, 2);
+            if (!h.Continuous)
+            {
+                h.Continuous = true;
+                h.Stroke();
+            }
+            return true;
+        }
+
         public void End()
         {
             switch (owner._couple)

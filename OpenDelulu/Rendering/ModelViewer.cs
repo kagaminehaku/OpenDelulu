@@ -415,6 +415,11 @@ public sealed class ModelViewer : Border
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
+        if (TouchHandler?.Wheel(e.Delta.Y) == true)
+        {
+            e.Handled = true;
+            return;
+        }
         _camera.ZoomBy(MathF.Pow(0.88f, (float)e.Delta.Y));
         RequestFrame();
         e.Handled = true;
