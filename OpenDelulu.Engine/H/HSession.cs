@@ -136,6 +136,9 @@ public sealed class HSession : CoupleSession
         // column 5 while she is in an action; full at column 0 × column 1 (10000 × 20). It drives the wet stain.
         if (Clip.Length > 0 && !Clip.EndsWith("待機", StringComparison.Ordinal) && Clip != "初期状態")
             Arousal = Math.Min(1, Arousal + seconds * 1000 * _params.ArousalRate / Math.Max(1, _params.ArousalFull));
+        // She leads the lewd piston: her excitement rises by itself (the exe's rate is not decoded: full in 10 s).
+        if (_lewd is not null && Clip.Contains("淫乱ピストンループ", StringComparison.Ordinal))
+            Excitement = Math.Min(1, Excitement + seconds * LewdExcitementPerSecond);
         // The spray follows her crotch while it plays.
         if (SquirtVisible && Squirt is { } squirt && Girl.Model.Rig.Find("o01_N_Sio") is int sio and >= 0)
         {
@@ -189,6 +192,13 @@ public sealed class HSession : CoupleSession
     protected override void OnClip(AnimationClipInfo clip)
     {
         string name = clip.Name;
+        if (_lewd is { } lewd && LewdLoop(name, lewd) is { } loop && loop != name && Play(loop))
+            return;
+        if (name.Contains("淫乱事後", StringComparison.Ordinal))
+        {
+            _lewd = null;
+            Excitement = 0;
+        }
         if (name == "F待機")
             RaiseSoundEffect(SoundEffects.Outside);
         // The exe (0x4B2EF0) counts her own climaxes, オナニー→オナニー絶頂 (clip 14) and アクション絶頂→アクション事後 (19);
@@ -253,6 +263,28 @@ public sealed class HSession : CoupleSession
 
     /// <summary>The climax she first squirts at: lg00 row 21 column 2 (3).</summary>
     public int SquirtAfter { get; private set; } = 3;
+
+    /// <summary>The position of the lewd piston she leads (A2 / B2), or null.</summary>
+    string? _lewd;
+
+    const double LewdExcitementPerSecond = 0.1;
+
+    /// <summary>
+    /// The clip the lewd piston should be in when <paramref name="name"/> starts: loops 1, 2, 3 at excitement below 0.65,
+    /// below 0.8 and above (the exe's thresholds 0x5C6824 / 0x5C6820), the climax once she is full, always in her own
+    /// position (B2's way in leads to A2's loop in the data); null when the clip is not part of it.
+    /// </summary>
+    string? LewdLoop(string name, string position)
+    {
+        bool loop = name.Contains("淫乱ピストンループ", StringComparison.Ordinal);
+        bool climax = name.EndsWith("淫乱ピストン3→" + name[..2] + "淫乱絶頂", StringComparison.Ordinal);
+        if (!loop && !climax)
+            return null;
+        if (Excitement >= 1)
+            return $"{position}淫乱ピストン3→{position}淫乱絶頂";
+        int n = Excitement < 0.65 ? 1 : Excitement < 0.8 ? 2 : 3;
+        return $"{position}淫乱ピストンループ{n}";
+    }
 
     /// <summary>Her arousal 0..1 (the exe's counter over its full value): it only grows during the scene.</summary>
     public double Arousal { get; private set; }
@@ -345,6 +377,15 @@ public sealed class HSession : CoupleSession
     {
         if (Inserted is not { } p)
             return false;
+        // At her lewd level, held in the anus (A2 / B2) once she is half excited, she takes over (exe 0x4AB850: from
+        // A2待機 / B2待機 to 淫乱ピストン, loops 1..3 as she gets excited, then 淫乱絶頂 and back to A1 / B1).
+        if (_mood == "淫乱待機" && p is "A2" or "B2" && Continuous && State == HState.Inserted && Excitement >= 0.5
+            && Play($"{p}待機→{p}淫乱ピストン1"))
+        {
+            _lewd = p;
+            _queuedStrokes = 0;
+            return true;
+        }
         if (State == HState.Moving)
         {
             _queuedStrokes = Math.Min(_queuedStrokes + 1, 2);
