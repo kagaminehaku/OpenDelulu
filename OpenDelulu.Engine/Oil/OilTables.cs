@@ -112,7 +112,11 @@ public sealed class OilTables
             if (row.Length < 28 || !int.TryParse(row[0], out int n) || row[1] == "0" || !row[2].StartsWith("o01_", StringComparison.Ordinal))
                 continue;
             int Int(int column) => int.TryParse(row[column], NumberStyles.Integer, CultureInfo.InvariantCulture, out int v) ? v : 0;
-            actions.Add(new OilAction(n, row[1], row[2], row[3], Int(21), Int(22), Int(25), Int(26)));
+            int slotCount = Math.Clamp(Int(6), 0, 4);
+            actions.Add(new OilAction(n, row[1], row[2], row[3], Int(21), Int(22), Int(25), Int(26))
+            {
+                Deformations = Enumerable.Range(7, slotCount).Select(Int).ToList(),
+            });
         }
 
         // Voices exist from level 2 on (the oil scene's first level); level 1 uses level 2's lines.
@@ -154,4 +158,10 @@ public sealed class OilTables
 public sealed record OilAction(int Row, string Name, string Locator, string LeftLocator, int HandClip, int GirlClip, int Hand, int Button = -1)
 {
     public int Group => (Row - 1) / 10;
+
+    /// <summary>
+    /// The deformations the action turns on: clip numbers of the body's .xm (row[6] of them in row[7..10]; 0..2 the left
+    /// breast / top, 3..5 the right, 6..8 both, 9..10 the bottom's front, 11..12 its back, 13..16 the whole bottom).
+    /// </summary>
+    public IReadOnlyList<int> Deformations { get; init; } = [];
 }

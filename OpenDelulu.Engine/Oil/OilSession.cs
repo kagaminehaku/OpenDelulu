@@ -182,12 +182,14 @@ public sealed class OilSession
         var drips = tables.Drips.Select(d => Load(d.Model, d.Animation)).OfType<Prop>().ToList();
         // Breast / top / bottom deformations of her body variant that follow the hand during special actions.
         TimelineMorph? deform = null;
+        List<string> deformClips = [];
         if (girl.Girl.Deformations.ElementAtOrDefault(girl.Cut - 1) is { } xmRef)
         {
             try
             {
                 var xm = XmFile.Read(fs.ReadReferenced(xmRef.Archive, xmRef.File));
                 deform = new TimelineMorph(girl.Model, xm.Morphs, checkRest: true);
+                deformClips = xm.Morphs.Clips.Select(c => c.Name).ToList();
                 if (deform.ChannelCount == 0)
                     deform = null;
             }
@@ -195,37 +197,21 @@ public sealed class OilSession
             {
             }
         }
-        return new OilSession(girl, pose, body, tables, level, voices, audio, right, left, drips) { _deform = deform };
+        return new OilSession(girl, pose, body, tables, level, voices, audio, right, left, drips) { _deform = deform, _deformClips = deformClips };
     }
 
     TimelineMorph? _deform;
+    IReadOnlyList<string> _deformClips = [];
 
     /// <summary>The .xm deformation follows the acting hand's timeline; without an action it rests.</summary>
     double DeformTime() => _action is not null && _actionHand?.Animator.Body is { } hand ? hand.Time : 0;
 
     /// <summary>
-    /// The side an action works on, from its name: 両 both (A), 左 left (L), 右 right (R), 前 / 下 the front of the bottom
-    /// (F), 後ろ its back (B). A side without keys in the current hand clip falls back to the "both" set (乳寄せ, the
-    /// bottom's 左/右 actions).
+    /// The deformations of the current action: the .xm clips its lf01 row lists (exe 0x4A1C9E…: each listed clip of the
+    /// body's deformer switched on, the others off).
     /// </summary>
-    bool IsDeformActive(string set)
-    {
-        if (_action is not { } action || _actionHand?.Animator.Body is not { Current: { } clip } || _deform is not { } deform)
-            return false;
-        string name = action.Name;
-        string wanted = name.Contains('両') ? "A" : name.StartsWith("前", StringComparison.Ordinal) || name.StartsWith("下", StringComparison.Ordinal) ? "F"
-            : name.StartsWith("後ろ", StringComparison.Ordinal) ? "B" : name.Contains('左') ? "L" : name.Contains('右') ? "R" : "A";
-        int cut = set.LastIndexOf('_');
-        if (cut < 0)
-            return false;
-        string family = set[..cut], side = set[(cut + 1)..];
-        double from = clip.Start - 1, to = clip.End + 1;
-        if (!deform.HasDeformation(set, from, to))
-            return false;
-        if (side == wanted)
-            return true;
-        return side == "A" && !deform.HasDeformation($"{family}_{wanted}", from, to);
-    }
+    bool IsDeformActive(string set) =>
+        _action is { } action && action.Deformations.Any(n => n >= 0 && n < _deformClips.Count && _deformClips[n] == set);
 
     /// <summary>Gives her the pose's animation (on the thread that renders).</summary>
     public void Attach()

@@ -77,11 +77,6 @@ public sealed class TimelineMorph
     /// </summary>
     public Func<string, bool>? ActiveSet { get; set; }
 
-    /// <summary>True when the set moves the mesh somewhere between <paramref name="from"/> and <paramref name="to"/>
-    /// (a key other than its rest key, which carries the set's own name).</summary>
-    public bool HasDeformation(string set, double from, double to) => _channels.Any(c => c.Set.Name == set
-        && c.Keys.Any(k => k.Frame >= from && k.Frame <= to && k.Key.Name != set));
-
     /// <summary>Timeline position in frames (set from the animation player before skinning).</summary>
     public double Time { get; set; }
 
