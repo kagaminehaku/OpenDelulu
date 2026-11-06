@@ -475,6 +475,13 @@ public sealed partial class PlayViewModel : ViewModelBase
             scene.CameraPitch = 0.45f;
             scene.CameraZoom = 0.8f;
         }
+        else if (_activity is not null && _stage is { } stage)
+        {
+            // The exe's date camera turns round her for a few points (0x4807E0): yaw in her own frame, 0 = facing her.
+            string point = stage.PointGroup("Date").ElementAtOrDefault(_point).Name ?? "";
+            if (int.TryParse(point.AsSpan(Math.Max(0, point.Length - 2)), out int number))
+                scene.CameraYawOffset = DateCameraYaw(stage.Variant.Stage, number - 1);
+        }
         Scene = scene;
         // Direct3D 9 lighting as in the original: the stage by its own .xl, the girl and the props by her bo00_NN.xl.
         var stageLights = _stage.Lights is { } xl ? LightSet.FromXl(xl) : null;
@@ -571,6 +578,21 @@ public sealed partial class PlayViewModel : ViewModelBase
     }
 
     // ------------------------------------------------------------------ sun oil
+
+    /// <summary>
+    /// The exe's date camera yaw for a stage's point (0-based Point_DateNN), from 0x4807E0: stage 1 points 6 / 9, stage 3
+    /// points 2 / 3 / 6, stage 8 point 14, stage 9 point 4; 0 (facing her) elsewhere.
+    /// </summary>
+    static float DateCameraYaw(int stage, int point) => (stage, point) switch
+    {
+        (1, 6) => 3.4033921f,
+        (1, 9) or (3, 6) => 5.585054f,
+        (3, 2) => 5.7595868f,
+        (3, 3) => 5.6723204f,
+        (8, 14) => 4.712389f,
+        (9, 4) => 0.7853982f,
+        _ => 0,
+    };
 
     /// <summary>Puts her in an oil pose at the stage's nearest oil point; drags on the viewer then rub oil in.</summary>
     async Task StartOilAsync(OilPose pose)
