@@ -8,7 +8,8 @@
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
-    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+    <!-- CoreCLR instead of Mono (experimental in .NET 10 for Android): the same runtime and JIT as the desktop build. -->
+    <UseMonoRuntime>false</UseMonoRuntime>
   </PropertyGroup>
 
   <ItemGroup>
